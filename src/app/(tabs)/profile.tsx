@@ -25,6 +25,7 @@ export default function ProfileScreen() {
     notifications,
     clearNotifications,
     markNotificationsRead,
+    signOut,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'profile' | 'saved' | 'notifications'>('profile');
@@ -53,6 +54,11 @@ export default function ProfileScreen() {
     });
   };
 
+  const handleSignOut = async () => {
+    await signOut();
+    router.replace('/login');
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Profile Header */}
@@ -68,6 +74,23 @@ export default function ProfileScreen() {
             </View>
           </View>
         </View>
+      </View>
+
+      <View style={styles.sessionCard}>
+        <View style={styles.sessionCardRow}>
+          <View style={styles.sessionBadge}>
+            <Ionicons name="lock-closed" size={14} color="#A5B4FC" />
+            <Text style={styles.sessionBadgeText}>Local frontend account</Text>
+          </View>
+
+          <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut}>
+            <Ionicons name="log-out-outline" size={16} color="#FCA5A5" />
+            <Text style={styles.signOutBtnText}>Sign Out</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.sessionText}>
+          Your profile, saved places, and reports are stored on this device only.
+        </Text>
       </View>
 
       {/* Sub-Navigation Segment Tabs */}
@@ -344,6 +367,60 @@ const styles = StyleSheet.create({
   },
   headerInfo: {
     flex: 1,
+  },
+  sessionCard: {
+    marginHorizontal: 16,
+    marginTop: 14,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: '#1E293B',
+  },
+  sessionCardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  sessionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#111827',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: '#312E81',
+    flexShrink: 1,
+  },
+  sessionBadgeText: {
+    color: '#C7D2FE',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  sessionText: {
+    color: '#94A3B8',
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 10,
+  },
+  signOutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#1F2937',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#7F1D1D',
+  },
+  signOutBtnText: {
+    color: '#FCA5A5',
+    fontSize: 12,
+    fontWeight: '800',
   },
   userName: {
     color: '#F8FAFC',

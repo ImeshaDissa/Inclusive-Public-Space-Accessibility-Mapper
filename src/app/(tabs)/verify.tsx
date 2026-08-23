@@ -326,6 +326,7 @@ const styles = StyleSheet.create({
   badgesRight: {
     alignItems: 'flex-end',
     gap: 4,
+    flexShrink: 0,
   },
   priorityBadge: {
     paddingHorizontal: 8,
@@ -359,6 +360,7 @@ const styles = StyleSheet.create({
   contentRow: {
     flexDirection: 'row',
     gap: 12,
+    alignItems: 'flex-start',
   },
   reportPhoto: {
     width: 80,
@@ -419,6 +421,8 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: '#1E293B',
+    gap: 12,
+    flexWrap: 'wrap',
   },
   countsContainer: {},
   countText: {
@@ -428,6 +432,9 @@ const styles = StyleSheet.create({
   actionButtonsRow: {
     flexDirection: 'row',
     gap: 8,
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    flex: 1,
   },
   disputeBtn: {
     flexDirection: 'row',
@@ -439,6 +446,8 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#EF4444',
+    minWidth: 94,
+    justifyContent: 'center',
   },
   disputeBtnText: {
     color: '#EF4444',
@@ -453,6 +462,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 10,
+    minWidth: 124,
+    justifyContent: 'center',
   },
   confirmBtnText: {
     color: '#FFF',

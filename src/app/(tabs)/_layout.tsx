@@ -1,12 +1,20 @@
-import { Tabs } from 'expo-router';
+import { Redirect, Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useColorScheme, View, Text, StyleSheet } from 'react-native';
+import { useColorScheme } from 'react-native';
 import { useApp } from '@/context/AppContext';
 
 export default function TabLayout() {
+  const { authReady, isAuthenticated, notifications, reports } = useApp();
   const colorScheme = useColorScheme();
   const isDark = colorScheme !== 'light';
-  const { notifications, reports } = useApp();
+
+  if (!authReady) {
+    return null;
+  }
+
+  if (!isAuthenticated) {
+    return <Redirect href="/login" />;
+  }
 
   const unreadNotificationsCount = notifications.filter((n) => !n.read).length;
   const pendingReportsCount = reports.filter((r) => r.status === 'pending').length;
