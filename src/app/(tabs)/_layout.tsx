@@ -1,12 +1,11 @@
 import { Redirect, Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useColorScheme } from 'react-native';
 import { useApp } from '@/context/AppContext';
+import { useAppTheme } from '@/context/ThemeContext';
 
 export default function TabLayout() {
   const { authReady, isAuthenticated, notifications, reports } = useApp();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme !== 'light';
+  const { colors } = useAppTheme();
 
   if (!authReady) {
     return null;
@@ -23,11 +22,11 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#6366F1',
-        tabBarInactiveTintColor: isDark ? '#64748B' : '#94A3B8',
+        tabBarActiveTintColor: colors.accent,
+        tabBarInactiveTintColor: colors.textMuted,
         tabBarStyle: {
-          backgroundColor: isDark ? '#0F172A' : '#FFFFFF',
-          borderTopColor: isDark ? '#1E293B' : '#E2E8F0',
+          backgroundColor: colors.tabBarBg,
+          borderTopColor: colors.tabBarBorder,
           height: 60,
           paddingBottom: 8,
           paddingTop: 6,
@@ -62,7 +61,7 @@ export default function TabLayout() {
           title: 'Verify',
           tabBarBadge: pendingReportsCount > 0 ? pendingReportsCount : undefined,
           tabBarBadgeStyle: {
-            backgroundColor: '#F59E0B',
+            backgroundColor: colors.statusDotPending,
             color: '#000',
             fontSize: 10,
             fontWeight: '800',
@@ -78,7 +77,7 @@ export default function TabLayout() {
           title: 'Profile',
           tabBarBadge: unreadNotificationsCount > 0 ? unreadNotificationsCount : undefined,
           tabBarBadgeStyle: {
-            backgroundColor: '#6366F1',
+            backgroundColor: colors.accent,
             color: '#FFF',
             fontSize: 10,
             fontWeight: '800',

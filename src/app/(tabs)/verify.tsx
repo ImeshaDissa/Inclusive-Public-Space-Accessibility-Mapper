@@ -7,73 +7,81 @@ import {
   FlatList,
   Image,
   SafeAreaView,
-  ScrollView,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useApp } from '@/context/AppContext';
+import { useAppTheme } from '@/context/ThemeContext';
+import { useToast } from '@/context/ToastContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DisputeModal } from '@/components/DisputeModal';
 import { Report, StatusType } from '@/types/accessibility';
 
 export default function VerificationQueueScreen() {
   const { reports, confirmReport, disputeReport } = useApp();
-
+  const { colors } = useAppTheme();
+  const { showToast } = useToast();
+  const insets = useSafeAreaInsets();
   const [activeDisputeReport, setActiveDisputeReport] = useState<Report | null>(null);
 
   const getStatusBadgeConfig = (status: StatusType) => {
     switch (status) {
       case 'verified':
-        return { label: 'VERIFIED', color: '#10B981', bg: '#064E3B', icon: 'checkmark-circle' as const };
+        return { label: 'VERIFIED', color: colors.badgeVerifiedText, bg: colors.badgeVerifiedBg, icon: 'checkmark-circle' as const };
       case 'disputed':
-        return { label: 'DISPUTED', color: '#EF4444', bg: '#7F1D1D', icon: 'alert-circle' as const };
+        return { label: 'DISPUTED', color: colors.badgeDisputedText, bg: colors.badgeDisputedBg, icon: 'alert-circle' as const };
       case 'pending':
       default:
-        return { label: 'PENDING', color: '#F59E0B', bg: '#78350F', icon: 'time' as const };
+        return { label: 'PENDING', color: colors.badgePendingText, bg: colors.badgePendingBg, icon: 'time' as const };
     }
   };
 
   const getPriorityStyle = (priority: string) => {
     switch (priority) {
       case 'High':
-        return { bg: '#450A0A', border: '#EF4444', text: '#FCA5A5' };
+        return { bg: colors.priorityHighBg, border: colors.priorityHighBorder, text: colors.priorityHighText };
       case 'Medium':
-        return { bg: '#451A03', border: '#F59E0B', text: '#FDE68A' };
+        return { bg: colors.priorityMediumBg, border: colors.priorityMediumBorder, text: colors.priorityMediumText };
       case 'Low':
       default:
-        return { bg: '#064E3B', border: '#10B981', text: '#A7F3D0' };
+        return { bg: colors.priorityLowBg, border: colors.priorityLowBorder, text: colors.priorityLowText };
     }
   };
 
-  const handleConfirm = (reportId: string) => {
+  const isFinalStatus = (status: StatusType) => status === 'verified' || status === 'disputed';
+
+  const handleConfirm = (reportId: string, placeName: string) => {
     confirmReport(reportId);
+    showToast(`Confirmed report for ${placeName}`, 'success', 'checkmark-circle');
   };
 
   const handleDisputeSubmit = (reason: string, note?: string) => {
     if (activeDisputeReport) {
       disputeReport(activeDisputeReport.id, reason, note);
+      showToast(`Disputed report for ${activeDisputeReport.placeName}`, 'warning', 'alert-circle');
     }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: colors.headerBg, borderBottomColor: colors.headerBorder, paddingTop: insets.top + 16 }]}>
         <View style={styles.headerTitleRow}>
-          <Ionicons name="shield-checkmark-sharp" size={24} color="#6366F1" />
+          <Ionicons name="shield-checkmark-sharp" size={24} color={colors.accent} />
           <View>
-            <Text style={styles.headerTitle}>Verification Queue</Text>
-            <Text style={styles.headerSubtitle}>Community Trust & Consensus Engine</Text>
+            <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Verification Queue</Text>
+            <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>Community Trust & Consensus Engine</Text>
           </View>
         </View>
       </View>
 
       {/* Demo Trust Rule Banner */}
-      <View style={styles.ruleBanner}>
-        <Ionicons name="information-circle" size={20} color="#818CF8" />
+      <View style={[styles.ruleBanner, { backgroundColor: colors.ruleBannerBg, borderColor: colors.ruleBannerBorder }]}>
+        <Ionicons name="information-circle" size={20} color={colors.ruleBannerTitle} />
         <View style={{ flex: 1 }}>
-          <Text style={styles.ruleTitle}>LIVE TRUST THRESHOLD LOGIC:</Text>
-          <Text style={styles.ruleText}>
-            • <Text style={{ color: '#10B981', fontWeight: '800' }}>3+ Confirmations</Text> → Status becomes <Text style={{ color: '#10B981' }}>Verified (Green Pin)</Text>
-            {'\n'}• <Text style={{ color: '#EF4444', fontWeight: '800' }}>2+ Disputes</Text> → Status becomes <Text style={{ color: '#EF4444' }}>Disputed (Red Pin)</Text>
+          <Text style={[styles.ruleTitle, { color: colors.ruleBannerTitle }]}>LIVE TRUST THRESHOLD LOGIC:</Text>
+          <Text style={[styles.ruleText, { color: colors.ruleBannerText }]}>
+            • <Text style={{ color: colors.statusDotVerified, fontWeight: '800' }}>3+ Confirmations</Text> → Status becomes <Text style={{ color: colors.statusDotVerified }}>Verified (Green Pin)</Text>
+            {'\n'}• <Text style={{ color: colors.statusDotDisputed, fontWeight: '800' }}>2+ Disputes</Text> → Status becomes <Text style={{ color: colors.statusDotDisputed }}>Disputed (Red Pin)</Text>
           </Text>
         </View>
       </View>
@@ -86,27 +94,27 @@ export default function VerificationQueueScreen() {
         renderItem={({ item }) => {
           const statusConfig = getStatusBadgeConfig(item.status);
           const priorityStyle = getPriorityStyle(item.priority);
+          const locked = isFinalStatus(item.status);
 
           return (
-            <View style={styles.card}>
+            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
               {/* Card Header: Submitter + Priority + Status */}
               <View style={styles.cardHeader}>
                 <View style={styles.submitterRow}>
                   {item.submitterAvatar ? (
                     <Image source={{ uri: item.submitterAvatar }} style={styles.avatar} />
                   ) : (
-                    <View style={styles.avatarPlaceholder}>
-                      <Ionicons name="person" size={14} color="#94A3B8" />
+                    <View style={[styles.avatarPlaceholder, { backgroundColor: colors.chipBg }]}>
+                      <Ionicons name="person" size={14} color={colors.textMuted} />
                     </View>
                   )}
                   <View>
-                    <Text style={styles.submitterName}>{item.submitterName}</Text>
-                    <Text style={styles.timestamp}>{item.timestamp}</Text>
+                    <Text style={[styles.submitterName, { color: colors.textPrimary }]}>{item.submitterName}</Text>
+                    <Text style={[styles.timestamp, { color: colors.textMuted }]}>{item.timestamp}</Text>
                   </View>
                 </View>
 
                 <View style={styles.badgesRight}>
-                  {/* Priority Badge */}
                   <View
                     style={[
                       styles.priorityBadge,
@@ -118,7 +126,6 @@ export default function VerificationQueueScreen() {
                     </Text>
                   </View>
 
-                  {/* Status Badge */}
                   <View style={[styles.statusBadge, { backgroundColor: statusConfig.bg }]}>
                     <Ionicons name={statusConfig.icon} size={12} color={statusConfig.color} />
                     <Text style={[styles.statusBadgeText, { color: statusConfig.color }]}>
@@ -129,7 +136,7 @@ export default function VerificationQueueScreen() {
               </View>
 
               {/* Place Name Title */}
-              <Text style={styles.placeNameTitle}>{item.placeName}</Text>
+              <Text style={[styles.placeNameTitle, { color: colors.textPrimary }]}>{item.placeName}</Text>
 
               {/* Photo & Audit Note */}
               <View style={styles.contentRow}>
@@ -137,26 +144,25 @@ export default function VerificationQueueScreen() {
                   <Image source={{ uri: item.photos[0] }} style={styles.reportPhoto} />
                 )}
                 <View style={styles.noteContainer}>
-                  <Text style={styles.noteText}>{item.note}</Text>
+                  <Text style={[styles.noteText, { color: colors.textSecondary }]}>{item.note}</Text>
 
-                  {/* Reported features pills */}
                   <View style={styles.featuresPillRow}>
                     {item.featuresReported?.ramp && (
-                      <View style={styles.featureTag}>
-                        <MaterialCommunityIcons name="wheelchair" size={10} color="#10B981" />
-                        <Text style={styles.featureTagText}>Ramp</Text>
+                      <View style={[styles.featureTag, { backgroundColor: colors.featureTagBg }]}>
+                        <MaterialCommunityIcons name="wheelchair" size={10} color={colors.statusDotVerified} />
+                        <Text style={[styles.featureTagText, { color: colors.featureTagText }]}>Ramp</Text>
                       </View>
                     )}
                     {item.featuresReported?.elevator && (
-                      <View style={styles.featureTag}>
-                        <MaterialCommunityIcons name="elevator-passenger" size={10} color="#10B981" />
-                        <Text style={styles.featureTagText}>Elevator</Text>
+                      <View style={[styles.featureTag, { backgroundColor: colors.featureTagBg }]}>
+                        <MaterialCommunityIcons name="elevator-passenger" size={10} color={colors.statusDotVerified} />
+                        <Text style={[styles.featureTagText, { color: colors.featureTagText }]}>Elevator</Text>
                       </View>
                     )}
                     {item.featuresReported?.toilet && (
-                      <View style={styles.featureTag}>
-                        <MaterialCommunityIcons name="human-handsdown" size={10} color="#10B981" />
-                        <Text style={styles.featureTagText}>Toilet</Text>
+                      <View style={[styles.featureTag, { backgroundColor: colors.featureTagBg }]}>
+                        <MaterialCommunityIcons name="human-handsdown" size={10} color={colors.statusDotVerified} />
+                        <Text style={[styles.featureTagText, { color: colors.featureTagText }]}>Toilet</Text>
                       </View>
                     )}
                   </View>
@@ -165,10 +171,10 @@ export default function VerificationQueueScreen() {
 
               {/* Dispute Reasons list if any */}
               {item.disputeReasons && item.disputeReasons.length > 0 && (
-                <View style={styles.disputeReasonsBox}>
-                  <Text style={styles.disputeReasonHeader}>Reported Disputes:</Text>
+                <View style={[styles.disputeReasonsBox, { backgroundColor: colors.disputeReasonBg, borderColor: colors.disputeReasonBorder }]}>
+                  <Text style={[styles.disputeReasonHeader, { color: colors.disputeReasonHeaderText }]}>Reported Disputes:</Text>
                   {item.disputeReasons.map((r, i) => (
-                    <Text key={i} style={styles.disputeReasonItem}>
+                    <Text key={i} style={[styles.disputeReasonItem, { color: colors.disputeReasonText }]}>
                       • {r}
                     </Text>
                   ))}
@@ -176,14 +182,14 @@ export default function VerificationQueueScreen() {
               )}
 
               {/* Counts & Action Buttons Footer */}
-              <View style={styles.cardFooter}>
+              <View style={[styles.cardFooter, { borderTopColor: colors.divider }]}>
                 <View style={styles.countsContainer}>
-                  <Text style={styles.countText}>
-                    <Text style={{ color: '#10B981', fontWeight: '800' }}>
+                  <Text style={[styles.countText, { color: colors.textSecondary }]}>
+                    <Text style={{ color: colors.statusDotVerified, fontWeight: '800' }}>
                       {item.confirmCount}
                     </Text>{' '}
                     Confirms ·{' '}
-                    <Text style={{ color: '#EF4444', fontWeight: '800' }}>
+                    <Text style={{ color: colors.statusDotDisputed, fontWeight: '800' }}>
                       {item.disputeCount}
                     </Text>{' '}
                     Disputes
@@ -193,20 +199,31 @@ export default function VerificationQueueScreen() {
                 <View style={styles.actionButtonsRow}>
                   {/* Dispute Button */}
                   <TouchableOpacity
-                    style={styles.disputeBtn}
+                    style={[
+                      styles.disputeBtn,
+                      { backgroundColor: colors.disputeBtn, borderColor: colors.disputeBtnBorder },
+                      locked && styles.disabledBtn,
+                    ]}
                     onPress={() => setActiveDisputeReport(item)}
+                    disabled={locked}
                   >
-                    <Ionicons name="close-circle-outline" size={16} color="#EF4444" />
-                    <Text style={styles.disputeBtnText}>Dispute</Text>
+                    <Ionicons name="close-circle-outline" size={16} color={locked ? colors.textMuted : colors.disputeBtnText} />
+                    <Text style={[styles.disputeBtnText, { color: locked ? colors.textMuted : colors.disputeBtnText }]}>Dispute</Text>
                   </TouchableOpacity>
 
                   {/* Confirm Button */}
                   <TouchableOpacity
-                    style={styles.confirmBtn}
-                    onPress={() => handleConfirm(item.id)}
+                    style={[
+                      styles.confirmBtn,
+                      { backgroundColor: locked ? colors.chipBg : colors.confirmBtn },
+                    ]}
+                    onPress={() => handleConfirm(item.id, item.placeName)}
+                    disabled={locked}
                   >
-                    <Ionicons name="checkmark-circle" size={16} color="#FFF" />
-                    <Text style={styles.confirmBtnText}>Confirm (+1)</Text>
+                    <Ionicons name="checkmark-circle" size={16} color={locked ? colors.textMuted : colors.confirmBtnText} />
+                    <Text style={[styles.confirmBtnText, { color: locked ? colors.textMuted : colors.confirmBtnText }]}>
+                      {locked ? statusConfig.label : 'Confirm (+1)'}
+                    </Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -229,15 +246,11 @@ export default function VerificationQueueScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#090D16',
   },
   header: {
     paddingHorizontal: 20,
-    paddingTop: 16,
     paddingBottom: 14,
-    backgroundColor: '#0F172A',
     borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
   },
   headerTitleRow: {
     flexDirection: 'row',
@@ -245,20 +258,16 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   headerTitle: {
-    color: '#F8FAFC',
     fontSize: 20,
     fontWeight: '800',
   },
   headerSubtitle: {
-    color: '#94A3B8',
     fontSize: 11,
   },
   ruleBanner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
-    backgroundColor: '#1E1B4B',
-    borderColor: '#4338CA',
     borderWidth: 1,
     padding: 12,
     marginHorizontal: 16,
@@ -266,13 +275,11 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
   ruleTitle: {
-    color: '#A5B4FC',
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 0.5,
   },
   ruleText: {
-    color: '#E0E7FF',
     fontSize: 11,
     lineHeight: 16,
     marginTop: 2,
@@ -283,12 +290,10 @@ const styles = StyleSheet.create({
     paddingBottom: 30,
   },
   card: {
-    backgroundColor: '#0F172A',
     borderRadius: 18,
     padding: 16,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: '#1E293B',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -310,17 +315,14 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#1E293B',
     justifyContent: 'center',
     alignItems: 'center',
   },
   submitterName: {
-    color: '#F8FAFC',
     fontSize: 12,
     fontWeight: '700',
   },
   timestamp: {
-    color: '#64748B',
     fontSize: 10,
   },
   badgesRight: {
@@ -352,7 +354,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   placeNameTitle: {
-    color: '#F8FAFC',
     fontSize: 17,
     fontWeight: '800',
     marginBottom: 10,
@@ -371,7 +372,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   noteText: {
-    color: '#CBD5E1',
     fontSize: 13,
     lineHeight: 18,
   },
@@ -385,31 +385,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#1E293B',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
   },
   featureTagText: {
-    color: '#94A3B8',
     fontSize: 10,
     fontWeight: '600',
   },
   disputeReasonsBox: {
-    backgroundColor: '#450A0A',
     borderRadius: 10,
     padding: 8,
     marginTop: 10,
     borderWidth: 1,
-    borderColor: '#7F1D1D',
   },
   disputeReasonHeader: {
-    color: '#FCA5A5',
     fontSize: 11,
     fontWeight: '700',
   },
   disputeReasonItem: {
-    color: '#FECDD3',
     fontSize: 11,
     marginTop: 2,
   },
@@ -420,13 +414,11 @@ const styles = StyleSheet.create({
     marginTop: 14,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#1E293B',
     gap: 12,
     flexWrap: 'wrap',
   },
   countsContainer: {},
   countText: {
-    color: '#94A3B8',
     fontSize: 12,
   },
   actionButtonsRow: {
@@ -440,17 +432,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#1E293B',
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#EF4444',
     minWidth: 94,
     justifyContent: 'center',
   },
   disputeBtnText: {
-    color: '#EF4444',
     fontSize: 12,
     fontWeight: '700',
   },
@@ -458,7 +447,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#059669',
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 10,
@@ -466,8 +454,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   confirmBtnText: {
-    color: '#FFF',
     fontSize: 12,
     fontWeight: '800',
+  },
+  disabledBtn: {
+    opacity: 0.5,
   },
 });

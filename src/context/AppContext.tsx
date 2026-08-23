@@ -302,69 +302,61 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const confirmReport = (reportId: string) => {
+    const targetReport = reports.find((r) => r.id === reportId);
+    if (!targetReport || targetReport.status === 'verified' || targetReport.status === 'disputed') return;
+
+    const newConfirm = targetReport.confirmCount + 1;
+    const newStatus = computeStatus(newConfirm, targetReport.disputeCount);
+
     setReports((prevReports) =>
       prevReports.map((r) => {
         if (r.id !== reportId) return r;
-        const newConfirm = r.confirmCount + 1;
-        const newStatus = computeStatus(newConfirm, r.disputeCount);
-        
-        // Update associated place
-        setPlaces((prevPlaces) =>
-          prevPlaces.map((p) => {
-            if (p.id !== r.placeId) return p;
-            const placeConfirms = p.confirmCount + 1;
-            const updatedPlaceStatus = computeStatus(placeConfirms, p.disputeCount);
-            if (updatedPlaceStatus !== p.status) {
-              addNotificationIfSaved(p.id, p.name, p.status, updatedPlaceStatus);
-            }
-            return {
-              ...p,
-              confirmCount: placeConfirms,
-              status: updatedPlaceStatus,
-            };
-          })
-        );
+        return { ...r, confirmCount: newConfirm, status: newStatus };
+      })
+    );
 
-        return {
-          ...r,
-          confirmCount: newConfirm,
-          status: newStatus,
-        };
+    setPlaces((prevPlaces) =>
+      prevPlaces.map((p) => {
+        if (p.id !== targetReport.placeId) return p;
+        const placeConfirms = p.confirmCount + 1;
+        const updatedPlaceStatus = computeStatus(placeConfirms, p.disputeCount);
+        if (updatedPlaceStatus !== p.status) {
+          addNotificationIfSaved(p.id, p.name, p.status, updatedPlaceStatus);
+        }
+        return { ...p, confirmCount: placeConfirms, status: updatedPlaceStatus };
       })
     );
   };
 
   const disputeReport = (reportId: string, reason: string, note?: string) => {
+    const targetReport = reports.find((r) => r.id === reportId);
+    if (!targetReport || targetReport.status === 'verified' || targetReport.status === 'disputed') return;
+
+    const newDisputes = targetReport.disputeCount + 1;
+    const newStatus = computeStatus(targetReport.confirmCount, newDisputes);
+    const updatedReasons = [...(targetReport.disputeReasons || []), reason];
+
     setReports((prevReports) =>
       prevReports.map((r) => {
         if (r.id !== reportId) return r;
-        const newDisputes = r.disputeCount + 1;
-        const newStatus = computeStatus(r.confirmCount, newDisputes);
-        const updatedReasons = [...(r.disputeReasons || []), reason];
-
-        // Update associated place
-        setPlaces((prevPlaces) =>
-          prevPlaces.map((p) => {
-            if (p.id !== r.placeId) return p;
-            const placeDisputes = p.disputeCount + 1;
-            const updatedPlaceStatus = computeStatus(p.confirmCount, placeDisputes);
-            if (updatedPlaceStatus !== p.status) {
-              addNotificationIfSaved(p.id, p.name, p.status, updatedPlaceStatus);
-            }
-            return {
-              ...p,
-              disputeCount: placeDisputes,
-              status: updatedPlaceStatus,
-            };
-          })
-        );
-
         return {
           ...r,
           disputeCount: newDisputes,
           disputeReasons: updatedReasons,
           status: newStatus,
         };
+      })
+    );
+
+    setPlaces((prevPlaces) =>
+      prevPlaces.map((p) => {
+        if (p.id !== targetReport.placeId) return p;
+        const placeDisputes = p.disputeCount + 1;
+        const updatedPlaceStatus = computeStatus(p.confirmCount, placeDisputes);
+        if (updatedPlaceStatus !== p.status) {
+          addNotificationIfSaved(p.id, p.name, p.status, updatedPlaceStatus);
+        }
+        return { ...p, disputeCount: placeDisputes, status: updatedPlaceStatus };
       })
     );
   };

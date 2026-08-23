@@ -14,16 +14,21 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useApp } from '@/context/AppContext';
+import { useAppTheme } from '@/context/ThemeContext';
+import { useToast } from '@/context/ToastContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function SubmitReportScreen() {
   const router = useRouter();
   const { places, addReport } = useApp();
+  const { colors } = useAppTheme();
+  const { showToast } = useToast();
+  const insets = useSafeAreaInsets();
 
   const [selectedPlaceId, setSelectedPlaceId] = useState<string>(places[0]?.id || '');
   const [customPlaceName, setCustomPlaceName] = useState<string>('');
   const [isCustomPlace, setIsCustomPlace] = useState<boolean>(false);
 
-  // Toggle Switches State
   const [features, setFeatures] = useState({
     ramp: true,
     elevator: false,
@@ -77,9 +82,9 @@ export default function SubmitReportScreen() {
       priority,
     });
 
+    showToast(`Report submitted for ${placeName}`, 'success', 'checkmark-circle');
     setShowSuccessToast(true);
 
-    // Reset form after short delay
     setTimeout(() => {
       setNote('');
       setShowSuccessToast(false);
@@ -88,55 +93,48 @@ export default function SubmitReportScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.header, { backgroundColor: colors.headerBg, borderBottomColor: colors.headerBorder, paddingTop: insets.top + 16 }]}>
         <View>
-          <Text style={styles.headerTitle}>Submit Accessibility Report</Text>
-          <Text style={styles.headerSubtitle}>Help map step-free paths & features in your community</Text>
+          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Submit Accessibility Report</Text>
+          <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>Help map step-free paths & features in your community</Text>
         </View>
       </View>
 
-      {/* Success Notification Banner */}
       {showSuccessToast && (
-        <View style={styles.successToast}>
-          <Ionicons name="checkmark-circle" size={24} color="#10B981" />
+        <View style={[styles.successToast, { backgroundColor: colors.successToastBg, borderColor: colors.successToastBorder }]}>
+          <Ionicons name="checkmark-circle" size={24} color={colors.statusDotVerified} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.successToastTitle}>Report Submitted!</Text>
-            <Text style={styles.successToastText}>Added to Verification Queue for community audit.</Text>
+            <Text style={[styles.successToastTitle, { color: colors.successToastTitle }]}>Report Submitted!</Text>
+            <Text style={[styles.successToastText, { color: colors.successToastText }]}>Added to Verification Queue for community audit.</Text>
           </View>
         </View>
       )}
 
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
         {/* Step 1: Select or Enter Location */}
-        <View style={styles.sectionCard}>
+        <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
           <View style={styles.sectionTitleRow}>
-            <View style={styles.stepBadge}>
-              <Text style={styles.stepBadgeText}>1</Text>
+            <View style={[styles.stepBadge, { backgroundColor: colors.stepBadgeBg }]}>
+              <Text style={[styles.stepBadgeText, { color: colors.stepBadgeText }]}>1</Text>
             </View>
-            <Text style={styles.sectionTitle}>SELECT VENUE OR LOCATION</Text>
+            <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>SELECT VENUE OR LOCATION</Text>
           </View>
 
-          {/* Place selector dropdown chips */}
           {!isCustomPlace ? (
             <View style={styles.venuePickerContainer}>
-              <Text style={styles.label}>Select from Existing Places:</Text>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>Select from Existing Places:</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.venueChipsScroll}>
                 {places.map((place) => {
                   const isSelected = selectedPlaceId === place.id;
                   return (
                     <TouchableOpacity
                       key={place.id}
-                      style={[styles.venueChip, isSelected && styles.venueChipSelected]}
+                      style={[styles.venueChip, { backgroundColor: colors.chipBg, borderColor: colors.chipBorder }, isSelected && { backgroundColor: colors.segmentActiveBg, borderColor: colors.accent }]}
                       onPress={() => setSelectedPlaceId(place.id)}
                     >
-                      <Ionicons
-                        name={isSelected ? 'location' : 'location-outline'}
-                        size={14}
-                        color={isSelected ? '#FFF' : '#6366F1'}
-                      />
-                      <Text style={[styles.venueChipText, isSelected && styles.venueTextSelected]}>
+                      <Ionicons name={isSelected ? 'location' : 'location-outline'} size={14} color={isSelected ? colors.filterActiveText : colors.accent} />
+                      <Text style={[styles.venueChipText, { color: isSelected ? colors.filterActiveText : colors.textSecondary }, isSelected && { fontWeight: '700' }]}>
                         {place.name}
                       </Text>
                     </TouchableOpacity>
@@ -145,145 +143,113 @@ export default function SubmitReportScreen() {
               </ScrollView>
 
               <TouchableOpacity style={styles.customToggleBtn} onPress={() => setIsCustomPlace(true)}>
-                <Ionicons name="add" size={16} color="#6366F1" />
-                <Text style={styles.customToggleText}>+ Enter a New Venue Name</Text>
+                <Ionicons name="add" size={16} color={colors.accentLight} />
+                <Text style={[styles.customToggleText, { color: colors.accentLight }]}>+ Enter a New Venue Name</Text>
               </TouchableOpacity>
             </View>
           ) : (
             <View style={styles.customInputContainer}>
-              <Text style={styles.label}>Enter Custom Venue Name:</Text>
+              <Text style={[styles.label, { color: colors.textSecondary }]}>Enter Custom Venue Name:</Text>
               <TextInput
-                style={styles.textInput}
+                style={[styles.textInput, { backgroundColor: colors.chipBg, borderColor: colors.chipBorder, color: colors.textPrimary }]}
                 placeholder="e.g. Metro West Library, Grand Cinema..."
-                placeholderTextColor="#64748B"
+                placeholderTextColor={colors.textMuted}
                 value={customPlaceName}
                 onChangeText={setCustomPlaceName}
               />
               <TouchableOpacity style={styles.customToggleBtn} onPress={() => setIsCustomPlace(false)}>
-                <Text style={styles.customToggleText}>← Pick from existing places list</Text>
+                <Text style={[styles.customToggleText, { color: colors.accentLight }]}>← Pick from existing places list</Text>
               </TouchableOpacity>
             </View>
           )}
         </View>
 
         {/* Step 2: Accessibility Checklist Toggles */}
-        <View style={styles.sectionCard}>
+        <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
           <View style={styles.sectionTitleRow}>
-            <View style={styles.stepBadge}>
-              <Text style={styles.stepBadgeText}>2</Text>
+            <View style={[styles.stepBadge, { backgroundColor: colors.stepBadgeBg }]}>
+              <Text style={[styles.stepBadgeText, { color: colors.stepBadgeText }]}>2</Text>
             </View>
-            <Text style={styles.sectionTitle}>VERIFY ACCESSIBILITY FEATURES</Text>
+            <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>VERIFY ACCESSIBILITY FEATURES</Text>
           </View>
 
           <View style={styles.toggleList}>
             <View style={styles.toggleRow}>
               <View style={styles.toggleLabelGroup}>
-                <MaterialCommunityIcons name="wheelchair" size={20} color="#10B981" />
-                <Text style={styles.toggleLabel}>Wheelchair Ramp</Text>
+                <MaterialCommunityIcons name="wheelchair" size={20} color={colors.statusDotVerified} />
+                <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>Wheelchair Ramp</Text>
               </View>
-              <Switch
-                value={features.ramp}
-                onValueChange={() => toggleFeature('ramp')}
-                trackColor={{ false: '#334155', true: '#4F46E5' }}
-                thumbColor={features.ramp ? '#818CF8' : '#94A3B8'}
-              />
+              <Switch value={features.ramp} onValueChange={() => toggleFeature('ramp')} trackColor={{ false: colors.toggleTrack, true: colors.accent }} thumbColor={features.ramp ? colors.accentLight : colors.toggleThumb} />
             </View>
 
             <View style={styles.toggleRow}>
               <View style={styles.toggleLabelGroup}>
-                <MaterialCommunityIcons name="elevator-passenger" size={20} color="#10B981" />
-                <Text style={styles.toggleLabel}>Elevator Access</Text>
+                <MaterialCommunityIcons name="elevator-passenger" size={20} color={colors.statusDotVerified} />
+                <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>Elevator Access</Text>
               </View>
-              <Switch
-                value={features.elevator}
-                onValueChange={() => toggleFeature('elevator')}
-                trackColor={{ false: '#334155', true: '#4F46E5' }}
-                thumbColor={features.elevator ? '#818CF8' : '#94A3B8'}
-              />
+              <Switch value={features.elevator} onValueChange={() => toggleFeature('elevator')} trackColor={{ false: colors.toggleTrack, true: colors.accent }} thumbColor={features.elevator ? colors.accentLight : colors.toggleThumb} />
             </View>
 
             <View style={styles.toggleRow}>
               <View style={styles.toggleLabelGroup}>
-                <MaterialCommunityIcons name="human-handsdown" size={20} color="#10B981" />
-                <Text style={styles.toggleLabel}>Accessible Restroom</Text>
+                <MaterialCommunityIcons name="human-handsdown" size={20} color={colors.statusDotVerified} />
+                <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>Accessible Restroom</Text>
               </View>
-              <Switch
-                value={features.toilet}
-                onValueChange={() => toggleFeature('toilet')}
-                trackColor={{ false: '#334155', true: '#4F46E5' }}
-                thumbColor={features.toilet ? '#818CF8' : '#94A3B8'}
-              />
+              <Switch value={features.toilet} onValueChange={() => toggleFeature('toilet')} trackColor={{ false: colors.toggleTrack, true: colors.accent }} thumbColor={features.toilet ? colors.accentLight : colors.toggleThumb} />
             </View>
 
             <View style={styles.toggleRow}>
               <View style={styles.toggleLabelGroup}>
-                <MaterialCommunityIcons name="car" size={20} color="#10B981" />
-                <Text style={styles.toggleLabel}>Reserved Disabled Parking</Text>
+                <MaterialCommunityIcons name="car" size={20} color={colors.statusDotVerified} />
+                <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>Reserved Disabled Parking</Text>
               </View>
-              <Switch
-                value={features.parking}
-                onValueChange={() => toggleFeature('parking')}
-                trackColor={{ false: '#334155', true: '#4F46E5' }}
-                thumbColor={features.parking ? '#818CF8' : '#94A3B8'}
-              />
+              <Switch value={features.parking} onValueChange={() => toggleFeature('parking')} trackColor={{ false: colors.toggleTrack, true: colors.accent }} thumbColor={features.parking ? colors.accentLight : colors.toggleThumb} />
             </View>
 
             <View style={styles.toggleRow}>
               <View style={styles.toggleLabelGroup}>
-                <MaterialCommunityIcons name="walk" size={20} color="#10B981" />
-                <Text style={styles.toggleLabel}>Step-Free Entrance</Text>
+                <MaterialCommunityIcons name="walk" size={20} color={colors.statusDotVerified} />
+                <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>Step-Free Entrance</Text>
               </View>
-              <Switch
-                value={features.stepFree}
-                onValueChange={() => toggleFeature('stepFree')}
-                trackColor={{ false: '#334155', true: '#4F46E5' }}
-                thumbColor={features.stepFree ? '#818CF8' : '#94A3B8'}
-              />
+              <Switch value={features.stepFree} onValueChange={() => toggleFeature('stepFree')} trackColor={{ false: colors.toggleTrack, true: colors.accent }} thumbColor={features.stepFree ? colors.accentLight : colors.toggleThumb} />
             </View>
           </View>
         </View>
 
         {/* Step 3: Audit Note & Priority */}
-        <View style={styles.sectionCard}>
+        <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
           <View style={styles.sectionTitleRow}>
-            <View style={styles.stepBadge}>
-              <Text style={styles.stepBadgeText}>3</Text>
+            <View style={[styles.stepBadge, { backgroundColor: colors.stepBadgeBg }]}>
+              <Text style={[styles.stepBadgeText, { color: colors.stepBadgeText }]}>3</Text>
             </View>
-            <Text style={styles.sectionTitle}>AUDIT NOTES & PRIORITY</Text>
+            <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>AUDIT NOTES & PRIORITY</Text>
           </View>
 
-          <Text style={styles.label}>Audit Details / Notes:</Text>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>Audit Details / Notes:</Text>
           <TextInput
-            style={[styles.textInput, styles.textArea]}
+            style={[styles.textInput, styles.textArea, { backgroundColor: colors.chipBg, borderColor: colors.chipBorder, color: colors.textPrimary }]}
             placeholder="Describe condition, maintenance status, door width, slope steepness, etc..."
-            placeholderTextColor="#64748B"
+            placeholderTextColor={colors.textMuted}
             multiline
             numberOfLines={4}
             value={note}
             onChangeText={setNote}
           />
 
-          {/* Priority selector */}
-          <Text style={[styles.label, { marginTop: 12 }]}>Report Priority Level:</Text>
+          <Text style={[styles.label, { color: colors.textSecondary, marginTop: 12 }]}>Report Priority Level:</Text>
           <View style={styles.priorityRow}>
             {(['High', 'Medium', 'Low'] as const).map((p) => {
               const isSelected = priority === p;
-              const colorMap = { High: '#EF4444', Medium: '#F59E0B', Low: '#10B981' };
+              const colorMap = { High: colors.priorityHighBorder, Medium: colors.priorityMediumBorder, Low: colors.priorityLowBorder };
+              const bgMap = { High: colors.priorityHighBg, Medium: colors.priorityMediumBg, Low: colors.priorityLowBg };
+              const textMap = { High: colors.priorityHighText, Medium: colors.priorityMediumText, Low: colors.priorityLowText };
               return (
                 <TouchableOpacity
                   key={p}
-                  style={[
-                    styles.priorityChip,
-                    isSelected && { backgroundColor: colorMap[p] + '33', borderColor: colorMap[p] },
-                  ]}
+                  style={[styles.priorityChip, { backgroundColor: colors.chipBg, borderColor: colors.chipBorder }, isSelected && { backgroundColor: bgMap[p], borderColor: colorMap[p] }]}
                   onPress={() => setPriority(p)}
                 >
-                  <Text
-                    style={[
-                      styles.priorityChipText,
-                      isSelected && { color: colorMap[p], fontWeight: '800' },
-                    ]}
-                  >
+                  <Text style={[styles.priorityChipText, { color: isSelected ? textMap[p] : colors.textSecondary }, isSelected && { fontWeight: '800' }]}>
                     {p} Priority
                   </Text>
                 </TouchableOpacity>
@@ -293,12 +259,12 @@ export default function SubmitReportScreen() {
         </View>
 
         {/* Step 4: Photo Evidence */}
-        <View style={styles.sectionCard}>
+        <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
           <View style={styles.sectionTitleRow}>
-            <View style={styles.stepBadge}>
-              <Text style={styles.stepBadgeText}>4</Text>
+            <View style={[styles.stepBadge, { backgroundColor: colors.stepBadgeBg }]}>
+              <Text style={[styles.stepBadgeText, { color: colors.stepBadgeText }]}>4</Text>
             </View>
-            <Text style={styles.sectionTitle}>ATTACH PHOTO EVIDENCE</Text>
+            <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>ATTACH PHOTO EVIDENCE</Text>
           </View>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photoList}>
@@ -311,17 +277,17 @@ export default function SubmitReportScreen() {
               </View>
             ))}
 
-            <TouchableOpacity style={styles.addPhotoBtn} onPress={handleAddSamplePhoto}>
-              <Ionicons name="camera-outline" size={24} color="#6366F1" />
-              <Text style={styles.addPhotoText}>+ Attach Photo</Text>
+            <TouchableOpacity style={[styles.addPhotoBtn, { backgroundColor: colors.chipBg, borderColor: colors.chipBorder }]} onPress={handleAddSamplePhoto}>
+              <Ionicons name="camera-outline" size={24} color={colors.accent} />
+              <Text style={[styles.addPhotoText, { color: colors.accentLight }]}>+ Attach Photo</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>
 
         {/* Submit Action Button */}
-        <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
-          <Ionicons name="send" size={18} color="#FFF" />
-          <Text style={styles.submitBtnText}>Submit Community Audit Report</Text>
+        <TouchableOpacity style={[styles.submitBtn, { backgroundColor: colors.submitBtn }]} onPress={handleSubmit}>
+          <Ionicons name="send" size={18} color={colors.submitBtnText} />
+          <Text style={[styles.submitBtnText, { color: colors.submitBtnText }]}>Submit Community Audit Report</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -331,23 +297,17 @@ export default function SubmitReportScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#090D16',
   },
   header: {
     paddingHorizontal: 20,
-    paddingTop: 16,
     paddingBottom: 14,
-    backgroundColor: '#0F172A',
     borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
   },
   headerTitle: {
-    color: '#F8FAFC',
     fontSize: 20,
     fontWeight: '800',
   },
   headerSubtitle: {
-    color: '#94A3B8',
     fontSize: 12,
     marginTop: 2,
   },
@@ -355,8 +315,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#064E3B',
-    borderColor: '#10B981',
     borderWidth: 1,
     padding: 14,
     marginHorizontal: 16,
@@ -364,12 +322,10 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
   successToastTitle: {
-    color: '#F8FAFC',
     fontSize: 14,
     fontWeight: '800',
   },
   successToastText: {
-    color: '#A7F3D0',
     fontSize: 12,
   },
   scrollContainer: {
@@ -378,12 +334,10 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   sectionCard: {
-    backgroundColor: '#0F172A',
     borderRadius: 16,
     padding: 16,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: '#1E293B',
   },
   sectionTitleRow: {
     flexDirection: 'row',
@@ -395,17 +349,14 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: '#312E81',
     justifyContent: 'center',
     alignItems: 'center',
   },
   stepBadgeText: {
-    color: '#818CF8',
     fontSize: 11,
     fontWeight: '800',
   },
   sectionTitle: {
-    color: '#94A3B8',
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1,
@@ -414,7 +365,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   label: {
-    color: '#CBD5E1',
     fontSize: 12,
     fontWeight: '700',
     marginBottom: 6,
@@ -426,26 +376,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#1E293B',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
     marginRight: 8,
     borderWidth: 1,
-    borderColor: '#334155',
-  },
-  venueChipSelected: {
-    backgroundColor: '#4F46E5',
-    borderColor: '#6366F1',
   },
   venueChipText: {
-    color: '#94A3B8',
     fontSize: 12,
     fontWeight: '600',
-  },
-  venueTextSelected: {
-    color: '#FFF',
-    fontWeight: '700',
   },
   customToggleBtn: {
     flexDirection: 'row',
@@ -454,7 +393,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   customToggleText: {
-    color: '#818CF8',
     fontSize: 12,
     fontWeight: '700',
   },
@@ -462,14 +400,11 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   textInput: {
-    backgroundColor: '#1E293B',
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    color: '#F8FAFC',
     fontSize: 13,
     borderWidth: 1,
-    borderColor: '#334155',
   },
   textArea: {
     minHeight: 80,
@@ -490,7 +425,6 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   toggleLabel: {
-    color: '#F8FAFC',
     fontSize: 13,
     fontWeight: '600',
   },
@@ -502,13 +436,10 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 8,
     borderRadius: 10,
-    backgroundColor: '#1E293B',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
   },
   priorityChipText: {
-    color: '#94A3B8',
     fontSize: 12,
     fontWeight: '600',
   },
@@ -540,15 +471,12 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 12,
-    backgroundColor: '#1E293B',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#334155',
     borderStyle: 'dashed',
   },
   addPhotoText: {
-    color: '#818CF8',
     fontSize: 10,
     fontWeight: '700',
     marginTop: 4,
@@ -558,14 +486,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#4F46E5',
     paddingVertical: 16,
     borderRadius: 16,
     marginTop: 8,
     marginBottom: 30,
   },
   submitBtnText: {
-    color: '#FFF',
     fontSize: 15,
     fontWeight: '800',
   },

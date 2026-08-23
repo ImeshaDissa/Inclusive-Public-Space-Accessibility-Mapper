@@ -12,7 +12,11 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
+import { useAppTheme } from '@/context/ThemeContext';
+import { useToast } from '@/context/ToastContext';
+import { AnimatedCard } from '@/components/AnimatedComponents';
 import { InteractiveMap } from '@/components/InteractiveMap';
 import { PlaceDetailsModal } from '@/components/PlaceDetailsModal';
 import { Place, StatusType } from '@/types/accessibility';
@@ -21,17 +25,18 @@ type FilterType = 'all' | 'verified' | 'ramp' | 'stepFree' | 'toilet';
 
 export default function MapScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { places, selectedPlaceId, setSelectedPlaceId, toggleSavePlace } = useApp();
+  const { colors } = useAppTheme();
+  const { showToast } = useToast();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
   const [viewMode, setViewMode] = useState<'map' | 'list'>('map');
   const [activeModalPlace, setActiveModalPlace] = useState<Place | null>(null);
 
-  // Filtered places calculation
   const filteredPlaces = useMemo(() => {
     return places.filter((place) => {
-      // Search text match
       const matchesSearch =
         place.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         place.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -39,7 +44,6 @@ export default function MapScreen() {
 
       if (!matchesSearch) return false;
 
-      // Filter chip logic
       switch (activeFilter) {
         case 'verified':
           return place.status === 'verified';
@@ -61,65 +65,73 @@ export default function MapScreen() {
     setActiveModalPlace(place);
   };
 
+  const handleToggleSave = (placeId: string) => {
+    const place = places.find((p) => p.id === placeId);
+    toggleSavePlace(placeId);
+    if (place) {
+      showToast(
+        place.saved ? `Removed ${place.name} from saved` : `Saved ${place.name}`,
+        place.saved ? 'info' : 'success',
+        place.saved ? 'bookmark-outline' : 'bookmark'
+      );
+    }
+  };
+
   const getStatusColor = (status: StatusType) => {
     switch (status) {
       case 'verified':
-        return '#10B981';
+        return colors.statusDotVerified;
       case 'disputed':
-        return '#EF4444';
+        return colors.statusDotDisputed;
       case 'pending':
       default:
-        return '#F59E0B';
+        return colors.statusDotPending;
     }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* App Top Header Bar */}
-      <View style={styles.header}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.header, { backgroundColor: colors.headerBg, borderBottomColor: colors.headerBorder, paddingTop: insets.top + 12 }]}>
         <View style={styles.headerTitleContainer}>
-          <Ionicons name="accessibility" size={24} color="#6366F1" />
+          <Ionicons name="accessibility" size={24} color={colors.accent} />
           <View>
-            <Text style={styles.appTitle}>InclusiveMapper</Text>
-            <Text style={styles.appSubtitle}>Public Space Accessibility</Text>
+            <Text style={[styles.appTitle, { color: colors.textPrimary }]}>InclusiveMapper</Text>
+            <Text style={[styles.appSubtitle, { color: colors.textSecondary }]}>Public Space Accessibility</Text>
           </View>
         </View>
 
-        {/* View Mode Toggle Button */}
         <TouchableOpacity
-          style={styles.viewToggleBtn}
+          style={[styles.viewToggleBtn, { backgroundColor: colors.accentBg, borderColor: colors.ruleBannerBorder }]}
           onPress={() => setViewMode((prev) => (prev === 'map' ? 'list' : 'map'))}
         >
           <Ionicons
             name={viewMode === 'map' ? 'list' : 'map-outline'}
             size={18}
-            color="#FFF"
+            color={colors.accent}
           />
-          <Text style={styles.viewToggleText}>
+          <Text style={[styles.viewToggleText, { color: colors.accent }]}>
             {viewMode === 'map' ? 'List View' : 'Map View'}
           </Text>
         </TouchableOpacity>
       </View>
 
-      {/* Search Input Bar */}
-      <View style={styles.searchSection}>
-        <View style={styles.searchBar}>
-          <Ionicons name="search" size={18} color="#94A3B8" />
+      <View style={[styles.searchSection, { backgroundColor: colors.headerBg }]}>
+        <View style={[styles.searchBar, { backgroundColor: colors.chipBg, borderColor: colors.chipBorder }]}>
+          <Ionicons name="search" size={18} color={colors.textMuted} />
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: colors.textPrimary }]}
             placeholder="Search venue, transit, park..."
-            placeholderTextColor="#64748B"
+            placeholderTextColor={colors.textMuted}
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={16} color="#94A3B8" />
+              <Ionicons name="close-circle" size={16} color={colors.textMuted} />
             </TouchableOpacity>
           )}
         </View>
 
-        {/* Filter Chips ScrollView */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -127,173 +139,133 @@ export default function MapScreen() {
           contentContainerStyle={styles.filterContainer}
         >
           <TouchableOpacity
-            style={[styles.filterChip, activeFilter === 'all' && styles.filterChipActive]}
+            style={[styles.filterChip, { backgroundColor: colors.chipBg, borderColor: colors.chipBorder }, activeFilter === 'all' && { backgroundColor: colors.filterActiveBg, borderColor: colors.accent }]}
             onPress={() => setActiveFilter('all')}
           >
-            <Text
-              style={[styles.filterChipText, activeFilter === 'all' && styles.filterTextActive]}
-            >
+            <Text style={[styles.filterChipText, { color: activeFilter === 'all' ? colors.filterActiveText : colors.textSecondary }, activeFilter === 'all' && { color: colors.filterActiveText, fontWeight: '700' }]}>
               All Places ({places.length})
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.filterChip, activeFilter === 'verified' && styles.filterChipActive]}
+            style={[styles.filterChip, { backgroundColor: colors.chipBg, borderColor: colors.chipBorder }, activeFilter === 'verified' && { backgroundColor: colors.filterActiveBg, borderColor: colors.accent }]}
             onPress={() => setActiveFilter('verified')}
           >
-            <Ionicons
-              name="checkmark-circle"
-              size={14}
-              color={activeFilter === 'verified' ? '#FFF' : '#10B981'}
-            />
-            <Text
-              style={[
-                styles.filterChipText,
-                activeFilter === 'verified' && styles.filterTextActive,
-              ]}
-            >
+            <Ionicons name="checkmark-circle" size={14} color={activeFilter === 'verified' ? colors.filterActiveText : colors.statusDotVerified} />
+            <Text style={[styles.filterChipText, { color: activeFilter === 'verified' ? colors.filterActiveText : colors.textSecondary }, activeFilter === 'verified' && { color: colors.filterActiveText, fontWeight: '700' }]}>
               Verified Only
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.filterChip, activeFilter === 'ramp' && styles.filterChipActive]}
+            style={[styles.filterChip, { backgroundColor: colors.chipBg, borderColor: colors.chipBorder }, activeFilter === 'ramp' && { backgroundColor: colors.filterActiveBg, borderColor: colors.accent }]}
             onPress={() => setActiveFilter('ramp')}
           >
-            <MaterialCommunityIcons
-              name="wheelchair"
-              size={14}
-              color={activeFilter === 'ramp' ? '#FFF' : '#818CF8'}
-            />
-            <Text
-              style={[styles.filterChipText, activeFilter === 'ramp' && styles.filterTextActive]}
-            >
+            <MaterialCommunityIcons name="wheelchair" size={14} color={activeFilter === 'ramp' ? colors.filterActiveText : colors.accentLight} />
+            <Text style={[styles.filterChipText, { color: activeFilter === 'ramp' ? colors.filterActiveText : colors.textSecondary }, activeFilter === 'ramp' && { color: colors.filterActiveText, fontWeight: '700' }]}>
               Wheelchair Ramp
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.filterChip, activeFilter === 'stepFree' && styles.filterChipActive]}
+            style={[styles.filterChip, { backgroundColor: colors.chipBg, borderColor: colors.chipBorder }, activeFilter === 'stepFree' && { backgroundColor: colors.filterActiveBg, borderColor: colors.accent }]}
             onPress={() => setActiveFilter('stepFree')}
           >
-            <MaterialCommunityIcons
-              name="walk"
-              size={14}
-              color={activeFilter === 'stepFree' ? '#FFF' : '#818CF8'}
-            />
-            <Text
-              style={[
-                styles.filterChipText,
-                activeFilter === 'stepFree' && styles.filterTextActive,
-              ]}
-            >
+            <MaterialCommunityIcons name="walk" size={14} color={activeFilter === 'stepFree' ? colors.filterActiveText : colors.accentLight} />
+            <Text style={[styles.filterChipText, { color: activeFilter === 'stepFree' ? colors.filterActiveText : colors.textSecondary }, activeFilter === 'stepFree' && { color: colors.filterActiveText, fontWeight: '700' }]}>
               Step-free Entrance
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.filterChip, activeFilter === 'toilet' && styles.filterChipActive]}
+            style={[styles.filterChip, { backgroundColor: colors.chipBg, borderColor: colors.chipBorder }, activeFilter === 'toilet' && { backgroundColor: colors.filterActiveBg, borderColor: colors.accent }]}
             onPress={() => setActiveFilter('toilet')}
           >
-            <MaterialCommunityIcons
-              name="human-handsdown"
-              size={14}
-              color={activeFilter === 'toilet' ? '#FFF' : '#818CF8'}
-            />
-            <Text
-              style={[
-                styles.filterChipText,
-                activeFilter === 'toilet' && styles.filterTextActive,
-              ]}
-            >
+            <MaterialCommunityIcons name="human-handsdown" size={14} color={activeFilter === 'toilet' ? colors.filterActiveText : colors.accentLight} />
+            <Text style={[styles.filterChipText, { color: activeFilter === 'toilet' ? colors.filterActiveText : colors.textSecondary }, activeFilter === 'toilet' && { color: colors.filterActiveText, fontWeight: '700' }]}>
               Accessible Toilet
             </Text>
           </TouchableOpacity>
         </ScrollView>
       </View>
 
-      {/* Main Map / List View Display */}
       {viewMode === 'map' ? (
         <ScrollView style={styles.scrollWrapper} showsVerticalScrollIndicator={false}>
-          {/* Interactive Map Visual Widget */}
           <InteractiveMap
             places={filteredPlaces}
             selectedPlaceId={selectedPlaceId}
             onSelectPlace={handleSelectPlace}
           />
 
-          {/* Quick Cards below Map */}
-          <Text style={styles.sectionHeader}>DISCOVER PLACES ({filteredPlaces.length})</Text>
-          {filteredPlaces.map((item) => {
+          <Text style={[styles.sectionHeader, { color: colors.textMuted }]}>DISCOVER PLACES ({filteredPlaces.length})</Text>
+          {filteredPlaces.map((item, index) => {
             const statusColor = getStatusColor(item.status);
             return (
+              <AnimatedCard key={item.id} delay={index * 80}>
               <TouchableOpacity
-                key={item.id}
-                style={styles.card}
+                style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
                 activeOpacity={0.85}
                 onPress={() => handleSelectPlace(item)}
               >
                 <Image source={{ uri: item.photos[0] }} style={styles.cardImage} />
                 <View style={styles.cardInfo}>
                   <View style={styles.cardTitleRow}>
-                    <Text style={styles.cardTitle} numberOfLines={1}>
+                    <Text style={[styles.cardTitle, { color: colors.textPrimary }]} numberOfLines={1}>
                       {item.name}
                     </Text>
                     <TouchableOpacity
-                      onPress={() => toggleSavePlace(item.id)}
+                      onPress={() => handleToggleSave(item.id)}
                       style={styles.cardSaveBtn}
                     >
                       <Ionicons
                         name={item.saved ? 'bookmark' : 'bookmark-outline'}
                         size={18}
-                        color={item.saved ? '#6366F1' : '#94A3B8'}
+                        color={item.saved ? colors.accent : colors.textMuted}
                       />
                     </TouchableOpacity>
                   </View>
 
-                  <Text style={styles.cardAddress} numberOfLines={1}>
+                  <Text style={[styles.cardAddress, { color: colors.textSecondary }]} numberOfLines={1}>
                     {item.address}
                   </Text>
 
-                  {/* Feature Badges Row */}
                   <View style={styles.featureRow}>
                     {item.features.ramp && (
-                      <View style={styles.badgePill}>
-                        <MaterialCommunityIcons name="wheelchair" size={12} color="#10B981" />
-                        <Text style={styles.badgeText}>Ramp</Text>
+                      <View style={[styles.badgePill, { backgroundColor: colors.featureTagBg }]}>
+                        <MaterialCommunityIcons name="wheelchair" size={12} color={colors.statusDotVerified} />
+                        <Text style={[styles.badgeText, { color: colors.featureTagText }]}>Ramp</Text>
                       </View>
                     )}
                     {item.features.elevator && (
-                      <View style={styles.badgePill}>
-                        <MaterialCommunityIcons name="elevator-passenger" size={12} color="#10B981" />
-                        <Text style={styles.badgeText}>Elevator</Text>
+                      <View style={[styles.badgePill, { backgroundColor: colors.featureTagBg }]}>
+                        <MaterialCommunityIcons name="elevator-passenger" size={12} color={colors.statusDotVerified} />
+                        <Text style={[styles.badgeText, { color: colors.featureTagText }]}>Elevator</Text>
                       </View>
                     )}
                     {item.features.toilet && (
-                      <View style={styles.badgePill}>
-                        <MaterialCommunityIcons name="human-handsdown" size={12} color="#10B981" />
-                        <Text style={styles.badgeText}>Toilet</Text>
+                      <View style={[styles.badgePill, { backgroundColor: colors.featureTagBg }]}>
+                        <MaterialCommunityIcons name="human-handsdown" size={12} color={colors.statusDotVerified} />
+                        <Text style={[styles.badgeText, { color: colors.featureTagText }]}>Toilet</Text>
                       </View>
                     )}
                   </View>
 
-                  {/* Status Footer */}
                   <View style={styles.cardFooter}>
                     <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
                     <Text style={[styles.statusText, { color: statusColor }]}>
                       {item.status.toUpperCase()}
                     </Text>
-                    <Text style={styles.confirmsText}>
+                    <Text style={[styles.confirmsText, { color: colors.textMuted }]}>
                       • {item.confirmCount} Confirms ({item.disputeCount} Disputes)
                     </Text>
                   </View>
                 </View>
               </TouchableOpacity>
+              </AnimatedCard>
             );
           })}
         </ScrollView>
       ) : (
-        /* List View */
         <FlatList
           data={filteredPlaces}
           keyExtractor={(item) => item.id}
@@ -302,37 +274,37 @@ export default function MapScreen() {
             const statusColor = getStatusColor(item.status);
             return (
               <TouchableOpacity
-                style={styles.card}
+                style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
                 activeOpacity={0.85}
                 onPress={() => handleSelectPlace(item)}
               >
                 <Image source={{ uri: item.photos[0] }} style={styles.cardImage} />
                 <View style={styles.cardInfo}>
                   <View style={styles.cardTitleRow}>
-                    <Text style={styles.cardTitle}>{item.name}</Text>
-                    <TouchableOpacity onPress={() => toggleSavePlace(item.id)}>
+                    <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{item.name}</Text>
+                    <TouchableOpacity onPress={() => handleToggleSave(item.id)}>
                       <Ionicons
                         name={item.saved ? 'bookmark' : 'bookmark-outline'}
                         size={20}
-                        color={item.saved ? '#6366F1' : '#94A3B8'}
+                        color={item.saved ? colors.accent : colors.textMuted}
                       />
                     </TouchableOpacity>
                   </View>
-                  <Text style={styles.cardAddress}>{item.address}</Text>
+                  <Text style={[styles.cardAddress, { color: colors.textSecondary }]}>{item.address}</Text>
                   <View style={styles.featureRow}>
                     {item.features.ramp && (
-                      <View style={styles.badgePill}>
-                        <Text style={styles.badgeText}>Ramp</Text>
+                      <View style={[styles.badgePill, { backgroundColor: colors.featureTagBg }]}>
+                        <Text style={[styles.badgeText, { color: colors.featureTagText }]}>Ramp</Text>
                       </View>
                     )}
                     {item.features.elevator && (
-                      <View style={styles.badgePill}>
-                        <Text style={styles.badgeText}>Elevator</Text>
+                      <View style={[styles.badgePill, { backgroundColor: colors.featureTagBg }]}>
+                        <Text style={[styles.badgeText, { color: colors.featureTagText }]}>Elevator</Text>
                       </View>
                     )}
                     {item.features.toilet && (
-                      <View style={styles.badgePill}>
-                        <Text style={styles.badgeText}>Accessible Restroom</Text>
+                      <View style={[styles.badgePill, { backgroundColor: colors.featureTagBg }]}>
+                        <Text style={[styles.badgeText, { color: colors.featureTagText }]}>Accessible Restroom</Text>
                       </View>
                     )}
                   </View>
@@ -340,7 +312,7 @@ export default function MapScreen() {
                     <Text style={[styles.statusText, { color: statusColor }]}>
                       {item.status.toUpperCase()}
                     </Text>
-                    <Text style={styles.confirmsText}>
+                    <Text style={[styles.confirmsText, { color: colors.textMuted }]}>
                       {item.confirmCount} confirmations
                     </Text>
                   </View>
@@ -351,12 +323,11 @@ export default function MapScreen() {
         />
       )}
 
-      {/* Place Details Modal Popup */}
       <PlaceDetailsModal
         place={activeModalPlace}
         visible={!!activeModalPlace}
         onClose={() => setActiveModalPlace(null)}
-        onToggleSave={toggleSavePlace}
+        onToggleSave={handleToggleSave}
         onReportUpdate={() => {
           setActiveModalPlace(null);
           router.push('/report' as any);
@@ -369,18 +340,14 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#090D16',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 12,
     paddingBottom: 10,
-    backgroundColor: '#0F172A',
     borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
   },
   headerTitleContainer: {
     flexDirection: 'row',
@@ -388,13 +355,11 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   appTitle: {
-    color: '#F8FAFC',
     fontSize: 17,
     fontWeight: '800',
     letterSpacing: 0.3,
   },
   appSubtitle: {
-    color: '#94A3B8',
     fontSize: 10,
     fontWeight: '600',
   },
@@ -402,15 +367,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#312E81',
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#4338CA',
   },
   viewToggleText: {
-    color: '#FFF',
     fontSize: 11,
     fontWeight: '700',
   },
@@ -418,22 +380,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 4,
-    backgroundColor: '#0F172A',
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1E293B',
     borderRadius: 14,
     paddingHorizontal: 12,
     height: 42,
     borderWidth: 1,
-    borderColor: '#334155',
     gap: 8,
   },
   searchInput: {
     flex: 1,
-    color: '#F8FAFC',
     fontSize: 13,
   },
   filterScroll: {
@@ -448,32 +406,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#1E293B',
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  filterChipActive: {
-    backgroundColor: '#4F46E5',
-    borderColor: '#6366F1',
   },
   filterChipText: {
-    color: '#94A3B8',
     fontSize: 12,
     fontWeight: '600',
-  },
-  filterTextActive: {
-    color: '#FFF',
-    fontWeight: '700',
   },
   scrollWrapper: {
     flex: 1,
     paddingHorizontal: 16,
   },
   sectionHeader: {
-    color: '#64748B',
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1,
@@ -486,13 +432,11 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   card: {
-    backgroundColor: '#0F172A',
     borderRadius: 16,
     marginBottom: 12,
     flexDirection: 'row',
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#1E293B',
   },
   cardImage: {
     width: 100,
@@ -509,7 +453,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cardTitle: {
-    color: '#F8FAFC',
     fontSize: 14,
     fontWeight: '700',
     flex: 1,
@@ -519,7 +462,6 @@ const styles = StyleSheet.create({
     padding: 2,
   },
   cardAddress: {
-    color: '#94A3B8',
     fontSize: 11,
     marginTop: 2,
   },
@@ -533,13 +475,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#1E293B',
     paddingHorizontal: 6,
     paddingVertical: 3,
     borderRadius: 6,
   },
   badgeText: {
-    color: '#CBD5E1',
     fontSize: 10,
     fontWeight: '600',
   },
@@ -560,7 +500,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   confirmsText: {
-    color: '#64748B',
     fontSize: 10,
   },
 });
