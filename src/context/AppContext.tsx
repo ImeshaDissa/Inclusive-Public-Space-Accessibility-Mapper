@@ -3,6 +3,10 @@ import { Place, Report, AppNotification, UserProfile, StatusType } from '@/types
 import { MOCK_PLACES, MOCK_REPORTS, INITIAL_USER_PROFILE, INITIAL_NOTIFICATIONS } from '@/constants/mockData';
 
 interface AppContextType {
+  isAuthenticated: boolean;
+  signIn: (email?: string, password?: string) => void;
+  signUp: (name: string, email: string, password?: string, hasDisability?: boolean) => void;
+  signOut: () => void;
   places: Place[];
   reports: Report[];
   notifications: AppNotification[];
@@ -34,11 +38,37 @@ export function computeStatus(confirmCount: number, disputeCount: number): Statu
 }
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
   const [places, setPlaces] = useState<Place[]>(MOCK_PLACES);
   const [reports, setReports] = useState<Report[]>(MOCK_REPORTS);
   const [notifications, setNotifications] = useState<AppNotification[]>(INITIAL_NOTIFICATIONS);
   const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_USER_PROFILE);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
+
+  const signIn = (email?: string) => {
+    setIsAuthenticated(true);
+    if (email) {
+      setUserProfile((prev) => ({
+        ...prev,
+        email: email,
+        name: email.split('@')[0].replace('.', ' ') || 'Community Mapper',
+      }));
+    }
+  };
+
+  const signUp = (name: string, email: string, _password?: string, hasDisability: boolean = false) => {
+    setIsAuthenticated(true);
+    setUserProfile((prev) => ({
+      ...prev,
+      name: name || 'Alex Morgan',
+      email: email || 'alex@accessibility.org',
+      hasDisability,
+    }));
+  };
+
+  const signOut = () => {
+    setIsAuthenticated(false);
+  };
 
   const toggleSavePlace = (placeId: string) => {
     setPlaces((prevPlaces) =>
@@ -53,7 +83,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     newStatus: StatusType
   ) => {
     const targetPlace = places.find((p) => p.id === placeId);
-    // Notify if saved or if place exists
     if (targetPlace && targetPlace.saved) {
       const statusLabel = newStatus.toUpperCase();
       const newNotif: AppNotification = {
@@ -143,8 +172,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (r.id !== reportId) return r;
         const newConfirm = r.confirmCount + 1;
         const newStatus = computeStatus(newConfirm, r.disputeCount);
-        
-        // Update associated place
+
         setPlaces((prevPlaces) =>
           prevPlaces.map((p) => {
             if (p.id !== r.placeId) return p;
@@ -178,7 +206,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const newStatus = computeStatus(r.confirmCount, newDisputes);
         const updatedReasons = [...(r.disputeReasons || []), reason];
 
-        // Update associated place
         setPlaces((prevPlaces) =>
           prevPlaces.map((p) => {
             if (p.id !== r.placeId) return p;
@@ -220,6 +247,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   return (
     <AppContext.Provider
       value={{
+        isAuthenticated,
+        signIn,
+        signUp,
+        signOut,
         places,
         reports,
         notifications,

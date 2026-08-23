@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useColorScheme, View, Text, StyleSheet } from 'react-native';
+import { useColorScheme } from 'react-native';
 import { useApp } from '@/context/AppContext';
 
 export default function TabLayout() {
@@ -30,6 +30,15 @@ export default function TabLayout() {
         },
       }}
     >
+      <Tabs.Screen
+        name="home"
+        options={{
+          title: 'Home',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'home' : 'home-outline'} size={22} color={color} />
+          ),
+        }}
+      />
       <Tabs.Screen
         name="map"
         options={{

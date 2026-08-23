@@ -8,6 +8,7 @@ import {
   Switch,
   Image,
   SafeAreaView,
+  Alert,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -24,7 +25,7 @@ export default function ProfileScreen() {
     toggleSavePlace,
     notifications,
     clearNotifications,
-    markNotificationsRead,
+    signOut,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'profile' | 'saved' | 'notifications'>('profile');
@@ -53,6 +54,11 @@ export default function ProfileScreen() {
     });
   };
 
+  const handleSignOut = () => {
+    signOut();
+    router.replace('/(auth)/login' as any);
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Profile Header */}
@@ -68,6 +74,12 @@ export default function ProfileScreen() {
             </View>
           </View>
         </View>
+
+        {/* Sign Out Button */}
+        <TouchableOpacity style={styles.signOutHeaderBtn} onPress={handleSignOut}>
+          <Ionicons name="log-out-outline" size={18} color="#EF4444" />
+          <Text style={styles.signOutHeaderText}>Sign Out</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Sub-Navigation Segment Tabs */}
@@ -202,6 +214,12 @@ export default function ProfileScreen() {
                 </View>
               </View>
             </View>
+
+            {/* Bottom Sign Out Card */}
+            <TouchableOpacity style={styles.bottomSignOutBtn} onPress={handleSignOut}>
+              <Ionicons name="log-out-outline" size={18} color="#EF4444" />
+              <Text style={styles.bottomSignOutText}>Sign Out of Account</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -372,6 +390,22 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
   },
+  signOutHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#450A0A',
+    borderColor: '#7F1D1D',
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  signOutHeaderText: {
+    color: '#EF4444',
+    fontSize: 11,
+    fontWeight: '700',
+  },
   segmentContainer: {
     flexDirection: 'row',
     backgroundColor: '#0F172A',
@@ -484,6 +518,24 @@ const styles = StyleSheet.create({
     color: '#F8FAFC',
     fontSize: 13,
     fontWeight: '600',
+  },
+  bottomSignOutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#1E293B',
+    borderWidth: 1,
+    borderColor: '#7F1D1D',
+    paddingVertical: 14,
+    borderRadius: 14,
+    marginTop: 10,
+    marginBottom: 20,
+  },
+  bottomSignOutText: {
+    color: '#EF4444',
+    fontSize: 13,
+    fontWeight: '700',
   },
   savedCard: {
     flexDirection: 'row',
