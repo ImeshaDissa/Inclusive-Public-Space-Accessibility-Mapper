@@ -675,4 +675,18 @@ const styles = StyleSheet.create({
     fontSize: 10,
     marginTop: 4,
   },
+  signOutHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#FEE2E2',
+  },
+  signOutHeaderText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
 });

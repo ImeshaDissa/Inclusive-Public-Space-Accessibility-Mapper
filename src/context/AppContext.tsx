@@ -62,16 +62,20 @@ const parseString = (value: string | null) => {
 
 interface AppContextType {
   isAuthenticated: boolean;
-  signIn: (email?: string, password?: string) => void;
-  signUp: (name: string, email: string, password?: string, hasDisability?: boolean) => void;
-  signOut: () => void;
+  authReady: boolean;
+  authEmail: string | null;
+  signIn: (credentials: { email: string; password: string }) => Promise<AuthActionResult>;
+  signUp: (details: {
+    name: string;
+    email: string;
+    password: string;
+    avatar?: string;
+  }) => Promise<AuthActionResult>;
+  signOut: () => Promise<void>;
   places: Place[];
   reports: Report[];
   notifications: AppNotification[];
   userProfile: UserProfile;
-  isAuthenticated: boolean;
-  authReady: boolean;
-  authEmail: string | null;
   selectedPlaceId: string | null;
   setSelectedPlaceId: (id: string | null) => void;
   toggleSavePlace: (placeId: string) => void;
@@ -88,14 +92,6 @@ interface AppContextType {
   updateUserProfile: (updates: Partial<UserProfile>) => void;
   clearNotifications: () => void;
   markNotificationsRead: () => void;
-  signIn: (credentials: { email: string; password: string }) => Promise<AuthActionResult>;
-  signUp: (details: {
-    name: string;
-    email: string;
-    password: string;
-    avatar?: string;
-  }) => Promise<AuthActionResult>;
-  signOut: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -437,7 +433,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   return (
     <AppContext.Provider
       value={{
-        isAuthenticated,
+        isAuthenticated: !!authEmail,
+        authReady,
+        authEmail,
         signIn,
         signUp,
         signOut,
@@ -445,9 +443,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         reports,
         notifications,
         userProfile,
-        isAuthenticated: !!authEmail,
-        authReady,
-        authEmail,
         selectedPlaceId,
         setSelectedPlaceId,
         toggleSavePlace,
@@ -457,9 +452,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         updateUserProfile,
         clearNotifications,
         markNotificationsRead,
-        signIn,
-        signUp,
-        signOut,
       }}
     >
       {children}
