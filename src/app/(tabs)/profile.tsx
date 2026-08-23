@@ -8,6 +8,7 @@ import {
   Switch,
   Image,
   SafeAreaView,
+  Alert,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -78,6 +79,12 @@ export default function ProfileScreen() {
             </View>
           </View>
         </View>
+
+        {/* Sign Out Button */}
+        <TouchableOpacity style={styles.signOutHeaderBtn} onPress={handleSignOut}>
+          <Ionicons name="log-out-outline" size={18} color="#EF4444" />
+          <Text style={styles.signOutHeaderText}>Sign Out</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={[styles.sessionCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
@@ -214,6 +221,12 @@ export default function ProfileScreen() {
                 </View>
               </View>
             </View>
+
+            {/* Bottom Sign Out Card */}
+            <TouchableOpacity style={styles.bottomSignOutBtn} onPress={handleSignOut}>
+              <Ionicons name="log-out-outline" size={18} color="#EF4444" />
+              <Text style={styles.bottomSignOutText}>Sign Out of Account</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -543,6 +556,24 @@ const styles = StyleSheet.create({
   prefText: {
     fontSize: 13,
     fontWeight: '600',
+  },
+  bottomSignOutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#1E293B',
+    borderWidth: 1,
+    borderColor: '#7F1D1D',
+    paddingVertical: 14,
+    borderRadius: 14,
+    marginTop: 10,
+    marginBottom: 20,
+  },
+  bottomSignOutText: {
+    color: '#EF4444',
+    fontSize: 13,
+    fontWeight: '700',
   },
   savedCard: {
     flexDirection: 'row',

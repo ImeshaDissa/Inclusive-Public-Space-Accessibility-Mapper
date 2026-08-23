@@ -61,6 +61,10 @@ const parseString = (value: string | null) => {
 };
 
 interface AppContextType {
+  isAuthenticated: boolean;
+  signIn: (email?: string, password?: string) => void;
+  signUp: (name: string, email: string, password?: string, hasDisability?: boolean) => void;
+  signOut: () => void;
   places: Place[];
   reports: Report[];
   notifications: AppNotification[];
@@ -217,7 +221,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     newStatus: StatusType
   ) => {
     const targetPlace = places.find((p) => p.id === placeId);
-    // Notify if saved or if place exists
     if (targetPlace && targetPlace.saved) {
       const statusLabel = newStatus.toUpperCase();
       const newNotif: AppNotification = {
@@ -434,6 +437,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   return (
     <AppContext.Provider
       value={{
+        isAuthenticated,
+        signIn,
+        signUp,
+        signOut,
         places,
         reports,
         notifications,
