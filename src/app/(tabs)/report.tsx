@@ -22,6 +22,8 @@ import { useApp } from '@/context/AppContext';
 import { useAppTheme } from '@/context/ThemeContext';
 import { useToast } from '@/context/ToastContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CategoryPlacesSection } from '@/components/CategoryPlacesSection';
+import { SelectedVenuePayload } from '@/types/categoryPlaces';
 
 /**
  * ─────────────────────────────────────────────────────────────────────────
@@ -161,11 +163,9 @@ export default function SubmitReportScreen() {
   const [step, setStep] = useState<1 | 2>(1);
 
   // ── Step 1: location ─────────────────────────────────────────────────
-  const [selectedPlaceId, setSelectedPlaceId] = useState<string>(places[0]?.id || '');
-  const [customPlaceName, setCustomPlaceName] = useState<string>('');
-  const [isCustomPlace, setIsCustomPlace] = useState<boolean>(false);
   const [coords, setCoords] = useState<{ latitude: number; longitude: number }>(DEFAULT_CENTER);
   const [address, setAddress] = useState<string>('');
+  const [detectedSpotName, setDetectedSpotName] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<
     { display_name: string; lat: string; lon: string }[]
@@ -173,6 +173,53 @@ export default function SubmitReportScreen() {
   const [isSearching, setIsSearching] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   const [mapKey, setMapKey] = useState(0); // force webview reload on recenter jumps
+
+  // Selected venue (either picked from saved database places or custom added under category)
+  const [selectedVenue, setSelectedVenue] = useState<SelectedVenuePayload | null>({
+    placeId: 'db-mall-1',
+    name: 'Grand City Galleria Mall',
+    category: 'Shopping Mall',
+    categoryId: 'mall',
+    address: '500 Central Boulevard, Downtown',
+    isNewCustomPlace: false,
+  });
+
+  // Reverse-geocode pinned map coordinates to get place & address
+  useEffect(() => {
+    let isCancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.latitude}&lon=${coords.longitude}&zoom=18&addressdetails=1`,
+          { headers: { 'Accept-Language': 'en' } }
+        );
+        const data = await res.json();
+        if (isCancelled) return;
+
+        if (data && data.address) {
+          const fullAddr = data.display_name || '';
+          setAddress(fullAddr);
+          const spotName =
+            data.name ||
+            data.address.amenity ||
+            data.address.building ||
+            data.address.shop ||
+            data.address.leisure ||
+            data.address.tourism ||
+            data.address.road ||
+            'Pinned Location';
+          setDetectedSpotName(spotName);
+        }
+      } catch (e) {
+        // ignore
+      }
+    }, 450);
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(timer);
+    };
+  }, [coords.latitude, coords.longitude]);
 
   // ── Step 2: details ──────────────────────────────────────────────────
   const [features, setFeatures] = useState<Record<FeatureKey, boolean>>({
@@ -368,31 +415,31 @@ export default function SubmitReportScreen() {
     setPhotos((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const targetPlace = places.find((p) => p.id === selectedPlaceId);
-  const placeName = isCustomPlace ? customPlaceName.trim() : targetPlace ? targetPlace.name : '';
-
-  const canContinueFromStep1 = isCustomPlace ? customPlaceName.trim().length > 0 : !!targetPlace;
+  const canContinueFromStep1 = !!selectedVenue && selectedVenue.name.trim().length > 0;
 
   const goToDetails = () => {
     if (!canContinueFromStep1) {
-      Alert.alert('Almost there', 'Please choose a venue or enter a custom venue name to continue.');
+      Alert.alert('Almost there', 'Please select or add a venue in this category to continue.');
       return;
     }
     setStep(2);
   };
 
   const handleSubmit = () => {
-    const finalPlaceName = isCustomPlace ? customPlaceName.trim() : targetPlace ? targetPlace.name : 'Unknown Place';
+    const finalPlaceName = selectedVenue?.name || 'Selected Place';
 
     addReport({
-      placeId: isCustomPlace ? undefined : selectedPlaceId,
+      placeId: selectedVenue?.isNewCustomPlace ? undefined : selectedVenue?.placeId,
       placeName: finalPlaceName,
       note: note.trim() || 'Accessibility check performed.',
       featuresReported: features,
       photos,
       priority,
-      // TODO: persist once the reports API/DB supports coordinates:
-      location: { latitude: coords.latitude, longitude: coords.longitude, address },
+      location: {
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        address: address || selectedVenue?.address || finalPlaceName,
+      },
     } as any);
 
     showToast(`Report submitted for ${finalPlaceName}`, 'success', 'checkmark-circle');
@@ -576,79 +623,15 @@ export default function SubmitReportScreen() {
             </Text>
           </View>
 
-          {/* ── Venue picker ────────────────────────────────────── */}
-          <View style={styles.section}>
-            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>SELECT VENUE OR LOCATION</Text>
-
-            {!isCustomPlace ? (
-              <View style={{ gap: 8 }}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  {places.map((place) => {
-                    const isSelected = selectedPlaceId === place.id;
-                    return (
-                      <TouchableOpacity
-                        key={place.id}
-                        style={[
-                          styles.venueChip,
-                          { backgroundColor: colors.chipBg, borderColor: colors.chipBorder },
-                          isSelected && { backgroundColor: colors.segmentActiveBg, borderColor: colors.accent },
-                        ]}
-                        onPress={() => setSelectedPlaceId(place.id)}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: isSelected }}
-                        accessibilityLabel={`Select venue ${place.name}`}
-                      >
-                        <Ionicons
-                          name={isSelected ? 'location' : 'location-outline'}
-                          size={14}
-                          color={isSelected ? colors.filterActiveText : colors.accent}
-                        />
-                        <Text
-                          style={[
-                            styles.venueChipText,
-                            { color: isSelected ? colors.filterActiveText : colors.textSecondary },
-                            isSelected && { fontWeight: '700' },
-                          ]}
-                        >
-                          {place.name}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-
-                <TouchableOpacity
-                  style={styles.customToggleBtn}
-                  onPress={() => setIsCustomPlace(true)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Enter a new venue name instead of picking from the list"
-                >
-                  <Ionicons name="add-circle-outline" size={16} color={colors.accentLight} />
-                  <Text style={[styles.customToggleText, { color: colors.accentLight }]}>Enter a new venue name</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View style={{ gap: 8 }}>
-                <TextInput
-                  style={[styles.textInput, { backgroundColor: colors.chipBg, borderColor: colors.chipBorder, color: colors.textPrimary }]}
-                  placeholder="e.g. Metro West Library, Grand Cinema…"
-                  placeholderTextColor={colors.textMuted}
-                  value={customPlaceName}
-                  onChangeText={setCustomPlaceName}
-                  accessibilityLabel="Custom venue name"
-                />
-                <TouchableOpacity
-                  style={styles.customToggleBtn}
-                  onPress={() => setIsCustomPlace(false)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Pick from existing places list instead"
-                >
-                  <Ionicons name="arrow-back-circle-outline" size={16} color={colors.accentLight} />
-                  <Text style={[styles.customToggleText, { color: colors.accentLight }]}>Pick from existing places</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
+          {/* ── Category & Saved Places in Database Section ────────── */}
+          <CategoryPlacesSection
+            coords={coords}
+            detectedAddress={address}
+            detectedSpotName={detectedSpotName}
+            registeredPlaces={places}
+            selectedVenue={selectedVenue}
+            onSelectVenue={setSelectedVenue}
+          />
         </ScrollView>
       ) : (
         <ScrollView
@@ -660,7 +643,7 @@ export default function SubmitReportScreen() {
           <View style={[styles.contextBanner, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
             <Ionicons name="location" size={16} color={colors.accent} />
             <Text style={[styles.contextBannerText, { color: colors.textPrimary }]} numberOfLines={1}>
-              {placeName || 'Selected venue'}
+              {selectedVenue?.name || 'Selected venue'} ({selectedVenue?.category || 'Public Space'})
             </Text>
           </View>
 
@@ -928,14 +911,6 @@ const styles = StyleSheet.create({
   },
   mapOverlayText: { fontSize: 12, flex: 1, fontWeight: '600' },
   mapHint: { fontSize: 11.5, marginTop: 8, lineHeight: 16 },
-
-  venueChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20, marginRight: 8, borderWidth: 1,
-  },
-  venueChipText: { fontSize: 12.5, fontWeight: '600' },
-  customToggleBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4, paddingVertical: 4 },
-  customToggleText: { fontSize: 12.5, fontWeight: '700' },
 
   textInput: { borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, fontSize: 13.5, borderWidth: 1 },
   textArea: { minHeight: 96, textAlignVertical: 'top' },
