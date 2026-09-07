@@ -23,46 +23,9 @@ import { useAppTheme } from '@/context/ThemeContext';
 import { useToast } from '@/context/ToastContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CategoryPlacesSection } from '@/components/CategoryPlacesSection';
+import { ReportDetailsSection } from '@/components/ReportDetailsSection';
 import { SelectedVenuePayload } from '@/types/categoryPlaces';
-
-/**
- * ─────────────────────────────────────────────────────────────────────────
- * SUBMIT ACCESSIBILITY REPORT — 2 STEP WIZARD
- * Step 1: "Where"    → map, search, existing venue chips, custom venue
- * Step 2: "Details"  → feature checklist, priority, notes, photos, submit
- *
- * MAP: Free, no-API-key OpenStreetMap tiles rendered via Leaflet inside a
- * WebView. Geocoding/search uses OpenStreetMap's free Nominatim service.
- * No backend exists yet — selected coordinates + address are kept in local
- * state and passed into addReport() as a `location` field. Extend the
- * AppContext report type to persist it once the API/DB layer exists.
- *
- * Requires: `react-native-webview`, `expo-location`
- *   npx expo install react-native-webview expo-location
- * ─────────────────────────────────────────────────────────────────────────
- */
-
-type FeatureKey =
-  | 'ramp'
-  | 'elevator'
-  | 'toilet'
-  | 'parking'
-  | 'stepFree'
-  | 'tactilePaving'
-  | 'automaticDoor';
-
-const FEATURE_META: Record<
-  FeatureKey,
-  { label: string; icon: string; iconSet: 'mci'; hint: string }
-> = {
-  ramp: { label: 'Wheelchair Ramp', icon: 'wheelchair', iconSet: 'mci', hint: 'wheelchair ramp availability' },
-  elevator: { label: 'Elevator Access', icon: 'elevator-passenger', iconSet: 'mci', hint: 'elevator access' },
-  toilet: { label: 'Accessible Restroom', icon: 'human-wheelchair', iconSet: 'mci', hint: 'accessible restroom' },
-  parking: { label: 'Disabled Parking', icon: 'car', iconSet: 'mci', hint: 'reserved disabled parking' },
-  stepFree: { label: 'Step-Free Entrance', icon: 'walk', iconSet: 'mci', hint: 'step-free entrance' },
-  tactilePaving: { label: 'Tactile Paving', icon: 'road-variant', iconSet: 'mci', hint: 'tactile paving for visually impaired visitors' },
-  automaticDoor: { label: 'Automatic Door', icon: 'door', iconSet: 'mci', hint: 'automatic door' },
-};
+import { FeatureKey } from '@/constants/reportFeatures';
 
 const DEFAULT_CENTER = { latitude: 6.9271, longitude: 79.8612 }; // Colombo fallback
 
@@ -232,9 +195,7 @@ export default function SubmitReportScreen() {
     automaticDoor: false,
   });
   const [note, setNote] = useState<string>('');
-  const [photos, setPhotos] = useState<string[]>([
-    'https://images.unsplash.com/photo-1517649763962-0c623266010b?auto=format&fit=crop&w=800&q=80',
-  ]);
+  const [photos, setPhotos] = useState<string[]>([]);
   const [priority, setPriority] = useState<'High' | 'Medium' | 'Low'>('High');
   const [showSuccessToast, setShowSuccessToast] = useState<boolean>(false);
 
@@ -401,14 +362,8 @@ export default function SubmitReportScreen() {
     }
   };
 
-  const handleAddSamplePhoto = () => {
-    const samplePhotos = [
-      'https://images.unsplash.com/photo-1585320806297-9794b3e4eeae?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1521587760476-6c12a4b040da?auto=format&fit=crop&w=800&q=80',
-    ];
-    const nextPhoto = samplePhotos[photos.length % samplePhotos.length];
-    setPhotos((prev) => [...prev, nextPhoto]);
+  const handleAddPhoto = (uri: string) => {
+    setPhotos((prev) => [...prev, uri]);
   };
 
   const removePhoto = (index: number) => {
@@ -634,156 +589,20 @@ export default function SubmitReportScreen() {
           />
         </ScrollView>
       ) : (
-        <ScrollView
-          style={styles.scrollContainer}
-          contentContainerStyle={{ paddingBottom: 24 }}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Context summary chip carried over from step 1 */}
-          <View style={[styles.contextBanner, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-            <Ionicons name="location" size={16} color={colors.accent} />
-            <Text style={[styles.contextBannerText, { color: colors.textPrimary }]} numberOfLines={1}>
-              {selectedVenue?.name || 'Selected venue'} ({selectedVenue?.category || 'Public Space'})
-            </Text>
-          </View>
-
-          {/* ── Feature checklist as a grid of cards ───────────── */}
-          <View style={styles.section}>
-            <View style={styles.sectionLabelRow}>
-              <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>ACCESSIBILITY FEATURES</Text>
-              <Text style={[styles.sectionLabelCount, { color: colors.accent }]}>{featureCount} selected</Text>
-            </View>
-            <View style={styles.featureGrid}>
-              {(Object.keys(FEATURE_META) as FeatureKey[]).map((key) => {
-                const meta = FEATURE_META[key];
-                const isOn = features[key];
-                return (
-                  <TouchableOpacity
-                    key={key}
-                    onPress={() => toggleFeature(key)}
-                    style={[
-                      styles.featureCard,
-                      { backgroundColor: colors.chipBg, borderColor: colors.chipBorder },
-                      isOn && { backgroundColor: colors.segmentActiveBg, borderColor: colors.accent },
-                    ]}
-                    accessibilityRole="switch"
-                    accessibilityState={{ checked: isOn }}
-                    accessibilityLabel={meta.label}
-                    accessibilityHint={`Double tap to toggle ${meta.hint}`}
-                  >
-                    <MaterialCommunityIcons
-                      name={meta.icon as any}
-                      size={22}
-                      color={isOn ? colors.accent : colors.textMuted}
-                    />
-                    <Text
-                      style={[
-                        styles.featureCardLabel,
-                        { color: isOn ? colors.textPrimary : colors.textSecondary },
-                        isOn && { fontWeight: '700' },
-                      ]}
-                    >
-                      {meta.label}
-                    </Text>
-                    <View
-                      style={[
-                        styles.featureCheckDot,
-                        { borderColor: colors.chipBorder },
-                        isOn && { backgroundColor: colors.accent, borderColor: colors.accent },
-                      ]}
-                    >
-                      {isOn && <Ionicons name="checkmark" size={12} color="#FFF" />}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-
-          {/* ── Priority ────────────────────────────────────────── */}
-          <View style={styles.section}>
-            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>REPORT PRIORITY</Text>
-            <View style={styles.priorityRow}>
-              {(['High', 'Medium', 'Low'] as const).map((p) => {
-                const isSelected = priority === p;
-                const colorMap = { High: colors.priorityHighBorder, Medium: colors.priorityMediumBorder, Low: colors.priorityLowBorder };
-                const bgMap = { High: colors.priorityHighBg, Medium: colors.priorityMediumBg, Low: colors.priorityLowBg };
-                const textMap = { High: colors.priorityHighText, Medium: colors.priorityMediumText, Low: colors.priorityLowText };
-                return (
-                  <TouchableOpacity
-                    key={p}
-                    style={[
-                      styles.priorityChip,
-                      { backgroundColor: colors.chipBg, borderColor: colors.chipBorder },
-                      isSelected && { backgroundColor: bgMap[p], borderColor: colorMap[p] },
-                    ]}
-                    onPress={() => setPriority(p)}
-                    accessibilityRole="radio"
-                    accessibilityState={{ selected: isSelected }}
-                    accessibilityLabel={`${p} priority`}
-                  >
-                    <Text
-                      style={[
-                        styles.priorityChipText,
-                        { color: isSelected ? textMap[p] : colors.textSecondary },
-                        isSelected && { fontWeight: '800' },
-                      ]}
-                    >
-                      {p}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-
-          {/* ── Notes ───────────────────────────────────────────── */}
-          <View style={styles.section}>
-            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>AUDIT NOTES</Text>
-            <TextInput
-              style={[styles.textInput, styles.textArea, { backgroundColor: colors.chipBg, borderColor: colors.chipBorder, color: colors.textPrimary }]}
-              placeholder="Describe condition, maintenance status, door width, slope steepness, etc…"
-              placeholderTextColor={colors.textMuted}
-              multiline
-              numberOfLines={4}
-              value={note}
-              onChangeText={setNote}
-              accessibilityLabel="Audit notes"
-              maxLength={500}
-            />
-            <Text style={[styles.charCount, { color: colors.textMuted }]}>{note.length}/500</Text>
-          </View>
-
-          {/* ── Photos ──────────────────────────────────────────── */}
-          <View style={styles.section}>
-            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>PHOTO EVIDENCE</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {photos.map((uri, idx) => (
-                <View key={idx} style={styles.photoItem}>
-                  <Image source={{ uri }} style={styles.photoThumbnail} accessibilityLabel={`Attached photo ${idx + 1}`} />
-                  <TouchableOpacity
-                    style={styles.removePhotoBtn}
-                    onPress={() => removePhoto(idx)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Remove photo ${idx + 1}`}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <Ionicons name="close" size={14} color="#FFF" />
-                  </TouchableOpacity>
-                </View>
-              ))}
-              <TouchableOpacity
-                style={[styles.addPhotoBtn, { backgroundColor: colors.chipBg, borderColor: colors.chipBorder }]}
-                onPress={handleAddSamplePhoto}
-                accessibilityRole="button"
-                accessibilityLabel="Attach a photo"
-              >
-                <Ionicons name="camera-outline" size={24} color={colors.accent} />
-                <Text style={[styles.addPhotoText, { color: colors.accentLight }]}>Attach</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </ScrollView>
+        <ReportDetailsSection
+          selectedVenue={selectedVenue}
+          coords={coords}
+          features={features}
+          onToggleFeature={toggleFeature}
+          priority={priority}
+          onChangePriority={setPriority}
+          note={note}
+          onChangeNote={setNote}
+          photos={photos}
+          onAddPhoto={handleAddPhoto}
+          onRemovePhoto={removePhoto}
+          onBackToLocation={() => setStep(1)}
+        />
       )}
 
       {/* ── Sticky bottom action bar ─────────────────────────────── */}
@@ -911,44 +730,6 @@ const styles = StyleSheet.create({
   },
   mapOverlayText: { fontSize: 12, flex: 1, fontWeight: '600' },
   mapHint: { fontSize: 11.5, marginTop: 8, lineHeight: 16 },
-
-  textInput: { borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, fontSize: 13.5, borderWidth: 1 },
-  textArea: { minHeight: 96, textAlignVertical: 'top' },
-  charCount: { fontSize: 11, textAlign: 'right', marginTop: 6 },
-
-  contextBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    borderWidth: 1, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 14, marginBottom: 18,
-  },
-  contextBannerText: { flex: 1, fontSize: 13, fontWeight: '700' },
-
-  featureGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  featureCard: {
-    width: '47.5%', borderWidth: 1, borderRadius: 16, padding: 14,
-    gap: 8, minHeight: 96, justifyContent: 'space-between',
-  },
-  featureCardLabel: { fontSize: 12.5, lineHeight: 16 },
-  featureCheckDot: {
-    position: 'absolute', top: 10, right: 10,
-    width: 20, height: 20, borderRadius: 10, borderWidth: 1.5,
-    justifyContent: 'center', alignItems: 'center',
-  },
-
-  priorityRow: { flexDirection: 'row', gap: 10 },
-  priorityChip: { flex: 1, paddingVertical: 12, borderRadius: 12, alignItems: 'center', borderWidth: 1 },
-  priorityChipText: { fontSize: 13, fontWeight: '700' },
-
-  photoItem: { position: 'relative', marginRight: 10 },
-  photoThumbnail: { width: 84, height: 84, borderRadius: 14 },
-  removePhotoBtn: {
-    position: 'absolute', top: -6, right: -6, backgroundColor: '#EF4444',
-    borderRadius: 11, width: 22, height: 22, justifyContent: 'center', alignItems: 'center',
-  },
-  addPhotoBtn: {
-    width: 84, height: 84, borderRadius: 14, justifyContent: 'center', alignItems: 'center',
-    borderWidth: 1.5, borderStyle: 'dashed',
-  },
-  addPhotoText: { fontSize: 10.5, fontWeight: '700', marginTop: 4 },
 
   bottomBar: { borderTopWidth: 1, paddingHorizontal: 16, paddingTop: 12 },
   primaryBtn: {
