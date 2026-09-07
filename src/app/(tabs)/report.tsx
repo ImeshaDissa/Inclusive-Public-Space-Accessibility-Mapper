@@ -520,17 +520,17 @@ export default function SubmitReportScreen() {
 
             <TouchableOpacity
               onPress={useMyLocation}
-              style={[styles.myLocationBtn, { backgroundColor: colors.segmentActiveBg, borderColor: colors.accent }]}
+              style={[styles.myLocationBtn, { backgroundColor: colors.chipBg, borderColor: colors.chipBorder }]}
               accessibilityRole="button"
               accessibilityLabel="Use my current location"
               disabled={isLocating}
             >
               {isLocating ? (
-                <ActivityIndicator size="small" color={colors.accent} />
+                <ActivityIndicator size="small" color={colors.textPrimary} />
               ) : (
-                <Ionicons name="navigate" size={16} color={colors.accent} />
+                <Ionicons name="navigate-outline" size={16} color={colors.textPrimary} />
               )}
-              <Text style={[styles.myLocationText, { color: colors.accent }]}>
+              <Text style={[styles.myLocationText, { color: colors.textPrimary }]}>
                 {isLocating ? 'Finding you…' : 'Use my current location'}
               </Text>
             </TouchableOpacity>
