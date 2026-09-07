@@ -193,11 +193,11 @@ export default function SubmitReportScreen() {
 
   // ── Step 2: details ──────────────────────────────────────────────────
   const [features, setFeatures] = useState<Record<FeatureKey, boolean>>({
-    ramp: true,
+    ramp: false,
     elevator: false,
-    toilet: true,
-    parking: true,
-    stepFree: true,
+    toilet: false,
+    parking: false,
+    stepFree: false,
     tactilePaving: false,
     automaticDoor: false,
   });
@@ -207,6 +207,18 @@ export default function SubmitReportScreen() {
 
   const toggleFeature = (key: FeatureKey) => {
     setFeatures((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const handleSetAllFeatures = (allOn: boolean) => {
+    setFeatures({
+      ramp: allOn,
+      elevator: allOn,
+      toilet: allOn,
+      parking: allOn,
+      stepFree: allOn,
+      tactilePaving: allOn,
+      automaticDoor: allOn,
+    });
   };
 
   const featureCount = Object.values(features).filter(Boolean).length;
@@ -635,6 +647,7 @@ export default function SubmitReportScreen() {
           coords={coords}
           features={features}
           onToggleFeature={toggleFeature}
+          onSetAllFeatures={handleSetAllFeatures}
           note={note}
           onChangeNote={setNote}
           photos={photos}
