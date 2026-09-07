@@ -34,10 +34,19 @@ export function CategoryPlacesSection({
 }: CategoryPlacesSectionProps) {
   const { colors } = useAppTheme();
 
-  // Active selected category ('mall' by default)
-  const [activeCategoryId, setActiveCategoryId] = useState<string>('mall');
+  // Active selected category
+  const [activeCategoryId, setActiveCategoryId] = useState<string>(
+    selectedVenue?.categoryId || 'mall'
+  );
   const [isAddingCustom, setIsAddingCustom] = useState<boolean>(false);
   const [customNameInput, setCustomNameInput] = useState<string>('');
+
+  // Keep activeCategoryId in sync if selectedVenue categoryId changes externally
+  React.useEffect(() => {
+    if (selectedVenue?.categoryId && selectedVenue.categoryId !== activeCategoryId) {
+      setActiveCategoryId(selectedVenue.categoryId);
+    }
+  }, [selectedVenue?.categoryId]);
 
   const activeCategory = useMemo(() => {
     return PLACE_CATEGORIES.find((c) => c.id === activeCategoryId) || PLACE_CATEGORIES[0];
@@ -76,10 +85,25 @@ export function CategoryPlacesSection({
     }).sort((a, b) => a.distanceMeters - b.distanceMeters);
   }, [activeCategoryId, activeCategory, coords, registeredPlaces]);
 
-  // Handle choosing a category
+  // Handle choosing a category: update category and sync selected location & category together
   const handleSelectCategory = (category: PlaceCategory) => {
     setActiveCategoryId(category.id);
     setIsAddingCustom(false);
+
+    const placeName =
+      detectedSpotName ||
+      (selectedVenue && selectedVenue.isNewCustomPlace && selectedVenue.name !== 'Pinned Map Spot' && selectedVenue.name !== 'Pinned Location'
+        ? selectedVenue.name
+        : `${category.name} at Selected Location`);
+
+    onSelectVenue({
+      placeId: undefined,
+      name: placeName,
+      category: category.name,
+      categoryId: category.id,
+      address: detectedAddress || (selectedVenue?.address ?? `${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)}`),
+      isNewCustomPlace: true,
+    });
   };
 
   // Handle picking a saved database place
@@ -112,62 +136,20 @@ export function CategoryPlacesSection({
 
   return (
     <View style={styles.container}>
-      {/* ── Active / Currently Selected Venue Banner ─────────────── */}
-      {selectedVenue && (
-        <View
-          style={[
-            styles.selectedHeroCard,
-            { backgroundColor: colors.card, borderColor: colors.accent },
-          ]}
-        >
-          <View style={styles.selectedHeroHeader}>
-            <View style={[styles.heroIconWrap, { backgroundColor: colors.accentBg }]}>
-              <Ionicons name="checkmark-circle" size={22} color={colors.accent} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={[styles.heroCategoryTag, { color: colors.accent }]}>
-                  {selectedVenue.category.toUpperCase()}
-                </Text>
-                {selectedVenue.isNewCustomPlace ? (
-                  <View style={[styles.pillBadge, { backgroundColor: colors.chipBg }]}>
-                    <Text style={[styles.pillBadgeText, { color: colors.textSecondary }]}>New at Pin</Text>
-                  </View>
-                ) : (
-                  <View style={[styles.pillBadge, { backgroundColor: colors.badgeVerifiedBg }]}>
-                    <Text style={[styles.pillBadgeText, { color: colors.badgeVerifiedText }]}>Saved in DB</Text>
-                  </View>
-                )}
-              </View>
-              <Text style={[styles.heroVenueTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-                {selectedVenue.name}
-              </Text>
-            </View>
-            <View style={[styles.selectedPill, { backgroundColor: colors.successBg, borderColor: colors.successBorder }]}>
-              <Ionicons name="checkmark" size={13} color={colors.statusDotVerified} />
-              <Text style={[styles.selectedPillText, { color: colors.statusDotVerified }]}>Active</Text>
-            </View>
-          </View>
-          <Text style={[styles.heroVenueAddress, { color: colors.textMuted }]} numberOfLines={1}>
-            {selectedVenue.address}
-          </Text>
-        </View>
-      )}
-
-      {/* ── Category Selector Header ─────────────────────────────── */}
-      <View style={styles.sectionHeaderRow}>
+      {/* ── 1. Category Selector Header ──────────────────────────── */}
+      <View style={styles.sectionHeaderBlock}>
         <View style={styles.titleRow}>
           <Ionicons name="grid-outline" size={16} color={colors.accent} />
           <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
             SELECT VENUE CATEGORY
           </Text>
         </View>
-        <Text style={[styles.stepHint, { color: colors.textMuted }]}>
-          Choose category to explore saved places
+        <Text style={[styles.stepSubtitle, { color: colors.textMuted }]}>
+          Choose a category to explore mapped locations
         </Text>
       </View>
 
-      {/* ── Category Chips Carousel ──────────────────────────────── */}
+      {/* ── 2. Category Chips Carousel ───────────────────────────── */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -175,6 +157,7 @@ export function CategoryPlacesSection({
       >
         {PLACE_CATEGORIES.map((cat) => {
           const isSelected = activeCategoryId === cat.id;
+          const count = SAVED_DATABASE_PLACES.filter((p) => p.categoryId === cat.id).length;
           return (
             <TouchableOpacity
               key={cat.id}
@@ -215,31 +198,73 @@ export function CategoryPlacesSection({
                 {cat.shortLabel}
               </Text>
               <Text style={[styles.categoryCardCount, { color: colors.textMuted }]}>
-                {SAVED_DATABASE_PLACES.filter((p) => p.categoryId === cat.id).length} in DB
+                {count} {count === 1 ? 'place' : 'places'}
               </Text>
             </TouchableOpacity>
           );
         })}
       </ScrollView>
 
-      {/* ── Saved Places in Database for Category ────────────────── */}
+      {/* ── 3. Active / Currently Selected Venue Banner ──────────── */}
+      {selectedVenue && (
+        <View
+          style={[
+            styles.selectedHeroCard,
+            { backgroundColor: colors.card, borderColor: colors.accent },
+          ]}
+        >
+          <View style={styles.selectedHeroHeader}>
+            <View style={[styles.heroIconWrap, { backgroundColor: colors.accentBg }]}>
+              <Ionicons name="checkmark-circle" size={22} color={colors.accent} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={[styles.heroCategoryTag, { color: colors.accent }]}>
+                  {selectedVenue.category.toUpperCase()}
+                </Text>
+                {selectedVenue.isNewCustomPlace ? (
+                  <View style={[styles.pillBadge, { backgroundColor: colors.chipBg }]}>
+                    <Text style={[styles.pillBadgeText, { color: colors.textSecondary }]}>Pinned Location</Text>
+                  </View>
+                ) : (
+                  <View style={[styles.pillBadge, { backgroundColor: colors.badgeVerifiedBg }]}>
+                    <Text style={[styles.pillBadgeText, { color: colors.badgeVerifiedText }]}>Verified Place</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={[styles.heroVenueTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                {selectedVenue.name}
+              </Text>
+            </View>
+            <View style={[styles.selectedPill, { backgroundColor: colors.successBg, borderColor: colors.successBorder }]}>
+              <Ionicons name="checkmark" size={13} color={colors.statusDotVerified} />
+              <Text style={[styles.selectedPillText, { color: colors.statusDotVerified }]}>Selected</Text>
+            </View>
+          </View>
+          <Text style={[styles.heroVenueAddress, { color: colors.textMuted }]} numberOfLines={1}>
+            {selectedVenue.address}
+          </Text>
+        </View>
+      )}
+
+      {/* ── 4. Mapped Places Nearby for Category ─────────────────── */}
       <View style={styles.subSectionHeader}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <Ionicons name="file-tray-full-outline" size={15} color={colors.accent} />
           <Text style={[styles.subSectionTitle, { color: colors.textPrimary }]}>
-            Saved {activeCategory.name}s in Database
+            Mapped {activeCategory.name}s Nearby
           </Text>
         </View>
         <Text style={[styles.savedDbCount, { color: colors.textMuted }]}>
-          {matchingSavedPlaces.length} saved
+          {matchingSavedPlaces.length} mapped
         </Text>
       </View>
 
       <Text style={[styles.subSectionHint, { color: colors.textMuted }]}>
-        Select a saved location from our database or add a new {activeCategory.name.toLowerCase()} at your pinned spot:
+        Select a verified location or confirm accessibility for your pinned spot:
       </Text>
 
-      {/* ── Horizontal list of saved database places ─────────────── */}
+      {/* ── Horizontal list of mapped places ─────────────────────── */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -293,11 +318,11 @@ export function CategoryPlacesSection({
               accessibilityState={{ selected: isSelected }}
               accessibilityLabel={`Select saved venue: ${place.name}`}
             >
-              {/* Top Row: Star saved badge & Distance */}
+              {/* Top Row: Verified badge & Distance */}
               <View style={styles.cardTopRow}>
                 <View style={[styles.dbSavedPill, { backgroundColor: colors.chipBg }]}>
-                  <Ionicons name="star" size={11} color="#F59E0B" />
-                  <Text style={[styles.dbSavedPillText, { color: colors.textSecondary }]}>In DB</Text>
+                  <Ionicons name="shield-checkmark" size={11} color={colors.statusDotVerified} />
+                  <Text style={[styles.dbSavedPillText, { color: colors.textSecondary }]}>Verified</Text>
                 </View>
                 <View style={[styles.distancePill, { backgroundColor: colors.chipBg }]}>
                   <Text style={[styles.distancePillText, { color: colors.textSecondary }]}>
@@ -430,11 +455,9 @@ const styles = StyleSheet.create({
   container: {
     marginBottom: 22,
   },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  sectionHeaderBlock: {
     marginBottom: 10,
+    gap: 3,
   },
   titleRow: {
     flexDirection: 'row',
@@ -442,17 +465,19 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   sectionLabel: {
-    fontSize: 11.5,
+    fontSize: 12,
     fontWeight: '800',
-    letterSpacing: 1,
+    letterSpacing: 0.8,
   },
-  stepHint: {
-    fontSize: 11,
+  stepSubtitle: {
+    fontSize: 12,
+    lineHeight: 16,
   },
   selectedHeroCard: {
     borderWidth: 1.5,
     borderRadius: 16,
     padding: 14,
+    marginTop: 14,
     marginBottom: 16,
   },
   selectedHeroHeader: {

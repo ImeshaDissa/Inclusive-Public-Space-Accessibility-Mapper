@@ -139,12 +139,11 @@ export default function SubmitReportScreen() {
 
   // Selected venue (either picked from saved database places or custom added under category)
   const [selectedVenue, setSelectedVenue] = useState<SelectedVenuePayload | null>({
-    placeId: 'db-mall-1',
-    name: 'Grand City Galleria Mall',
+    name: 'Selected Pinned Spot',
     category: 'Shopping Mall',
     categoryId: 'mall',
-    address: '500 Central Boulevard, Downtown',
-    isNewCustomPlace: false,
+    address: 'Pinned on map',
+    isNewCustomPlace: true,
   });
 
   // Reverse-geocode pinned map coordinates to get place & address
@@ -172,6 +171,14 @@ export default function SubmitReportScreen() {
             data.address.road ||
             'Pinned Location';
           setDetectedSpotName(spotName);
+
+          setSelectedVenue((prev) => ({
+            name: spotName,
+            category: prev?.category || 'Shopping Mall',
+            categoryId: prev?.categoryId || 'mall',
+            address: fullAddr,
+            isNewCustomPlace: true,
+          }));
         }
       } catch (e) {
         // ignore
@@ -196,7 +203,6 @@ export default function SubmitReportScreen() {
   });
   const [note, setNote] = useState<string>('');
   const [photos, setPhotos] = useState<string[]>([]);
-  const [priority, setPriority] = useState<'High' | 'Medium' | 'Low'>('High');
   const [showSuccessToast, setShowSuccessToast] = useState<boolean>(false);
 
   const toggleFeature = (key: FeatureKey) => {
@@ -254,6 +260,14 @@ export default function SubmitReportScreen() {
       if (data.type === 'pin') {
         setCoords({ latitude: data.lat, longitude: data.lng });
         setAddress(''); // clear stale label until reverse-geocoded / re-searched
+        setDetectedSpotName('');
+        setSelectedVenue((prev) => ({
+          name: 'Pinned Location',
+          category: prev?.category || 'Shopping Mall',
+          categoryId: prev?.categoryId || 'mall',
+          address: `${data.lat.toFixed(4)}, ${data.lng.toFixed(4)}`,
+          isNewCustomPlace: true,
+        }));
       }
     } catch (e) {
       // ignore malformed messages
@@ -295,8 +309,17 @@ export default function SubmitReportScreen() {
     const lng = parseFloat(result.lon);
     recenterMap(lat, lng);
     setAddress(result.display_name);
+    const spotName = result.display_name.split(',')[0] || 'Selected Place';
+    setDetectedSpotName(spotName);
     setSearchQuery(result.display_name);
     setSearchResults([]);
+    setSelectedVenue((prev) => ({
+      name: spotName,
+      category: prev?.category || 'Shopping Mall',
+      categoryId: prev?.categoryId || 'mall',
+      address: result.display_name,
+      isNewCustomPlace: true,
+    }));
     Keyboard.dismiss();
   };
 
@@ -317,8 +340,17 @@ export default function SubmitReportScreen() {
               if (res.ok) {
                 const data = await res.json();
                 if (data && data.display_name) {
+                  const spotName = data.name || data.address?.amenity || data.address?.road || 'Current Location';
                   setAddress(data.display_name);
+                  setDetectedSpotName(spotName);
                   setSearchQuery(data.display_name);
+                  setSelectedVenue((prev) => ({
+                    name: spotName,
+                    category: prev?.category || 'Shopping Mall',
+                    categoryId: prev?.categoryId || 'mall',
+                    address: data.display_name,
+                    isNewCustomPlace: true,
+                  }));
                 }
               }
             } catch (err) {}
@@ -350,8 +382,17 @@ export default function SubmitReportScreen() {
         const label = [place.name, place.street, place.city, place.region]
           .filter(Boolean)
           .join(', ');
+        const placeName = place.name || place.street || 'Current Location';
         setAddress(label);
+        setDetectedSpotName(placeName);
         setSearchQuery(label);
+        setSelectedVenue((prev) => ({
+          name: placeName,
+          category: prev?.category || 'Shopping Mall',
+          categoryId: prev?.categoryId || 'mall',
+          address: label,
+          isNewCustomPlace: true,
+        }));
       }
     } catch (e) {
       Alert.alert('Could not get location', 'Please try again or search manually.');
@@ -389,7 +430,7 @@ export default function SubmitReportScreen() {
       note: note.trim() || 'Accessibility check performed.',
       featuresReported: features,
       photos,
-      priority,
+      priority: 'Medium',
       location: {
         latitude: coords.latitude,
         longitude: coords.longitude,
@@ -594,8 +635,6 @@ export default function SubmitReportScreen() {
           coords={coords}
           features={features}
           onToggleFeature={toggleFeature}
-          priority={priority}
-          onChangePriority={setPriority}
           note={note}
           onChangeNote={setNote}
           photos={photos}

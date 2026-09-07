@@ -22,8 +22,6 @@ interface ReportDetailsSectionProps {
   coords: { latitude: number; longitude: number };
   features: Record<FeatureKey, boolean>;
   onToggleFeature: (key: FeatureKey) => void;
-  priority: 'High' | 'Medium' | 'Low';
-  onChangePriority: (p: 'High' | 'Medium' | 'Low') => void;
   note: string;
   onChangeNote: (text: string) => void;
   photos: string[];
@@ -37,8 +35,6 @@ export function ReportDetailsSection({
   coords,
   features,
   onToggleFeature,
-  priority,
-  onChangePriority,
   note,
   onChangeNote,
   photos,
@@ -232,81 +228,7 @@ export function ReportDetailsSection({
         </View>
       </View>
 
-      {/* ── Section 2: Priority / Urgency Level ────────────────── */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeaderRow}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Ionicons name="alert-circle-outline" size={16} color={colors.accent} />
-            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-              REPORT PRIORITY
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.priorityGrid}>
-          {[
-            {
-              level: 'High' as const,
-              title: 'High Priority',
-              subtitle: 'Major barrier or immediate safety concern',
-              color: '#EF4444',
-              bg: '#FEF2F2',
-            },
-            {
-              level: 'Medium' as const,
-              title: 'Medium Priority',
-              subtitle: 'Needs repair, maintenance or improvement',
-              color: '#F59E0B',
-              bg: '#FFFBEB',
-            },
-            {
-              level: 'Low' as const,
-              title: 'Low Priority',
-              subtitle: 'Routine update or general audit confirmation',
-              color: '#10B981',
-              bg: '#ECFDF5',
-            },
-          ].map((item) => {
-            const isSelected = priority === item.level;
-            return (
-              <TouchableOpacity
-                key={item.level}
-                onPress={() => onChangePriority(item.level)}
-                style={[
-                  styles.priorityCard,
-                  {
-                    backgroundColor: isSelected ? item.bg : colors.card,
-                    borderColor: isSelected ? item.color : colors.cardBorder,
-                  },
-                ]}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: isSelected }}
-              >
-                <View style={styles.priorityCardHeader}>
-                  <View style={[styles.priorityIndicatorDot, { backgroundColor: item.color }]} />
-                  <Text
-                    style={[
-                      styles.priorityCardTitle,
-                      { color: isSelected ? item.color : colors.textPrimary, fontWeight: isSelected ? '800' : '700' },
-                    ]}
-                  >
-                    {item.title}
-                  </Text>
-                  <View style={{ flex: 1 }} />
-                  {isSelected && (
-                    <Ionicons name="checkmark-circle" size={16} color={item.color} />
-                  )}
-                </View>
-                <Text style={[styles.priorityCardSubtitle, { color: colors.textMuted }]}>
-                  {item.subtitle}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </View>
-
-      {/* ── Section 3: Real Photo Evidence Upload ──────────────── */}
+      {/* ── Section 2: Real Photo Evidence Upload ──────────────── */}
       <View style={styles.section}>
         <View style={styles.sectionHeaderRow}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -427,7 +349,7 @@ export function ReportDetailsSection({
         )}
       </View>
 
-      {/* ── Section 4: Audit Notes & Observations ──────────────── */}
+      {/* ── Section 3: Audit Notes & Observations ──────────────── */}
       <View style={styles.section}>
         <View style={styles.sectionHeaderRow}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -626,32 +548,6 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
     backgroundColor: '#94A3B8',
-  },
-  priorityGrid: {
-    gap: 10,
-  },
-  priorityCard: {
-    borderWidth: 1.5,
-    borderRadius: 16,
-    padding: 12,
-    gap: 4,
-  },
-  priorityCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  priorityIndicatorDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  priorityCardTitle: {
-    fontSize: 13.5,
-  },
-  priorityCardSubtitle: {
-    fontSize: 11.5,
-    marginLeft: 16,
   },
   uploadDropzone: {
     borderWidth: 1.5,
