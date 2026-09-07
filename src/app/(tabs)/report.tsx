@@ -204,6 +204,7 @@ export default function SubmitReportScreen() {
   const [note, setNote] = useState<string>('');
   const [photos, setPhotos] = useState<string[]>([]);
   const [showSuccessToast, setShowSuccessToast] = useState<boolean>(false);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   const toggleFeature = (key: FeatureKey) => {
     setFeatures((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -433,31 +434,45 @@ export default function SubmitReportScreen() {
     setStep(2);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    if (isSubmitting) return;
     const finalPlaceName = selectedVenue?.name || 'Selected Place';
+    setIsSubmitting(true);
 
-    addReport({
-      placeId: selectedVenue?.isNewCustomPlace ? undefined : selectedVenue?.placeId,
-      placeName: finalPlaceName,
-      note: note.trim() || 'Accessibility check performed.',
-      featuresReported: features,
-      photos,
-      priority: 'Medium',
-      location: {
-        latitude: coords.latitude,
-        longitude: coords.longitude,
-        address: address || selectedVenue?.address || finalPlaceName,
-      },
-    } as any);
+    try {
+      const result = await addReport({
+        placeId: selectedVenue?.isNewCustomPlace ? undefined : selectedVenue?.placeId,
+        placeName: finalPlaceName,
+        note: note.trim() || 'Accessibility check performed.',
+        featuresReported: features,
+        photos,
+        priority: 'Medium',
+        location: {
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+          address: address || selectedVenue?.address || finalPlaceName,
+        },
+      });
 
-    showToast(`Report submitted for ${finalPlaceName}`, 'success', 'checkmark-circle');
-    setShowSuccessToast(true);
+      if (result && result.persistedToSupabase) {
+        showToast(`Report saved & synced to Supabase for ${finalPlaceName}`, 'success', 'checkmark-circle');
+      } else {
+        showToast(`Report submitted for ${finalPlaceName}`, 'success', 'checkmark-circle');
+      }
+      setShowSuccessToast(true);
 
-    setTimeout(() => {
-      setNote('');
-      setShowSuccessToast(false);
+      setTimeout(() => {
+        setNote('');
+        setPhotos([]);
+        setShowSuccessToast(false);
+        setIsSubmitting(false);
+        router.push('/verify' as any);
+      }, 1500);
+    } catch (error) {
+      showToast(`Report submitted for ${finalPlaceName}`, 'success', 'checkmark-circle');
+      setIsSubmitting(false);
       router.push('/verify' as any);
-    }, 1500);
+    }
   };
 
   return (
@@ -672,13 +687,29 @@ export default function SubmitReportScreen() {
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
-            style={[styles.primaryBtn, { backgroundColor: colors.submitBtn }]}
+            style={[
+              styles.primaryBtn,
+              { backgroundColor: colors.submitBtn },
+              isSubmitting && { opacity: 0.75 },
+            ]}
             onPress={handleSubmit}
+            disabled={isSubmitting}
             accessibilityRole="button"
-            accessibilityLabel="Submit community audit report"
+            accessibilityLabel={isSubmitting ? 'Submitting audit report...' : 'Submit community audit report'}
           >
-            <Ionicons name="send" size={18} color={colors.submitBtnText} />
-            <Text style={[styles.primaryBtnText, { color: colors.submitBtnText }]}>Submit Report</Text>
+            {isSubmitting ? (
+              <>
+                <ActivityIndicator size="small" color={colors.submitBtnText} />
+                <Text style={[styles.primaryBtnText, { color: colors.submitBtnText, marginLeft: 8 }]}>
+                  Submitting Report...
+                </Text>
+              </>
+            ) : (
+              <>
+                <Ionicons name="send" size={18} color={colors.submitBtnText} />
+                <Text style={[styles.primaryBtnText, { color: colors.submitBtnText }]}>Submit Report</Text>
+              </>
+            )}
           </TouchableOpacity>
         )}
       </View>

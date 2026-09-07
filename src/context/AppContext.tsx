@@ -2,6 +2,13 @@ import React, { createContext, useContext, useEffect, useState, ReactNode } from
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Place, Report, AppNotification, UserProfile, StatusType } from '@/types/accessibility';
 import { MOCK_PLACES, MOCK_REPORTS, INITIAL_USER_PROFILE, INITIAL_NOTIFICATIONS } from '@/constants/mockData';
+import {
+  createReportInBackend,
+  fetchReportsFromBackend,
+  confirmReportInBackend,
+  disputeReportInBackend,
+} from '@/features/reports/api';
+import { CreateReportResult } from '@/features/reports/types';
 
 type LocalAccount = {
   name: string;
@@ -43,7 +50,7 @@ const parseArray = <T,>(value: string | null, fallback: T[]): T[] => {
   if (!value) return fallback;
 
   try {
-    const parsed = JSON.parse(value) as T[];
+    const parsed = JSON.parse(value);
     return Array.isArray(parsed) ? parsed : fallback;
   } catch {
     return fallback;
@@ -86,7 +93,8 @@ interface AppContextType {
     featuresReported: Record<string, boolean>;
     photos: string[];
     priority?: 'High' | 'Medium' | 'Low';
-  }) => void;
+    location?: { latitude: number; longitude: number; address: string };
+  }) => Promise<CreateReportResult>;
   confirmReport: (reportId: string) => void;
   disputeReport: (reportId: string, reason: string, note?: string) => void;
   updateUserProfile: (updates: Partial<UserProfile>) => void;
@@ -140,6 +148,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setPlaces(parseArray<Place>(storedPlaces, MOCK_PLACES));
         setReports(parseArray<Report>(storedReports, MOCK_REPORTS));
         setNotifications(parseArray<AppNotification>(storedNotifications, INITIAL_NOTIFICATIONS));
+
+        // Background sync: pull reports from Supabase backend
+        fetchReportsFromBackend()
+          .then((backendReports) => {
+            if (backendReports && backendReports.length > 0 && isActive) {
+              setReports((prev) => {
+                const map = new Map<string, Report>();
+                prev.forEach((r) => map.set(r.id, r));
+                backendReports.forEach((r) => map.set(r.id, r));
+                return Array.from(map.values());
+              });
+            }
+          })
+          .catch(() => {});
       } catch {
         if (!isActive) return;
         setAccounts([DEMO_ACCOUNT]);
@@ -233,13 +255,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
-  const addReport = ({
+  const addReport = async ({
     placeId,
     placeName,
     note,
     featuresReported,
     photos,
     priority = 'Medium',
+    location,
   }: {
     placeId?: string;
     placeName: string;
@@ -247,7 +270,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     featuresReported: Record<string, boolean>;
     photos: string[];
     priority?: 'High' | 'Medium' | 'Low';
-  }) => {
+    location?: { latitude: number; longitude: number; address: string };
+  }): Promise<CreateReportResult> => {
     let targetPlaceId = placeId;
     let existingPlace = places.find((p) => p.id === placeId || p.name.toLowerCase() === placeName.toLowerCase());
 
@@ -257,9 +281,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         id: targetPlaceId,
         name: placeName,
         category: 'Community Reported Venue',
-        address: 'User Submitted Location',
-        lat: 37.775 + (Math.random() - 0.5) * 0.03,
-        lng: -122.418 + (Math.random() - 0.5) * 0.03,
+        address: location?.address || 'User Submitted Location',
+        lat: location?.latitude || (37.775 + (Math.random() - 0.5) * 0.03),
+        lng: location?.longitude || (-122.418 + (Math.random() - 0.5) * 0.03),
         features: {
           ramp: !!featuresReported.ramp,
           elevator: !!featuresReported.elevator,
@@ -281,23 +305,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       targetPlaceId = existingPlace.id;
     }
 
-    const newReport: Report = {
-      id: `report-${Date.now()}`,
-      placeId: targetPlaceId!,
+    // Call Supabase backend service (with automatic offline/local fallback)
+    const result = await createReportInBackend({
+      placeId: targetPlaceId,
       placeName: existingPlace ? existingPlace.name : placeName,
-      submitterName: userProfile.name + ' (You)',
-      submitterAvatar: userProfile.avatar,
-      timestamp: 'Just now',
       note: note || 'Community accessibility audit submitted.',
       featuresReported,
-      photos: photos.length > 0 ? photos : ['https://images.unsplash.com/photo-1517649763962-0c623266010b?auto=format&fit=crop&w=800&q=80'],
+      photos,
       priority,
-      confirmCount: 1,
-      disputeCount: 0,
-      status: 'pending',
-    };
+      submitterName: userProfile.name + ' (You)',
+      submitterAvatar: userProfile.avatar,
+      location,
+    });
 
-    setReports((prev) => [newReport, ...prev]);
+    // Update local state and AsyncStorage cache
+    setReports((prev) => [result.report, ...prev]);
+
+    return result;
   };
 
   const confirmReport = (reportId: string) => {
@@ -325,6 +349,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return { ...p, confirmCount: placeConfirms, status: updatedPlaceStatus };
       })
     );
+
+    // Sync to Supabase backend in the background
+    confirmReportInBackend(reportId, newConfirm, newStatus);
   };
 
   const disputeReport = (reportId: string, reason: string, note?: string) => {
@@ -351,13 +378,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       prevPlaces.map((p) => {
         if (p.id !== targetReport.placeId) return p;
         const placeDisputes = p.disputeCount + 1;
-        const updatedPlaceStatus = computeStatus(p.confirmCount, placeDisputes);
-        if (updatedPlaceStatus !== p.status) {
-          addNotificationIfSaved(p.id, p.name, p.status, updatedPlaceStatus);
-        }
-        return { ...p, disputeCount: placeDisputes, status: updatedPlaceStatus };
+        const placeStatus = computeStatus(p.confirmCount, placeDisputes);
+        addNotificationIfSaved(p.id, p.name, p.status, placeStatus);
+        return { ...p, disputeCount: placeDisputes, status: placeStatus };
       })
     );
+
+    // Sync to Supabase backend in the background
+    disputeReportInBackend(reportId, reason, newDisputes, newStatus);
   };
 
   const updateUserProfile = (updates: Partial<UserProfile>) => {
