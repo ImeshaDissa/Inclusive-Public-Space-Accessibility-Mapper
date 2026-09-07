@@ -6,11 +6,11 @@ import {
   TouchableOpacity,
   ScrollView,
   TextInput,
-  Image,
   Modal,
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAppTheme } from '@/context/ThemeContext';
 import { FeatureKey, FEATURE_METADATA, QUICK_AUDIT_PRESETS } from '@/constants/reportFeatures';
@@ -386,8 +386,19 @@ export function ReportDetailsSection({
           <View style={styles.galleryGrid}>
             {photos.map((uri, idx) => (
               <View key={idx} style={[styles.thumbnailWrap, { borderColor: colors.cardBorder }]}>
-                <TouchableOpacity onPress={() => setPreviewImage(uri)} activeOpacity={0.85}>
-                  <Image source={{ uri }} style={styles.thumbnailImage} resizeMode="cover" />
+                <TouchableOpacity
+                  style={styles.thumbnailTouch}
+                  onPress={() => setPreviewImage(uri)}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel={`View photo ${idx + 1}`}
+                >
+                  <Image
+                    source={{ uri }}
+                    style={styles.thumbnailImage}
+                    contentFit="cover"
+                    transition={200}
+                  />
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -482,7 +493,12 @@ export function ReportDetailsSection({
             <Ionicons name="close-circle" size={32} color="#FFFFFF" />
           </TouchableOpacity>
           {previewImage && (
-            <Image source={{ uri: previewImage }} style={styles.fullPreviewImage} resizeMode="contain" />
+            <Image
+              source={{ uri: previewImage }}
+              style={styles.fullPreviewImage}
+              contentFit="contain"
+              transition={200}
+            />
           )}
         </View>
       </Modal>
@@ -716,13 +732,19 @@ const styles = StyleSheet.create({
     width: 95,
     height: 95,
     borderRadius: 14,
-    borderWidth: 1,
+    borderWidth: 1.5,
     position: 'relative',
     overflow: 'hidden',
+    backgroundColor: '#F1F5F9',
+  },
+  thumbnailTouch: {
+    width: 95,
+    height: 95,
   },
   thumbnailImage: {
-    width: '100%',
-    height: '100%',
+    width: 95,
+    height: 95,
+    borderRadius: 12,
   },
   removeBadge: {
     position: 'absolute',

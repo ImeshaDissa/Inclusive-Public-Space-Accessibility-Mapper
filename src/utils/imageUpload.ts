@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { Platform, Alert } from 'react-native';
 
 /**
  * Universal device image picker.
@@ -13,38 +13,58 @@ export async function pickImageFromDevice(): Promise<string | null> {
       input.accept = 'image/*';
       input.style.display = 'none';
 
+      const cleanup = () => {
+        try {
+          if (input.parentNode) {
+            input.parentNode.removeChild(input);
+          }
+        } catch (e) {
+          // ignore
+        }
+      };
+
       input.onchange = (event: any) => {
         const file = event.target?.files?.[0];
         if (!file) {
+          cleanup();
           resolve(null);
           return;
         }
 
-        // Limit to 10MB to avoid excessive memory usage
-        if (file.size > 10 * 1024 * 1024) {
-          alert('Image size exceeds 10MB limit. Please select a smaller photo.');
+        // Limit to 15MB
+        if (file.size > 15 * 1024 * 1024) {
+          alert('Image size exceeds 15MB limit. Please select a smaller photo.');
+          cleanup();
           resolve(null);
           return;
         }
 
         const reader = new FileReader();
         reader.onload = (e) => {
+          cleanup();
           const result = e.target?.result as string;
           resolve(result || null);
         };
-        reader.onerror = () => {
-          resolve(null);
+        reader.onerror = (err) => {
+          console.warn('FileReader error, falling back to Blob URL:', err);
+          cleanup();
+          try {
+            const blobUrl = URL.createObjectURL(file);
+            resolve(blobUrl);
+          } catch (e) {
+            resolve(null);
+          }
         };
         reader.readAsDataURL(file);
       };
 
       input.oncancel = () => {
+        cleanup();
         resolve(null);
       };
 
       document.body.appendChild(input);
       input.click();
-      document.body.removeChild(input);
     });
   }
 
@@ -63,7 +83,10 @@ export async function pickImageFromDevice(): Promise<string | null> {
       }
     }
   } catch (e) {
-    // expo-image-picker not installed
+    Alert.alert(
+      'Image Picker on Mobile',
+      'To select images from a native phone gallery, install expo-image-picker (npx expo install expo-image-picker). On web browsers, device file upload works directly.'
+    );
   }
 
   return null;
