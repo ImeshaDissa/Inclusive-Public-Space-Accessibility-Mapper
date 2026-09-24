@@ -8,7 +8,6 @@ import {
   ScrollView,
   Switch,
   Image,
-  SafeAreaView,
   Alert,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -16,7 +15,7 @@ import { useRouter } from 'expo-router';
 import { useApp } from '@/context/AppContext';
 import { useAppTheme } from '@/context/ThemeContext';
 import { useToast } from '@/context/ToastContext';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function SubmitReportScreen() {
   const router = useRouter();

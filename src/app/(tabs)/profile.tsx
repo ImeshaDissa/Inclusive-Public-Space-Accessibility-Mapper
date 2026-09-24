@@ -1,26 +1,30 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Switch,
-  Image,
-  SafeAreaView,
-  Alert,
-} from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { DisabilityTypeDropdown } from '@/components/DisabilityTypeDropdown';
+import { EditProfileModal } from '@/components/EditProfileModal';
+import { PlaceDetailsModal } from '@/components/PlaceDetailsModal';
+import { DEFAULT_ROLE_LABEL, ROLE_LABELS } from '@/constants/profile';
 import { useApp } from '@/context/AppContext';
 import { useAppTheme } from '@/context/ThemeContext';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { PlaceDetailsModal } from '@/components/PlaceDetailsModal';
+import { useToast } from '@/context/ToastContext';
+import { requestAccountExport, sendSavedPlaceAlert } from '@/features/notifications/actions';
 import { Place, StatusType } from '@/types/accessibility';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import {
+  Image,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TouchableOpacity,
+  View
+} from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { showToast } = useToast();
   const {
     userProfile,
     updateUserProfile,
@@ -30,11 +34,13 @@ export default function ProfileScreen() {
     clearNotifications,
     markNotificationsRead,
     signOut,
+    userId,
   } = useApp();
   const { colors, isDark, toggleTheme } = useAppTheme();
 
   const [activeTab, setActiveTab] = useState<'profile' | 'saved' | 'notifications'>('profile');
   const [selectedPlaceModal, setSelectedPlaceModal] = useState<Place | null>(null);
+  const [editModalVisible, setEditModalVisible] = useState(false);
 
   const savedPlaces = places.filter((p) => p.saved);
 
@@ -64,6 +70,39 @@ export default function ProfileScreen() {
     router.replace('/login');
   };
 
+  // Tier 2: emergency push to every device registered on this account.
+  const handleEmergencyAlert = async () => {
+    if (!userId) {
+      showToast('Sign in to send an alert.', 'warning');
+      return;
+    }
+    const result = await sendSavedPlaceAlert(userId, userProfile.email);
+    const emailAttempted = result.emailOk !== undefined;
+    if (result.ok && (!emailAttempted || result.emailOk)) {
+      showToast('Emergency alert sent to your devices and email.', 'success');
+    } else if (result.ok && emailAttempted) {
+      showToast(`Alert on device, but email failed: ${result.detail ?? 'unknown error'}`, 'error');
+    } else if (result.detail) {
+      showToast(`Alert problem: ${result.detail}`, 'error');
+    } else {
+      showToast('Could not send the alert. Try again.', 'error');
+    }
+  };
+
+  // Tier 3: email yourself a copy of saved places + profile data.
+  const handleExportData = async () => {
+    if (!userId) {
+      showToast('Sign in to export your data.', 'warning');
+      return;
+    }
+    const result = await requestAccountExport(userId, userProfile.email, places.filter((p) => p.saved));
+    if (result.ok) {
+      showToast('Export email sent — check your inbox.', 'success');
+    } else {
+      showToast(`Export failed: ${result.detail ?? 'unknown error'}`, 'error');
+    }
+  };
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Profile Header */}
@@ -75,8 +114,17 @@ export default function ProfileScreen() {
           <View style={styles.badgeRow}>
             <View style={[styles.roleBadge, { backgroundColor: colors.stepBadgeBg }]}>
               <Ionicons name="ribbon" size={12} color={colors.accentLight} />
-              <Text style={[styles.roleBadgeText, { color: colors.stepBadgeText }]}>Community Auditor · Level 3</Text>
+              <Text style={[styles.roleBadgeText, { color: colors.stepBadgeText }]}>
+                {ROLE_LABELS[userProfile.role || ''] || DEFAULT_ROLE_LABEL}
+              </Text>
             </View>
+            <TouchableOpacity
+              style={[styles.editBadgeBtn, { backgroundColor: colors.accentBg }]}
+              onPress={() => setEditModalVisible(true)}
+            >
+              <Ionicons name="create-outline" size={12} color={colors.accentLight} />
+              <Text style={[styles.editBadgeText, { color: colors.accentLight }]}>Edit</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -93,12 +141,25 @@ export default function ProfileScreen() {
             <Ionicons name="lock-closed" size={14} color={colors.sessionBadgeText} />
             <Text style={[styles.sessionBadgeText, { color: colors.sessionBadgeText }]}>Local frontend account</Text>
           </View>
-
-          <TouchableOpacity style={[styles.signOutBtn, { backgroundColor: colors.signOutBg, borderColor: colors.signOutBorder }]} onPress={handleSignOut}>
-            <Ionicons name="log-out-outline" size={16} color={colors.signOutText} />
-            <Text style={[styles.signOutBtnText, { color: colors.signOutText }]}>Sign Out</Text>
-          </TouchableOpacity>
         </View>
+
+        <TouchableOpacity
+          style={[styles.sosPrimaryButton, { backgroundColor: colors.errorBg, borderColor: colors.errorBorder }]}
+          onPress={handleEmergencyAlert}
+          activeOpacity={0.9}
+        >
+          <View style={[styles.sosPrimaryIcon, { backgroundColor: colors.error + '22' }]}>
+            <Ionicons name="warning" size={22} color={colors.error} />
+          </View>
+          <View style={styles.sosPrimaryTextWrap}>
+            <Text style={[styles.sosPrimaryTitle, { color: colors.error }]}>SOS</Text>
+            <Text style={[styles.sosPrimarySub, { color: colors.textSecondary }]}>
+              Send emergency alert + email notification
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        </TouchableOpacity>
+
         <Text style={[styles.sessionText, { color: colors.textSecondary }]}>
           Your profile, saved places, and reports are stored on this device only.
         </Text>
@@ -158,6 +219,24 @@ export default function ProfileScreen() {
         {/* Tab 1: Profile & Preferences */}
         {activeTab === 'profile' && (
           <View style={styles.tabContent}>
+            {/* Tier 2: Emergency alert — kept at the TOP so it's always visible */}
+            <TouchableOpacity
+              style={[styles.sosBtn, { borderColor: colors.errorBorder, backgroundColor: colors.errorBg }]}
+              onPress={handleEmergencyAlert}
+              activeOpacity={0.85}
+            >
+              <View style={[styles.sosIconBox, { backgroundColor: colors.error + '22' }]}>
+                <Ionicons name="warning" size={22} color={colors.error} />
+              </View>
+              <View style={styles.sosTextWrap}>
+                <Text style={[styles.sosTitle, { color: colors.error }]}>Send Emergency Alert</Text>
+                <Text style={[styles.sosSub, { color: colors.textSecondary }]}>
+                  Instant device alert + Inbox message — reports a barrier needing urgent help.
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+
             <View style={[styles.cardSection, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
               <View style={styles.toggleRow}>
                 <View style={styles.toggleTextGroup}>
@@ -179,8 +258,13 @@ export default function ProfileScreen() {
 
               {userProfile.hasDisability && (
                 <View style={[styles.disabilityTypeBox, { backgroundColor: colors.chipBg }]}>
-                  <Text style={[styles.disabilityTypeLabel, { color: colors.textSecondary }]}>Disability Type / Mobility Note:</Text>
-                  <Text style={[styles.disabilityTypeValue, { color: colors.accentLight }]}>{userProfile.disabilityType}</Text>
+                  <Text style={[styles.disabilityTypeLabel, { color: colors.textSecondary }]}>
+                    Disability Type / Mobility Note (tap to change):
+                  </Text>
+                  <DisabilityTypeDropdown
+                    value={userProfile.disabilityType}
+                    onChange={(type) => updateUserProfile({ disabilityType: type })}
+                  />
                 </View>
               )}
             </View>
@@ -221,6 +305,21 @@ export default function ProfileScreen() {
                 </View>
               </View>
             </View>
+
+            {/* Tier 3: Email data export */}
+            <TouchableOpacity
+              style={[styles.sosBtn, { borderColor: colors.cardBorder, backgroundColor: colors.card }]}
+              onPress={handleExportData}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="mail-outline" size={20} color={colors.accent} />
+              <View style={styles.sosTextWrap}>
+                <Text style={[styles.sosTitle, { color: colors.textPrimary }]}>Email My Data Export</Text>
+                <Text style={[styles.sosSub, { color: colors.textSecondary }]}>
+                  Sends saved places & profile summary to your email.
+                </Text>
+              </View>
+            </TouchableOpacity>
 
             {/* Bottom Sign Out Card */}
             <TouchableOpacity style={styles.bottomSignOutBtn} onPress={handleSignOut}>
@@ -281,53 +380,31 @@ export default function ProfileScreen() {
           </View>
         )}
 
-        {/* Tab 3: Notifications / Alerts */}
+        {/* Tab 3: Notifications — moved to the dedicated Inbox tab */}
         {activeTab === 'notifications' && (
           <View style={styles.tabContent}>
-            <View style={styles.notifHeaderRow}>
-              <Text style={[styles.sectionHeader, { color: colors.textMuted }]}>IN-APP STATUS NOTIFICATIONS</Text>
-              {notifications.length > 0 && (
-                <TouchableOpacity onPress={clearNotifications}>
-                  <Text style={[styles.clearBtnText, { color: colors.clearBtn }]}>Clear All</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {notifications.length === 0 ? (
-              <View style={[styles.emptyContainer, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-                <Ionicons name="notifications-off-outline" size={36} color={colors.emptyIcon} />
-                <Text style={[styles.emptyTitle, { color: colors.emptyTitle }]}>No Notifications</Text>
-                <Text style={[styles.emptySubtext, { color: colors.emptySubtext }]}>
-                  You'll see alerts here when verification status updates for places in your saved list.
+            <View style={[styles.inboxRedirectCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+              <View style={[styles.inboxRedirectIcon, { backgroundColor: colors.accentBg }]}>
+                <Ionicons name="notifications" size={22} color={colors.accent} />
+              </View>
+              <View style={styles.inboxRedirectText}>
+                <Text style={[styles.inboxRedirectTitle, { color: colors.textPrimary }]}>Notifications have moved</Text>
+                <Text style={[styles.inboxRedirectSub, { color: colors.textSecondary }]}>
+                  Visit the Inbox tab in the bottom navigation for real-time updates.
                 </Text>
               </View>
-            ) : (
-              notifications.map((notif) => {
-                const isVerified = notif.newStatus === 'verified';
-                const isDisputed = notif.newStatus === 'disputed';
-                const iconColor = isVerified ? colors.statusDotVerified : isDisputed ? colors.statusDotDisputed : colors.statusDotPending;
-
-                return (
-                  <View key={notif.id} style={[styles.notifCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-                    <View style={[styles.notifIconBox, { backgroundColor: iconColor + '22' }]}>
-                      <Ionicons
-                        name={isVerified ? 'checkmark-circle' : isDisputed ? 'alert-circle' : 'time'}
-                        size={20}
-                        color={iconColor}
-                      />
-                    </View>
-
-                    <View style={styles.notifTextContainer}>
-                      <Text style={[styles.notifMessage, { color: colors.textPrimary }]}>{notif.message}</Text>
-                      <Text style={[styles.notifTimestamp, { color: colors.textMuted }]}>{notif.timestamp}</Text>
-                    </View>
-                  </View>
-                );
-              })
-            )}
+              <TouchableOpacity
+                style={[styles.inboxRedirectBtn, { backgroundColor: colors.accent }]}
+                onPress={() => router.push('/inbox' as any)}
+              >
+                <Text style={styles.inboxRedirectBtnText}>Open</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       </ScrollView>
+
+      <EditProfileModal visible={editModalVisible} onClose={() => setEditModalVisible(false)} />
 
       <PlaceDetailsModal
         place={selectedPlaceModal}
@@ -376,6 +453,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
+  },
+  sosPrimaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginTop: 12,
+  },
+  sosPrimaryIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sosPrimaryTextWrap: {
+    flex: 1,
+  },
+  sosPrimaryTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  sosPrimarySub: {
+    fontSize: 11,
+    marginTop: 2,
   },
   sessionBadge: {
     flexDirection: 'row',
@@ -429,6 +534,18 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   roleBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  editBadgeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  editBadgeText: {
     fontSize: 10,
     fontWeight: '700',
   },
@@ -557,6 +674,32 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
+  sosBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 14,
+  },
+  sosIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sosTextWrap: {
+    flex: 1,
+  },
+  sosTitle: {
+    fontSize: 13.5,
+    fontWeight: '800',
+  },
+  sosSub: {
+    fontSize: 11,
+    marginTop: 2,
+  },
   bottomSignOutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -646,6 +789,42 @@ const styles = StyleSheet.create({
   clearBtnText: {
     fontSize: 12,
     fontWeight: '700',
+  },
+  inboxRedirectCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+  },
+  inboxRedirectIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inboxRedirectText: {
+    flex: 1,
+  },
+  inboxRedirectTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  inboxRedirectSub: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  inboxRedirectBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  inboxRedirectBtnText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '800',
   },
   notifCard: {
     flexDirection: 'row',

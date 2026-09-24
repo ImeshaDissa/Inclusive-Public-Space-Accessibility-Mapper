@@ -166,7 +166,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
           style={styles.zoomButton}
           onPress={() => setZoomLevel(1)}
         >
-          <Ionicons name="locate" size={18} color="#6366F1" />
+          <Ionicons name="locate" size={18} color="#FF5A36" />
         </TouchableOpacity>
       </View>
     </View>
@@ -324,8 +324,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.15)',
   },
   selectedPill: {
-    borderColor: '#6366F1',
-    backgroundColor: '#1E1B4B',
+    borderColor: '#FF5A36',
+    backgroundColor: 'rgba(255, 90, 54, 0.2)',
   },
   markerName: {
     color: '#FFF',

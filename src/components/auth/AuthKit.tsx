@@ -98,7 +98,7 @@ export function AuthTopBar({
         <Ionicons
           name={isDark ? 'sunny' : 'moon'}
           size={16}
-          color={isDark ? '#F59E0B' : '#4F46E5'}
+          color={isDark ? '#F59E0B' : '#FF5A36'}
         />
         <Text
           style={[

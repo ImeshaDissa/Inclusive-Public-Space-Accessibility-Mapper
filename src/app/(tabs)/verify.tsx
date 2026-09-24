@@ -6,13 +6,12 @@ import {
   TouchableOpacity,
   FlatList,
   Image,
-  SafeAreaView,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useApp } from '@/context/AppContext';
 import { useAppTheme } from '@/context/ThemeContext';
 import { useToast } from '@/context/ToastContext';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DisputeModal } from '@/components/DisputeModal';
 import { Report, StatusType } from '@/types/accessibility';
 
