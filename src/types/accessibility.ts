@@ -60,6 +60,7 @@ export interface UserProfile {
   name: string;
   email: string;
   avatar: string;
+  role?: string;
   hasDisability: boolean;
   disabilityType: string;
   preferences: {

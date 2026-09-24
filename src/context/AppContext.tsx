@@ -2,6 +2,32 @@ import React, { createContext, useContext, useEffect, useState, ReactNode } from
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Place, Report, AppNotification, UserProfile, StatusType } from '@/types/accessibility';
 import { MOCK_PLACES, MOCK_REPORTS, INITIAL_USER_PROFILE, INITIAL_NOTIFICATIONS } from '@/constants/mockData';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import {
+  signInWithSupabase,
+  signUpWithSupabase,
+  signOutWithSupabase,
+  fetchSupabaseProfile,
+  updateSupabaseProfile,
+} from '@/features/auth/api';
+import {
+  fetchPlacesFromSupabase,
+  insertPlaceToSupabase,
+  updatePlaceStatusInSupabase,
+  toggleSavePlaceInSupabase,
+} from '@/features/places/api';
+import {
+  fetchReportsFromSupabase,
+  insertReportToSupabase,
+  updateReportConfirmInSupabase,
+  updateReportDisputeInSupabase,
+} from '@/features/reviews/api';
+import {
+  fetchNotificationsFromSupabase,
+  insertNotificationToSupabase,
+  markNotificationsReadInSupabase,
+  clearNotificationsInSupabase,
+} from '@/features/notifications/api';
 
 type LocalAccount = {
   name: string;
@@ -41,7 +67,6 @@ const DEMO_ACCOUNT: LocalAccount = {
 
 const parseArray = <T,>(value: string | null, fallback: T[]): T[] => {
   if (!value) return fallback;
-
   try {
     const parsed = JSON.parse(value) as T[];
     return Array.isArray(parsed) ? parsed : fallback;
@@ -52,7 +77,6 @@ const parseArray = <T,>(value: string | null, fallback: T[]): T[] => {
 
 const parseString = (value: string | null) => {
   if (!value) return null;
-
   try {
     return JSON.parse(value) as string | null;
   } catch {
@@ -64,6 +88,7 @@ interface AppContextType {
   isAuthenticated: boolean;
   authReady: boolean;
   authEmail: string | null;
+  userId: string | null;
   signIn: (credentials: { email: string; password: string }) => Promise<AuthActionResult>;
   signUp: (details: {
     name: string;
@@ -106,107 +131,153 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [authReady, setAuthReady] = useState(false);
   const [accounts, setAccounts] = useState<LocalAccount[]>([DEMO_ACCOUNT]);
   const [authEmail, setAuthEmail] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [places, setPlaces] = useState<Place[]>(MOCK_PLACES);
   const [reports, setReports] = useState<Report[]>(MOCK_REPORTS);
   const [notifications, setNotifications] = useState<AppNotification[]>(INITIAL_NOTIFICATIONS);
   const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_USER_PROFILE);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
 
+  // Initialize Data & Load Supabase or Storage state
   useEffect(() => {
     let isActive = true;
 
-    const loadState = async () => {
+    const loadInitialData = async () => {
       try {
-        const [storedAccounts, storedActiveEmail, storedPlaces, storedReports, storedNotifications] =
-          await Promise.all([
-            AsyncStorage.getItem(STORAGE_KEYS.accounts),
-            AsyncStorage.getItem(STORAGE_KEYS.activeEmail),
-            AsyncStorage.getItem(STORAGE_KEYS.places),
-            AsyncStorage.getItem(STORAGE_KEYS.reports),
-            AsyncStorage.getItem(STORAGE_KEYS.notifications),
+        if (isSupabaseConfigured) {
+          // Check active Supabase session
+          const { data } = await supabase.auth.getSession();
+          if (data.session?.user && isActive) {
+            const user = data.session.user;
+            setUserId(user.id);
+            setAuthEmail(user.email || null);
+
+            const [profile, userNotifs] = await Promise.all([
+              fetchSupabaseProfile(user.id, user.email || ''),
+              fetchNotificationsFromSupabase(user.id),
+            ]);
+
+            if (isActive) {
+              setUserProfile(profile);
+              if (userNotifs.length > 0) setNotifications(userNotifs);
+            }
+          }
+
+          // Fetch Places & Reports from Supabase
+          const [fetchedPlaces, fetchedReports] = await Promise.all([
+            fetchPlacesFromSupabase(data.session?.user?.id),
+            fetchReportsFromSupabase(),
           ]);
 
-        const nextAccounts = parseArray<LocalAccount>(storedAccounts, [DEMO_ACCOUNT]);
-        const nextActiveEmail = parseString(storedActiveEmail);
-        const activeAccount = nextActiveEmail
-          ? nextAccounts.find((account) => account.email.toLowerCase() === nextActiveEmail.toLowerCase())
-          : null;
+          if (isActive) {
+            if (fetchedPlaces.length > 0) setPlaces(fetchedPlaces);
+            if (fetchedReports.length > 0) setReports(fetchedReports);
+          }
+        } else {
+          // Local Storage fallback when Supabase is not yet configured
+          const [storedAccounts, storedActiveEmail, storedPlaces, storedReports, storedNotifications] =
+            await Promise.all([
+              AsyncStorage.getItem(STORAGE_KEYS.accounts),
+              AsyncStorage.getItem(STORAGE_KEYS.activeEmail),
+              AsyncStorage.getItem(STORAGE_KEYS.places),
+              AsyncStorage.getItem(STORAGE_KEYS.reports),
+              AsyncStorage.getItem(STORAGE_KEYS.notifications),
+            ]);
 
-        if (!isActive) return;
+          const nextAccounts = parseArray<LocalAccount>(storedAccounts, [DEMO_ACCOUNT]);
+          const nextActiveEmail = parseString(storedActiveEmail);
+          const activeAccount = nextActiveEmail
+            ? nextAccounts.find((a) => a.email.toLowerCase() === nextActiveEmail.toLowerCase())
+            : null;
 
-        setAccounts(nextAccounts.length > 0 ? nextAccounts : [DEMO_ACCOUNT]);
-        setAuthEmail(activeAccount ? activeAccount.email : null);
-        setUserProfile(activeAccount ? activeAccount.profile : INITIAL_USER_PROFILE);
-        setPlaces(parseArray<Place>(storedPlaces, MOCK_PLACES));
-        setReports(parseArray<Report>(storedReports, MOCK_REPORTS));
-        setNotifications(parseArray<AppNotification>(storedNotifications, INITIAL_NOTIFICATIONS));
-      } catch {
-        if (!isActive) return;
-        setAccounts([DEMO_ACCOUNT]);
-        setAuthEmail(null);
-        setUserProfile(INITIAL_USER_PROFILE);
-        setPlaces(MOCK_PLACES);
-        setReports(MOCK_REPORTS);
-        setNotifications(INITIAL_NOTIFICATIONS);
-      } finally {
-        if (isActive) {
-          setAuthReady(true);
+          if (!isActive) return;
+
+          setAccounts(nextAccounts.length > 0 ? nextAccounts : [DEMO_ACCOUNT]);
+          setAuthEmail(activeAccount ? activeAccount.email : null);
+          setUserProfile(activeAccount ? activeAccount.profile : INITIAL_USER_PROFILE);
+          setPlaces(parseArray<Place>(storedPlaces, MOCK_PLACES));
+          setReports(parseArray<Report>(storedReports, MOCK_REPORTS));
+          setNotifications(parseArray<AppNotification>(storedNotifications, INITIAL_NOTIFICATIONS));
         }
+      } catch (err) {
+        console.error('Error loading initial app data:', err);
+      } finally {
+        if (isActive) setAuthReady(true);
       }
     };
 
-    loadState();
+    loadInitialData();
+
+    // Subscribe to Supabase Auth state changes
+    let authSubscription: { unsubscribe: () => void } | null = null;
+    if (isSupabaseConfigured) {
+      const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (!isActive) return;
+        if (session?.user) {
+          setUserId(session.user.id);
+          setAuthEmail(session.user.email || null);
+          const [profile, userNotifs] = await Promise.all([
+            fetchSupabaseProfile(session.user.id, session.user.email || ''),
+            fetchNotificationsFromSupabase(session.user.id),
+          ]);
+          if (isActive) {
+            setUserProfile(profile);
+            if (userNotifs.length > 0) setNotifications(userNotifs);
+          }
+        } else {
+          setUserId(null);
+          setAuthEmail(null);
+          setUserProfile(INITIAL_USER_PROFILE);
+          setNotifications(INITIAL_NOTIFICATIONS);
+        }
+      });
+      authSubscription = listener.subscription;
+    }
 
     return () => {
       isActive = false;
+      if (authSubscription) authSubscription.unsubscribe();
     };
   }, []);
 
+  // Sync to local storage for offline fallback
   useEffect(() => {
-    if (!authReady) return;
+    if (!authReady || isSupabaseConfigured) return;
     AsyncStorage.setItem(STORAGE_KEYS.accounts, JSON.stringify(accounts)).catch(() => undefined);
   }, [accounts, authReady]);
 
   useEffect(() => {
-    if (!authReady) return;
+    if (!authReady || isSupabaseConfigured) return;
     AsyncStorage.setItem(STORAGE_KEYS.activeEmail, JSON.stringify(authEmail)).catch(() => undefined);
   }, [authEmail, authReady]);
 
   useEffect(() => {
-    if (!authReady) return;
+    if (!authReady || isSupabaseConfigured) return;
     AsyncStorage.setItem(STORAGE_KEYS.places, JSON.stringify(places)).catch(() => undefined);
   }, [places, authReady]);
 
   useEffect(() => {
-    if (!authReady) return;
+    if (!authReady || isSupabaseConfigured) return;
     AsyncStorage.setItem(STORAGE_KEYS.reports, JSON.stringify(reports)).catch(() => undefined);
   }, [reports, authReady]);
 
   useEffect(() => {
-    if (!authReady) return;
+    if (!authReady || isSupabaseConfigured) return;
     AsyncStorage.setItem(STORAGE_KEYS.notifications, JSON.stringify(notifications)).catch(() => undefined);
   }, [notifications, authReady]);
 
-  useEffect(() => {
-    if (!authReady || !authEmail) return;
-
-    setAccounts((currentAccounts) =>
-      currentAccounts.map((account) =>
-        account.email.toLowerCase() === authEmail.toLowerCase()
-          ? {
-              ...account,
-              name: userProfile.name,
-              email: userProfile.email,
-              profile: userProfile,
-            }
-          : account
-      )
-    );
-  }, [authEmail, authReady, userProfile]);
-
   const toggleSavePlace = (placeId: string) => {
     setPlaces((prevPlaces) =>
-      prevPlaces.map((p) => (p.id === placeId ? { ...p, saved: !p.saved } : p))
+      prevPlaces.map((p) => {
+        if (p.id === placeId) {
+          const newSaved = !p.saved;
+          if (isSupabaseConfigured && userId) {
+            toggleSavePlaceInSupabase(userId, placeId, newSaved);
+          }
+          return { ...p, saved: newSaved };
+        }
+        return p;
+      })
     );
   };
 
@@ -229,7 +300,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         timestamp: 'Just now',
         read: false,
       };
+
       setNotifications((prev) => [newNotif, ...prev]);
+
+      if (isSupabaseConfigured && userId) {
+        insertNotificationToSupabase(newNotif, userId);
+      }
     }
   };
 
@@ -276,7 +352,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         saved: true,
         description: note || 'Newly submitted place by community accessibility auditor.',
       };
+
       setPlaces((prev) => [newPlace, ...prev]);
+      if (isSupabaseConfigured) {
+        insertPlaceToSupabase(newPlace);
+      }
     } else {
       targetPlaceId = existingPlace.id;
     }
@@ -298,6 +378,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     setReports((prev) => [newReport, ...prev]);
+
+    if (isSupabaseConfigured) {
+      insertReportToSupabase(newReport, userId || undefined);
+    }
   };
 
   const confirmReport = (reportId: string) => {
@@ -314,6 +398,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       })
     );
 
+    if (isSupabaseConfigured) {
+      updateReportConfirmInSupabase(reportId, newConfirm, newStatus);
+    }
+
     setPlaces((prevPlaces) =>
       prevPlaces.map((p) => {
         if (p.id !== targetReport.placeId) return p;
@@ -321,6 +409,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const updatedPlaceStatus = computeStatus(placeConfirms, p.disputeCount);
         if (updatedPlaceStatus !== p.status) {
           addNotificationIfSaved(p.id, p.name, p.status, updatedPlaceStatus);
+        }
+        if (isSupabaseConfigured) {
+          updatePlaceStatusInSupabase(p.id, placeConfirms, p.disputeCount, updatedPlaceStatus);
         }
         return { ...p, confirmCount: placeConfirms, status: updatedPlaceStatus };
       })
@@ -347,6 +438,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       })
     );
 
+    if (isSupabaseConfigured) {
+      updateReportDisputeInSupabase(reportId, newDisputes, updatedReasons, newStatus);
+    }
+
     setPlaces((prevPlaces) =>
       prevPlaces.map((p) => {
         if (p.id !== targetReport.placeId) return p;
@@ -355,24 +450,59 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (updatedPlaceStatus !== p.status) {
           addNotificationIfSaved(p.id, p.name, p.status, updatedPlaceStatus);
         }
+        if (isSupabaseConfigured) {
+          updatePlaceStatusInSupabase(p.id, p.confirmCount, placeDisputes, updatedPlaceStatus);
+        }
         return { ...p, disputeCount: placeDisputes, status: updatedPlaceStatus };
       })
     );
   };
 
   const updateUserProfile = (updates: Partial<UserProfile>) => {
-    setUserProfile((prev) => ({ ...prev, ...updates }));
+    setUserProfile((prev) => {
+      const nextProfile = { ...prev, ...updates };
+      if (isSupabaseConfigured && userId) {
+        updateSupabaseProfile(userId, updates);
+      }
+      return nextProfile;
+    });
   };
 
   const clearNotifications = () => {
     setNotifications([]);
+    if (isSupabaseConfigured && userId) {
+      clearNotificationsInSupabase(userId);
+    }
   };
 
   const markNotificationsRead = () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    if (isSupabaseConfigured && userId) {
+      markNotificationsReadInSupabase(userId);
+    }
   };
 
   const signIn = async ({ email, password }: { email: string; password: string }): Promise<AuthActionResult> => {
+    if (isSupabaseConfigured) {
+      const res = await signInWithSupabase({ email, password });
+      if (res.success && res.user) {
+        setUserId(res.user.id);
+        setAuthEmail(res.user.email);
+        if (res.profile) setUserProfile(res.profile);
+
+        const [fetchedPlaces, userNotifs] = await Promise.all([
+          fetchPlacesFromSupabase(res.user.id),
+          fetchNotificationsFromSupabase(res.user.id),
+        ]);
+        if (fetchedPlaces.length > 0) setPlaces(fetchedPlaces);
+        if (userNotifs.length > 0) setNotifications(userNotifs);
+
+        return { success: true };
+      }
+      return { success: false, message: res.message || 'Supabase authentication failed.' };
+    }
+
+    // Local Storage demo fallback when Supabase credentials are not set
     const normalizedEmail = email.trim().toLowerCase();
     const account = accounts.find((entry) => entry.email.toLowerCase() === normalizedEmail);
 
@@ -400,6 +530,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     password: string;
     avatar?: string;
   }): Promise<AuthActionResult> => {
+    if (isSupabaseConfigured) {
+      const res = await signUpWithSupabase({ name, email, password, avatar });
+      if (res.success && res.user) {
+        setUserId(res.user.id);
+        setAuthEmail(res.user.email);
+        if (res.profile) setUserProfile(res.profile);
+        return { success: true };
+      }
+      return { success: false, message: res.message || 'Supabase account creation failed.' };
+    }
+
+    // Local Storage demo fallback
     const normalizedEmail = email.trim().toLowerCase();
 
     if (!name.trim() || !normalizedEmail || !password.trim()) {
@@ -426,8 +568,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const signOut = async () => {
+    if (isSupabaseConfigured) {
+      await signOutWithSupabase();
+    }
+    setUserId(null);
     setAuthEmail(null);
     setUserProfile(INITIAL_USER_PROFILE);
+    setNotifications(INITIAL_NOTIFICATIONS);
   };
 
   return (
@@ -436,6 +583,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         isAuthenticated: !!authEmail,
         authReady,
         authEmail,
+        userId,
         signIn,
         signUp,
         signOut,
