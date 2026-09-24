@@ -1,4 +1,4 @@
-import { Place, Report, UserProfile, AppNotification } from '@/types/accessibility';
+import { Place, Report, UserProfile, AppNotification, NotificationCategory } from '@/types/accessibility';
 
 export const MOCK_PLACES: Place[] = [
   {
@@ -199,6 +199,7 @@ export const INITIAL_USER_PROFILE: UserProfile = {
   name: 'Alex Morgan',
   email: 'alex.morgan@accessibility.org',
   avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80',
+  role: 'user',
   hasDisability: true,
   disabilityType: 'Manual Wheelchair User',
   preferences: {
@@ -219,6 +220,7 @@ export const INITIAL_NOTIFICATIONS: AppNotification[] = [
     message: 'Central Community Library verified ramp & elevator access (5 community confirmations).',
     timestamp: 'Yesterday at 4:30 PM',
     read: false,
+    category: 'verification' as NotificationCategory,
   },
   {
     id: 'notif-2',
@@ -229,5 +231,6 @@ export const INITIAL_NOTIFICATIONS: AppNotification[] = [
     message: 'New report submitted for Metropolitan Train Station: Platform 2 elevator offline.',
     timestamp: '2 hours ago',
     read: false,
+    category: 'saved_place' as NotificationCategory,
   },
 ];

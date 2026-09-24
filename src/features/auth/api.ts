@@ -132,22 +132,63 @@ export async function fetchSupabaseProfile(userId: string, defaultEmail: string)
       .single();
 
     if (error || !data) {
-      return {
-        ...INITIAL_USER_PROFILE,
-        email: defaultEmail,
-      };
+    return {
+      ...INITIAL_USER_PROFILE,
+      email: defaultEmail,
+      role: 'user',
+    };
     }
 
     return {
       name: data.name || INITIAL_USER_PROFILE.name,
       email: data.email || defaultEmail,
       avatar: data.avatar || INITIAL_USER_PROFILE.avatar,
+      role: data.role || 'user',
       hasDisability: data.has_disability ?? INITIAL_USER_PROFILE.hasDisability,
       disabilityType: data.disability_type || INITIAL_USER_PROFILE.disabilityType,
       preferences: data.preferences || INITIAL_USER_PROFILE.preferences,
     };
   } catch {
     return INITIAL_USER_PROFILE;
+  }
+}
+
+/**
+ * Upload a locally picked image (expo-image-picker) to Supabase Storage
+ * and return its public URL. Files live under `avatars/<user_id>/...` so the
+ * storage RLS policy can scope writes to the owner's folder.
+ */
+export async function uploadAvatarToSupabase(
+  userId: string,
+  uri: string,
+  fileExt: string
+): Promise<{ success: boolean; url?: string; message?: string }> {
+  if (!isSupabaseConfigured) {
+    return { success: false, message: 'Supabase credentials are not configured.' };
+  }
+
+  try {
+    const response = await fetch(uri);
+    const arraybuffer = await response.arrayBuffer();
+
+    // Always overwrite the same file so the user's avatar folder stays tidy.
+    const filePath = `${userId}/avatar.${fileExt || 'jpg'}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('avatars')
+      .upload(filePath, arraybuffer, {
+        contentType: `image/${fileExt || 'jpeg'}`,
+        upsert: true,
+      });
+
+    if (uploadError) {
+      return { success: false, message: uploadError.message };
+    }
+
+    const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
+    return { success: true, url: data.publicUrl };
+  } catch (err: any) {
+    return { success: false, message: err.message || 'Avatar upload failed.' };
   }
 }
 

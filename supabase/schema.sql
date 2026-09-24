@@ -6,7 +6,7 @@
 -- 1. USER ROLES TABLE (Privilege Escalation Prevention)
 create table if not exists public.user_roles (
   user_id uuid primary key references auth.users(id) on delete cascade,
-  role text not null default 'auditor',
+  role text not null default 'user',
   created_at timestamptz default now()
 );
 
@@ -19,7 +19,7 @@ create table if not exists public.profiles (
   has_disability boolean default false,
   disability_type text default 'Wheelchair User',
   preferences jsonb default '{"requireRamp": true, "requireElevator": true, "requireAccessibleToilet": true, "requireStepFree": true}'::jsonb,
-  role text default 'auditor',
+  role text default 'user',
   points integer default 0,
   audits_count integer default 0,
   level text default 'Bronze Mapper',
@@ -27,6 +27,10 @@ create table if not exists public.profiles (
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
+
+-- MIGRATION: rename legacy 'auditor' roles to 'user' (idempotent)
+update public.user_roles set role = 'user' where role = 'auditor';
+update public.profiles set role = 'user' where role = 'auditor';
 
 -- 3. PLACES TABLE
 create table if not exists public.places (
@@ -73,6 +77,7 @@ create table if not exists public.user_saved_places (
 );
 
 -- 6. NOTIFICATIONS TABLE
+-- category: verification | saved_place | badge | dispute | system
 create table if not exists public.notifications (
   id text primary key,
   user_id uuid references public.profiles(id) on delete cascade,
@@ -81,6 +86,7 @@ create table if not exists public.notifications (
   old_status text,
   new_status text not null,
   message text not null,
+  category text default 'saved_place',
   read boolean default false,
   created_at timestamptz default now()
 );
@@ -95,7 +101,7 @@ create or replace function public.handle_new_user_role()
 returns trigger as $$
 begin
   insert into public.user_roles (user_id, role)
-  values (new.id, 'auditor')
+  values (new.id, 'user')
   on conflict (user_id) do nothing;
   return new;
 end;
@@ -117,7 +123,7 @@ begin
     coalesce(new.raw_user_meta_data->>'display_name', new.raw_user_meta_data->>'name', split_part(new.email, '@', 1)),
     coalesce(new.raw_user_meta_data->>'avatar', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80'),
     coalesce((new.raw_user_meta_data->>'has_disability')::boolean, false),
-    'auditor' -- Secure default role (prevents client escalation)
+    'user' -- Secure default role (prevents client escalation)
   )
   on conflict (id) do update
   set
@@ -176,8 +182,8 @@ begin
     claims := jsonb_set(claims, '{app_metadata, user_role}', to_jsonb(user_role));
     claims := jsonb_set(claims, '{user_role}', to_jsonb(user_role));
   else
-    claims := jsonb_set(claims, '{app_metadata, user_role}', '"auditor"');
-    claims := jsonb_set(claims, '{user_role}', '"auditor"');
+    claims := jsonb_set(claims, '{app_metadata, user_role}', '"user"');
+    claims := jsonb_set(claims, '{user_role}', '"user"');
   end if;
 
   -- Update 'claims' object in original event
@@ -192,7 +198,7 @@ revoke execute on function public.custom_access_token_hook from authenticated, a
 
 -- ====================================================================
 -- SECURE ROLE ELEVATION FUNCTION (SECURITY DEFINER)
--- Enables admins to safely promote users to 'verifier', 'caregiver', or 'admin'
+-- Enables admins to safely promote users to 'verifier' or 'admin'
 -- ====================================================================
 
 create or replace function public.promote_user_role(
@@ -215,8 +221,8 @@ begin
   end if;
 
   -- Validate target role
-  if new_role not in ('auditor', 'verifier', 'caregiver', 'admin') then
-    raise exception 'Invalid role. Must be auditor, verifier, caregiver, or admin.';
+  if new_role not in ('user', 'verifier', 'admin') then
+    raise exception 'Invalid role. Must be user, verifier, or admin.';
   end if;
 
   -- Update public.user_roles
@@ -294,6 +300,44 @@ create policy "Users can view their notifications" on public.notifications
 drop policy if exists "Users can update their notifications" on public.notifications;
 create policy "Users can update their notifications" on public.notifications
   for update using (auth.uid() = user_id);
+
+-- ====================================================================
+-- AVATAR STORAGE BUCKET (Profile Photos)
+-- Public-read bucket; authenticated users may upload only into their own folder
+-- ====================================================================
+
+insert into storage.buckets (id, name, public)
+values ('avatars', 'avatars', true)
+on conflict (id) do nothing;
+
+drop policy if exists "Allow authenticated uploads to own avatar folder" on storage.objects;
+create policy "Allow authenticated uploads to own avatar folder"
+  on storage.objects for insert to authenticated
+  with check (
+    bucket_id = 'avatars'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+drop policy if exists "Allow users to update own avatar" on storage.objects;
+create policy "Allow users to update own avatar"
+  on storage.objects for update to authenticated
+  using (
+    bucket_id = 'avatars'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+drop policy if exists "Allow users to delete own avatar" on storage.objects;
+create policy "Allow users to delete own avatar"
+  on storage.objects for delete to authenticated
+  using (
+    bucket_id = 'avatars' 
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
+
+drop policy if exists "Avatars are publicly readable" on storage.objects;
+create policy "Avatars are publicly readable"
+  on storage.objects for select to public
+  using (bucket_id = 'avatars');
 
 -- ====================================================================
 -- SEED MOCK PLACES INTO DATABASE

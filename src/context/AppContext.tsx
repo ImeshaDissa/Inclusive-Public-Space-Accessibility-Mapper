@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Place, Report, AppNotification, UserProfile, StatusType } from '@/types/accessibility';
+import { Place, Report, AppNotification, UserProfile, StatusType, NotificationCategory } from '@/types/accessibility';
 import { MOCK_PLACES, MOCK_REPORTS, INITIAL_USER_PROFILE, INITIAL_NOTIFICATIONS } from '@/constants/mockData';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import {
@@ -9,6 +9,7 @@ import {
   signOutWithSupabase,
   fetchSupabaseProfile,
   updateSupabaseProfile,
+  uploadAvatarToSupabase,
 } from '@/features/auth/api';
 import {
   fetchPlacesFromSupabase,
@@ -28,6 +29,7 @@ import {
   markNotificationsReadInSupabase,
   clearNotificationsInSupabase,
 } from '@/features/notifications/api';
+import { registerPushToken } from '@/lib/pushNotifications';
 
 type LocalAccount = {
   name: string;
@@ -115,6 +117,8 @@ interface AppContextType {
   confirmReport: (reportId: string) => void;
   disputeReport: (reportId: string, reason: string, note?: string) => void;
   updateUserProfile: (updates: Partial<UserProfile>) => void;
+  /** Uploads a picked local image to Supabase Storage and sets it as the avatar. */
+  updateUserAvatar: (localUri: string) => Promise<AuthActionResult>;
   clearNotifications: () => void;
   markNotificationsRead: () => void;
 }
@@ -240,6 +244,59 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
   }, []);
 
+  // Tier 1 realtime: live-update the inbox when the DB changes
+  // (DB triggers insert rows; this subscription surfaces them instantly
+  // and bumps the unread badge without a refetch).
+  useEffect(() => {
+    if (!isSupabaseConfigured || !userId) return;
+
+    const channel = supabase
+      .channel(`notifications-${userId}`)
+      .on(
+        'postgres_changes' as any,
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload: any) => {
+          const row = payload.new;
+          if (!row) return;
+          const incoming: AppNotification = {
+            id: row.id,
+            placeId: row.place_id,
+            placeName: row.place_name,
+            oldStatus: (row.old_status as StatusType) || null,
+            newStatus: (row.new_status as StatusType) || 'verified',
+            message: row.message,
+            timestamp: 'Just now',
+            read: Boolean(row.read),
+            category:
+              (['verification', 'saved_place', 'badge', 'dispute', 'system'] as NotificationCategory[]).includes(
+                row.category,
+              )
+                ? row.category
+                : 'saved_place',
+          };
+          setNotifications((prev) =>
+            prev.some((n) => n.id === incoming.id) ? prev : [incoming, ...prev]
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId]);
+
+  // Tier 2: register the device's Expo push token for this user.
+  useEffect(() => {
+    if (!userId) return;
+    registerPushToken(userId).catch(() => undefined);
+  }, [userId]);
+
   // Sync to local storage for offline fallback
   useEffect(() => {
     if (!authReady || isSupabaseConfigured) return;
@@ -299,6 +356,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         message: `Status updated: ${placeName} is now marked ${statusLabel}`,
         timestamp: 'Just now',
         read: false,
+        category: newStatus === 'disputed' ? 'dispute' : 'saved_place',
       };
 
       setNotifications((prev) => [newNotif, ...prev]);
@@ -350,7 +408,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         disputeCount: 0,
         status: 'pending',
         saved: true,
-        description: note || 'Newly submitted place by community accessibility auditor.',
+        description: note || 'Newly submitted place by a community member.',
       };
 
       setPlaces((prev) => [newPlace, ...prev]);
@@ -463,9 +521,37 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const nextProfile = { ...prev, ...updates };
       if (isSupabaseConfigured && userId) {
         updateSupabaseProfile(userId, updates);
+      } else {
+        // Local mode: persist edits into the matching local account record.
+        setAccounts((prevAccounts) =>
+          prevAccounts.map((account) =>
+            authEmail && account.email.toLowerCase() === authEmail.toLowerCase()
+              ? { ...account, profile: nextProfile }
+              : account
+          )
+        );
       }
       return nextProfile;
     });
+  };
+
+  const updateUserAvatar = async (localUri: string): Promise<AuthActionResult> => {
+    // Local-mode: just use the picked image directly.
+    if (!isSupabaseConfigured || !userId) {
+      setUserProfile((prev) => ({ ...prev, avatar: localUri }));
+      return { success: true };
+    }
+
+    const fileExt = localUri.split('.').pop()?.toLowerCase() || 'jpg';
+    const result = await uploadAvatarToSupabase(userId, localUri, fileExt);
+
+    if (!result.success || !result.url) {
+      return { success: false, message: result.message || 'Avatar upload failed.' };
+    }
+
+    setUserProfile((prev) => ({ ...prev, avatar: result.url! }));
+    await updateSupabaseProfile(userId, { avatar: result.url });
+    return { success: true };
   };
 
   const clearNotifications = () => {
@@ -598,6 +684,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         confirmReport,
         disputeReport,
         updateUserProfile,
+        updateUserAvatar,
         clearNotifications,
         markNotificationsRead,
       }}

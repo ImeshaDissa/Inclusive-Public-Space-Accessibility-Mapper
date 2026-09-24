@@ -45,15 +45,24 @@ export interface Report {
   disputeReasons?: string[];
 }
 
+/** Category of an in-app notification (drives icon + filter UI). */
+export type NotificationCategory =
+  | 'verification'
+  | 'saved_place'
+  | 'badge'
+  | 'dispute'
+  | 'system';
+
 export interface AppNotification {
   id: string;
   placeId: string;
   placeName: string;
-  oldStatus: StatusType;
+  oldStatus: StatusType | null;
   newStatus: StatusType;
   message: string;
   timestamp: string;
   read: boolean;
+  category: NotificationCategory;
 }
 
 export interface UserProfile {

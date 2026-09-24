@@ -37,8 +37,8 @@ export default function HomeScreen() {
           style={styles.profileBadgeBtn}
           onPress={() => router.push('/profile' as any)}
         >
-          <Ionicons name="ribbon-outline" size={16} color="#818CF8" />
-          <Text style={styles.profileBadgeText}>Level 3 Auditor</Text>
+          <Ionicons name="ribbon-outline" size={16} color="#FF7A5C" />
+          <Text style={styles.profileBadgeText}>Community Member</Text>
         </TouchableOpacity>
       </View>
 
@@ -97,8 +97,8 @@ export default function HomeScreen() {
 
           {/* Card 4: Total Confirmations */}
           <View style={styles.statCard}>
-            <View style={[styles.statIconBox, { backgroundColor: '#312E81' }]}>
-              <Ionicons name="people" size={20} color="#818CF8" />
+            <View style={[styles.statIconBox, { backgroundColor: 'rgba(255, 90, 54, 0.14)' }]}>
+              <Ionicons name="people" size={20} color="#FF7A5C" />
             </View>
             <Text style={styles.statNumber}>{totalConfirms}</Text>
             <Text style={styles.statLabel}>Total Confirms</Text>
@@ -112,8 +112,8 @@ export default function HomeScreen() {
             style={styles.actionCard}
             onPress={() => router.push('/map' as any)}
           >
-            <View style={[styles.actionIcon, { backgroundColor: '#312E81' }]}>
-              <Ionicons name="map-outline" size={24} color="#6366F1" />
+            <View style={[styles.actionIcon, { backgroundColor: 'rgba(255, 90, 54, 0.14)' }]}>
+              <Ionicons name="map-outline" size={24} color="#FF5A36" />
             </View>
             <Text style={styles.actionTitle}>Discover Map</Text>
             <Text style={styles.actionDesc}>Find step-free routes & color-coded pins</Text>
@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     borderWidth: 1.5,
-    borderColor: '#6366F1',
+    borderColor: '#FF5A36',
   },
   greetingText: {
     color: '#94A3B8',
@@ -233,15 +233,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#312E81',
+    backgroundColor: 'rgba(255, 90, 54, 0.14)',
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#4338CA',
+    borderColor: 'rgba(255, 90, 54, 0.45)',
   },
   profileBadgeText: {
-    color: '#A5B4FC',
+    color: '#FFB59E',
     fontSize: 11,
     fontWeight: '700',
   },
@@ -293,7 +293,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#4F46E5',
+    backgroundColor: '#FF5A36',
     paddingVertical: 12,
     borderRadius: 14,
     marginTop: 16,
@@ -414,7 +414,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   activitySubmitter: {
-    color: '#818CF8',
+    color: '#FF7A5C',
     fontSize: 10,
     fontWeight: '600',
   },

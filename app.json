@@ -26,6 +26,18 @@
     "plugins": [
       "expo-router",
       [
+        "expo-image-picker",
+        {
+          "photoPermission": "Allow $(PRODUCT_NAME) to access your photo library to set a profile picture"
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#FF5A36"
+        }
+      ],
+      [
         "expo-camera",
         {
           "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera for QR code scanning"
