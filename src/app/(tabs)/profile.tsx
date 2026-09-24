@@ -11,16 +11,15 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    Image,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TouchableOpacity,
-    View
+  Image,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -77,11 +76,17 @@ export default function ProfileScreen() {
       showToast('Sign in to send an alert.', 'warning');
       return;
     }
-    const ok = await sendSavedPlaceAlert(userId, userProfile.email);
-    showToast(
-      ok ? 'Emergency alert sent to your devices and email.' : 'Could not send the alert. Try again.',
-      ok ? 'success' : 'error'
-    );
+    const result = await sendSavedPlaceAlert(userId, userProfile.email);
+    const emailAttempted = result.emailOk !== undefined;
+    if (result.ok && (!emailAttempted || result.emailOk)) {
+      showToast('Emergency alert sent to your devices and email.', 'success');
+    } else if (result.ok && emailAttempted) {
+      showToast(`Alert on device, but email failed: ${result.detail ?? 'unknown error'}`, 'error');
+    } else if (result.detail) {
+      showToast(`Alert problem: ${result.detail}`, 'error');
+    } else {
+      showToast('Could not send the alert. Try again.', 'error');
+    }
   };
 
   // Tier 3: email yourself a copy of saved places + profile data.
@@ -90,11 +95,12 @@ export default function ProfileScreen() {
       showToast('Sign in to export your data.', 'warning');
       return;
     }
-    const ok = await requestAccountExport(userId, userProfile.email, places.filter((p) => p.saved));
-    showToast(
-      ok ? 'Export email sent — check your inbox.' : 'Could not queue the export email.',
-      ok ? 'success' : 'error'
-    );
+    const result = await requestAccountExport(userId, userProfile.email, places.filter((p) => p.saved));
+    if (result.ok) {
+      showToast('Export email sent — check your inbox.', 'success');
+    } else {
+      showToast(`Export failed: ${result.detail ?? 'unknown error'}`, 'error');
+    }
   };
 
   return (
@@ -104,19 +110,22 @@ export default function ProfileScreen() {
         <Image source={{ uri: userProfile.avatar }} style={[styles.avatar, { borderColor: colors.accent }]} />
         <View style={styles.headerInfo}>
           <Text style={[styles.userName, { color: colors.textPrimary }]}>{userProfile.name}</Text>
-          <Text style={[styles.userEmail, { color: colors.textSecondary }]}>{userProfile.email}</Text>            <View style={styles.badgeRow}>
-              <View style={[styles.roleBadge, { backgroundColor: colors.stepBadgeBg }]}>
-                <Ionicons name="ribbon" size={12} color={colors.accentLight} />
-                <Text style={[styles.roleBadgeText, { color: colors.stepBadgeText }]}>
-                  {ROLE_LABELS[userProfile.role || ''] || DEFAULT_ROLE_LABEL}
-                </Text>
-              </View>
-              <TouchableOpacity style={[styles.editBadgeBtn, { backgroundColor: colors.accentBg }]}
-                onPress={() => setEditModalVisible(true)}>
-                <Ionicons name="create-outline" size={12} color={colors.accentLight} />
-                <Text style={[styles.editBadgeText, { color: colors.accentLight }]}>Edit</Text>
-              </TouchableOpacity>
+          <Text style={[styles.userEmail, { color: colors.textSecondary }]}>{userProfile.email}</Text>
+          <View style={styles.badgeRow}>
+            <View style={[styles.roleBadge, { backgroundColor: colors.stepBadgeBg }]}>
+              <Ionicons name="ribbon" size={12} color={colors.accentLight} />
+              <Text style={[styles.roleBadgeText, { color: colors.stepBadgeText }]}>
+                {ROLE_LABELS[userProfile.role || ''] || DEFAULT_ROLE_LABEL}
+              </Text>
             </View>
+            <TouchableOpacity
+              style={[styles.editBadgeBtn, { backgroundColor: colors.accentBg }]}
+              onPress={() => setEditModalVisible(true)}
+            >
+              <Ionicons name="create-outline" size={12} color={colors.accentLight} />
+              <Text style={[styles.editBadgeText, { color: colors.accentLight }]}>Edit</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Sign Out Button */}

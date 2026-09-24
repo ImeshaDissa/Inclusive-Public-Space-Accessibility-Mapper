@@ -8,13 +8,12 @@ import {
   ScrollView,
   FlatList,
   Image,
-  SafeAreaView,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useApp } from '@/context/AppContext';
 import { useAppTheme } from '@/context/ThemeContext';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PlaceDetailsModal } from '@/components/PlaceDetailsModal';
 import { Place, StatusType } from '@/types/accessibility';
 

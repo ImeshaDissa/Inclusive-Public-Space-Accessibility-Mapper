@@ -297,9 +297,21 @@ drop policy if exists "Users can view their notifications" on public.notificatio
 create policy "Users can view their notifications" on public.notifications
   for select using (auth.uid() = user_id);
 
+drop policy if exists "Users can insert their notifications" on public.notifications;
+create policy "Users can insert their notifications" on public.notifications
+  for insert to authenticated
+  with check (auth.uid() = user_id);
+
 drop policy if exists "Users can update their notifications" on public.notifications;
 create policy "Users can update their notifications" on public.notifications
-  for update using (auth.uid() = user_id);
+  for update to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+drop policy if exists "Users can delete their notifications" on public.notifications;
+create policy "Users can delete their notifications" on public.notifications
+  for delete to authenticated
+  using (auth.uid() = user_id);
 
 -- ====================================================================
 -- AVATAR STORAGE BUCKET (Profile Photos)

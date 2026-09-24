@@ -2,7 +2,7 @@
 -- InclusiveMapper — Three-Tiered Notification Strategy
 -- Tier 1: In-App   (notification center + Supabase Realtime)
 -- Tier 2: Push     (Expo Push via Edge Function, fired by DB trigger)
--- Tier 3: Email    (Supabase Auth native + Edge Function via Resend)
+-- Tier 3: Email    (Supabase Auth native + Edge Function via Brevo)
 -- NOTE: No caregiver-specific features — everything runs under the 'user' role.
 -- Run AFTER supabase/schema.sql in the Supabase SQL Editor.
 -- ====================================================================
@@ -18,6 +18,25 @@ update public.notifications set category = 'saved_place' where category is null;
 
 -- Reports can now carry the user-facing category for the trigger to copy.
 alter table public.reports add column if not exists notification_category text;
+
+-- Missing RLS: client INSERT (SOS / status alerts) and DELETE (Clear inbox)
+-- silently failed without these policies. DB triggers use SECURITY DEFINER
+-- and are unaffected.
+drop policy if exists "Users can insert their notifications" on public.notifications;
+create policy "Users can insert their notifications" on public.notifications
+  for insert to authenticated
+  with check (auth.uid() = user_id);
+
+drop policy if exists "Users can delete their notifications" on public.notifications;
+create policy "Users can delete their notifications" on public.notifications
+  for delete to authenticated
+  using (auth.uid() = user_id);
+
+drop policy if exists "Users can update their notifications" on public.notifications;
+create policy "Users can update their notifications" on public.notifications
+  for update to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
 
 -- ====================================================================
 -- 2. REALTIME — broadcast notifications/places/reports changes
@@ -211,6 +230,10 @@ create trigger on_report_verified_badge
   after update of status on public.reports
   for each row execute function public.notify_badge_earned();
 
+-- pg_net extension (async HTTP from Postgres) — MUST exist before the
+-- function below references net.http_post. Safe to re-run.
+create extension if not exists pg_net;
+
 -- ====================================================================
 -- 7. TRIGGER D — Push notifications (Tier 2)
 -- On HIGH-priority report insert, notify users who saved the place
@@ -259,9 +282,6 @@ create trigger on_high_priority_report
   after insert on public.reports
   for each row execute function public.trigger_push_notification();
 
--- pg_net extension (async HTTP from Postgres). Safe to re-run.
-create extension if not exists pg_net;
-
 -- --------------------------------------------------------------------
 -- Configure once per project (REQUIRED for push trigger):
 --   alter database postgres set app.settings.push_function_url = 'https://<project-ref>.supabase.co/functions/v1/push-notify';
@@ -293,7 +313,8 @@ create policy "Users manage own push tokens"
 
 -- ====================================================================
 -- 9. EMAIL REQUESTS queue (Tier 3 custom emails via Edge Function)
--- kind: account_export | monthly_digest | test
+-- kind: account_export | emergency_alert | monthly_digest | test
+--       | welcome | place_update
 -- status: pending | sent | failed
 -- ====================================================================
 create table if not exists public.email_requests (
@@ -309,6 +330,13 @@ create table if not exists public.email_requests (
 );
 
 alter table public.email_requests enable row level security;
+
+alter table public.email_requests drop constraint if exists email_requests_kind_check;
+alter table public.email_requests add constraint email_requests_kind_check
+  check (kind in (
+    'account_export', 'emergency_alert', 'monthly_digest', 'test',
+    'welcome', 'place_update'
+  ));
 
 drop policy if exists "Users insert own email requests" on public.email_requests;
 create policy "Users insert own email requests"

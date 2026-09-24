@@ -30,6 +30,7 @@ import {
   clearNotificationsInSupabase,
 } from '@/features/notifications/api';
 import { registerPushToken } from '@/lib/pushNotifications';
+import { sendPlaceUpdateEmail, sendWelcomeEmail } from '@/features/notifications/actions';
 
 type LocalAccount = {
   name: string;
@@ -163,7 +164,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
             if (isActive) {
               setUserProfile(profile);
-              if (userNotifs.length > 0) setNotifications(userNotifs);
+              setNotifications(userNotifs);
             }
           }
 
@@ -226,13 +227,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           ]);
           if (isActive) {
             setUserProfile(profile);
-            if (userNotifs.length > 0) setNotifications(userNotifs);
+            setNotifications(userNotifs);
           }
         } else {
           setUserId(null);
           setAuthEmail(null);
           setUserProfile(INITIAL_USER_PROFILE);
-          setNotifications(INITIAL_NOTIFICATIONS);
+          setNotifications([]);
         }
       });
       authSubscription = listener.subscription;
@@ -363,6 +364,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       if (isSupabaseConfigured && userId) {
         insertNotificationToSupabase(newNotif, userId);
+        if (userProfile.email) {
+          sendPlaceUpdateEmail(userId, userProfile.email, {
+            place_name: placeName,
+            address: targetPlace.address,
+            old_status: oldStatus,
+            new_status: newStatus,
+            message: newNotif.message,
+            confirm_count: targetPlace.confirmCount,
+            dispute_count: targetPlace.disputeCount,
+          }).catch(() => undefined);
+        }
       }
     }
   };
@@ -507,6 +519,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const updatedPlaceStatus = computeStatus(p.confirmCount, placeDisputes);
         if (updatedPlaceStatus !== p.status) {
           addNotificationIfSaved(p.id, p.name, p.status, updatedPlaceStatus);
+          if (updatedPlaceStatus === 'disputed' && isSupabaseConfigured && userId) {
+            supabase.functions
+              .invoke('push-notify', {
+                body: {
+                  type: 'disputed_status',
+                  place_id: p.id,
+                  place_name: p.name,
+                  submitter_id: userId,
+                },
+              })
+              .catch(() => undefined);
+          }
         }
         if (isSupabaseConfigured) {
           updatePlaceStatusInSupabase(p.id, p.confirmCount, placeDisputes, updatedPlaceStatus);
@@ -581,7 +605,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           fetchNotificationsFromSupabase(res.user.id),
         ]);
         if (fetchedPlaces.length > 0) setPlaces(fetchedPlaces);
-        if (userNotifs.length > 0) setNotifications(userNotifs);
+        setNotifications(userNotifs);
 
         return { success: true };
       }
@@ -622,6 +646,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setUserId(res.user.id);
         setAuthEmail(res.user.email);
         if (res.profile) setUserProfile(res.profile);
+        sendWelcomeEmail(res.user.id, res.user.email).catch(() => undefined);
         return { success: true };
       }
       return { success: false, message: res.message || 'Supabase account creation failed.' };
@@ -660,7 +685,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setUserId(null);
     setAuthEmail(null);
     setUserProfile(INITIAL_USER_PROFILE);
-    setNotifications(INITIAL_NOTIFICATIONS);
+    setNotifications(isSupabaseConfigured ? [] : INITIAL_NOTIFICATIONS);
   };
 
   return (

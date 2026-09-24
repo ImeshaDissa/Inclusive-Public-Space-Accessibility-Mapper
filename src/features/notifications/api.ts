@@ -17,6 +17,7 @@ const toCategory = (value: unknown): NotificationCategory =>
 
 /**
  * Fetch user notifications from Supabase `notifications` table.
+ * Returns [] when the inbox is empty (never falls back to mock data online).
  */
 export async function fetchNotificationsFromSupabase(userId?: string): Promise<AppNotification[]> {
   if (!isSupabaseConfigured || !userId) {
@@ -30,9 +31,11 @@ export async function fetchNotificationsFromSupabase(userId?: string): Promise<A
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
 
-    if (error || !data || data.length === 0) {
-      return INITIAL_NOTIFICATIONS;
+    if (error) {
+      console.error('Error fetching notifications from Supabase:', error.message);
+      return [];
     }
+    if (!data || data.length === 0) return [];
 
     return data.map((n) => ({
       id: n.id,
@@ -47,7 +50,7 @@ export async function fetchNotificationsFromSupabase(userId?: string): Promise<A
     }));
   } catch (err) {
     console.error('Error fetching notifications from Supabase:', err);
-    return INITIAL_NOTIFICATIONS;
+    return [];
   }
 }
 

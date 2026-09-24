@@ -1,3 +1,5 @@
+// Side-effect import: suppress known Expo Go push warnings before anything else loads.
+import '@/lib/expoGoWarnings';
 import { Stack } from 'expo-router';
 import { DarkTheme, DefaultTheme, ThemeProvider as NavThemeProvider } from '@react-navigation/native';
 import { StatusBar, View, StyleSheet } from 'react-native';
