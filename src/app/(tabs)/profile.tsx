@@ -1,27 +1,26 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Switch,
-  Image,
-  SafeAreaView,
-  Alert,
-} from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { DisabilityTypeDropdown } from '@/components/DisabilityTypeDropdown';
+import { EditProfileModal } from '@/components/EditProfileModal';
+import { PlaceDetailsModal } from '@/components/PlaceDetailsModal';
+import { DEFAULT_ROLE_LABEL, ROLE_LABELS } from '@/constants/profile';
 import { useApp } from '@/context/AppContext';
 import { useAppTheme } from '@/context/ThemeContext';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { PlaceDetailsModal } from '@/components/PlaceDetailsModal';
-import { EditProfileModal } from '@/components/EditProfileModal';
-import { DisabilityTypeDropdown } from '@/components/DisabilityTypeDropdown';
-import { Place, StatusType } from '@/types/accessibility';
-import { ROLE_LABELS, DEFAULT_ROLE_LABEL } from '@/constants/profile';
-import { requestAccountExport, sendSavedPlaceAlert } from '@/features/notifications/actions';
 import { useToast } from '@/context/ToastContext';
+import { requestAccountExport, sendSavedPlaceAlert } from '@/features/notifications/actions';
+import { Place, StatusType } from '@/types/accessibility';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import {
+    Image,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    TouchableOpacity,
+    View
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function ProfileScreen() {
   const router = useRouter();

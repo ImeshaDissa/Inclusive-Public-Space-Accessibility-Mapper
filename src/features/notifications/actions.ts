@@ -1,5 +1,5 @@
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
-import { Place, AppNotification } from '@/types/accessibility';
+import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import { AppNotification, Place } from '@/types/accessibility';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
