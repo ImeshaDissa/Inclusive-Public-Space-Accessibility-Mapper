@@ -8,12 +8,12 @@ import {
   Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
 import { useAppTheme } from '@/context/ThemeContext';
-import { AppNotification, NotificationCategory } from '@/types/accessibility';
-import { Place, StatusType } from '@/types/accessibility';
+import { NotificationCategory, Place, StatusType } from '@/types/accessibility';
 import { PlaceDetailsModal } from '@/components/PlaceDetailsModal';
+import { ProfileBackground } from '@/components/profile/ProfileBackground';
 
 type FilterKey = 'all' | NotificationCategory;
 
@@ -30,8 +30,7 @@ const FILTERS: Array<{ key: FilterKey; label: string; icon: keyof typeof Ionicon
  * realtime updates handled in AppContext. Supports category filters.
  */
 export default function InboxScreen() {
-  const insets = useSafeAreaInsets();
-  const { colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const {
     notifications,
     places,
@@ -75,9 +74,21 @@ export default function InboxScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <ProfileBackground theme={isDark ? 'dark' : 'light'} />
+
+      <SafeAreaView style={styles.safeOverlay} edges={['top', 'left', 'right']}>
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.headerBg, borderBottomColor: colors.headerBorder, paddingTop: insets.top + 16 }]}>
+      <View
+        style={[
+          styles.header,
+          {
+            backgroundColor: isDark ? 'rgba(11, 15, 25, 0.72)' : 'rgba(255, 255, 255, 0.78)',
+            borderBottomColor: colors.headerBorder,
+            paddingTop: 12,
+          },
+        ]}
+      >
         <View style={styles.headerLeft}>
           <View style={[styles.bellBadge, { backgroundColor: colors.accentBg }]}>
             <Ionicons name="notifications" size={20} color={colors.accent} />
@@ -97,20 +108,40 @@ export default function InboxScreen() {
 
         <View style={styles.headerActions}>
           {unreadCount > 0 && (
-            <TouchableOpacity onPress={markNotificationsRead} hitSlop={6}>
-              <Ionicons name="checkmark-done-outline" size={22} color={colors.textSecondary} />
+            <TouchableOpacity
+              onPress={markNotificationsRead}
+              hitSlop={6}
+              style={[styles.headerIconBtn, { backgroundColor: colors.chipBg }]}
+              accessibilityRole="button"
+              accessibilityLabel="Mark all as read"
+            >
+              <Ionicons name="checkmark-done-outline" size={18} color={colors.textSecondary} />
             </TouchableOpacity>
           )}
           {notifications.length > 0 && (
-            <TouchableOpacity onPress={clearNotifications} hitSlop={6}>
-              <Ionicons name="trash-outline" size={20} color={colors.clearBtn} />
+            <TouchableOpacity
+              onPress={clearNotifications}
+              hitSlop={6}
+              style={[styles.headerIconBtn, { backgroundColor: colors.errorBg }]}
+              accessibilityRole="button"
+              accessibilityLabel="Clear notifications"
+            >
+              <Ionicons name="trash-outline" size={17} color={colors.clearBtn} />
             </TouchableOpacity>
           )}
         </View>
       </View>
 
       {/* Category Filters */}
-      <View style={[styles.filterRow, { backgroundColor: colors.headerBg, borderBottomColor: colors.headerBorder }]}>
+      <View
+        style={[
+          styles.filterRow,
+          {
+            backgroundColor: isDark ? 'rgba(11, 15, 25, 0.55)' : 'rgba(255, 255, 255, 0.55)',
+            borderBottomColor: colors.headerBorder,
+          },
+        ]}
+      >
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterContent}>
           {FILTERS.map((f) => {
             const active = filter === f.key;
@@ -123,6 +154,7 @@ export default function InboxScreen() {
                   active && { backgroundColor: colors.segmentActiveBg, borderColor: colors.segmentActiveBg },
                 ]}
                 onPress={() => setFilter(f.key)}
+                activeOpacity={0.72}
               >
                 <Ionicons name={f.icon} size={13} color={active ? colors.filterActiveText : colors.textSecondary} />
                 <Text style={[styles.filterText, { color: active ? colors.filterActiveText : colors.textSecondary }]}>
@@ -154,7 +186,14 @@ export default function InboxScreen() {
               <View
                 style={[
                   styles.notifCard,
-                  { backgroundColor: notif.read ? colors.card : colors.accentBg, borderColor: colors.cardBorder },
+                  {
+                    backgroundColor: notif.read
+                      ? isDark
+                        ? 'rgba(21, 28, 44, 0.88)'
+                        : 'rgba(255, 255, 255, 0.9)'
+                      : colors.accentBg,
+                    borderColor: colors.cardBorder,
+                  },
                 ]}
               >
                 <View style={[styles.notifIconBox, { backgroundColor: style.color + '22' }]}>
@@ -186,6 +225,7 @@ export default function InboxScreen() {
           })
         )}
       </ScrollView>
+      </SafeAreaView>
 
       <PlaceDetailsModal
         place={selectedPlaceModal}
@@ -196,12 +236,13 @@ export default function InboxScreen() {
           setSelectedPlaceModal(null);
         }}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  safeOverlay: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -214,6 +255,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  headerIconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   bellBadge: {
     width: 42,
