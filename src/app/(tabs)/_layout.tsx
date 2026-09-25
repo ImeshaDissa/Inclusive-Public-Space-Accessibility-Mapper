@@ -1,11 +1,12 @@
 import { Redirect, Tabs } from 'expo-router';
+import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '@/context/AppContext';
 import { useAppTheme } from '@/context/ThemeContext';
 
 export default function TabLayout() {
   const { authReady, isAuthenticated, notifications, reports } = useApp();
-  const { colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
 
   if (!authReady) {
     return null;
@@ -27,9 +28,12 @@ export default function TabLayout() {
         tabBarStyle: {
           backgroundColor: colors.tabBarBg,
           borderTopColor: colors.tabBarBorder,
-          height: 60,
+          borderTopWidth: 1,
+          height: 64,
           paddingBottom: 8,
           paddingTop: 6,
+          elevation: 0,
+          shadowOpacity: 0,
         },
         tabBarLabelStyle: {
           fontSize: 11,
@@ -68,8 +72,10 @@ export default function TabLayout() {
         name="report"
         options={{
           title: 'Submit',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'add-circle' : 'add-circle-outline'} size={24} color={color} />
+          tabBarIcon: () => (
+            <View style={[styles.elevatedSubmitBtn, { backgroundColor: colors.accent }]}>
+              <Ionicons name="add" size={26} color="#FFFFFF" />
+            </View>
           ),
         }}
       />
@@ -79,8 +85,8 @@ export default function TabLayout() {
           title: 'Verify',
           tabBarBadge: pendingReportsCount > 0 ? pendingReportsCount : undefined,
           tabBarBadgeStyle: {
-            backgroundColor: colors.statusDotPending,
-            color: '#000',
+            backgroundColor: colors.badgePendingBg || '#78350F',
+            color: colors.badgePendingText || '#F59E0B',
             fontSize: 10,
             fontWeight: '800',
           },
@@ -96,7 +102,7 @@ export default function TabLayout() {
           tabBarBadge: unreadNotificationsCount > 0 ? unreadNotificationsCount : undefined,
           tabBarBadgeStyle: {
             backgroundColor: colors.accent,
-            color: '#FFF',
+            color: '#FFFFFF',
             fontSize: 10,
             fontWeight: '800',
           },
@@ -108,3 +114,19 @@ export default function TabLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  elevatedSubmitBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: -14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 4,
+  },
+});
