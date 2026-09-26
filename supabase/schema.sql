@@ -400,3 +400,51 @@ values
     'Includes automatic sliding doors, Braille signage, power-assisted elevator, and gender-neutral accessible restroom.'
   )
 on conflict (id) do nothing;
+
+-- ====================================================================
+-- AUTOMATED VERIFICATION THRESHOLD TRIGGERS
+-- Rules:
+--   - 3+ Confirmations -> Status becomes 'verified' (Green Pin)
+--   - 2+ Disputes -> Status becomes 'disputed' (Red Pin)
+--   - Otherwise -> Status remains 'pending'
+-- ====================================================================
+
+-- 1. Trigger Function for Reports
+create or replace function public.handle_report_verification_threshold()
+returns trigger as $$
+begin
+  if new.dispute_count >= 2 then
+    new.status := 'disputed';
+  elsif new.confirm_count >= 3 then
+    new.status := 'verified';
+  else
+    new.status := 'pending';
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists on_report_verification_update on public.reports;
+create trigger on_report_verification_update
+  before insert or update of confirm_count, dispute_count on public.reports
+  for each row execute function public.handle_report_verification_threshold();
+
+-- 2. Trigger Function for Places
+create or replace function public.handle_place_verification_threshold()
+returns trigger as $$
+begin
+  if new.dispute_count >= 2 then
+    new.status := 'disputed';
+  elsif new.confirm_count >= 3 then
+    new.status := 'verified';
+  else
+    new.status := 'pending';
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists on_place_verification_update on public.places;
+create trigger on_place_verification_update
+  before insert or update of confirm_count, dispute_count on public.places
+  for each row execute function public.handle_place_verification_threshold();
