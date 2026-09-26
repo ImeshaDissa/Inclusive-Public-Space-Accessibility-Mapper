@@ -136,7 +136,7 @@ export default function SignUpScreen() {
                   Create an Account
                 </Text>
                 <Text style={[styles.headerSubtitle, { color: c.textSecondary }]}>
-                  Become a community auditor & accessibility navigator
+                  Become a community member & accessibility navigator
                 </Text>
               </View>
 

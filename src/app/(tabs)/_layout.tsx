@@ -96,9 +96,9 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="profile"
+        name="inbox"
         options={{
-          title: 'Profile',
+          title: 'Inbox',
           tabBarBadge: unreadNotificationsCount > 0 ? unreadNotificationsCount : undefined,
           tabBarBadgeStyle: {
             backgroundColor: colors.accent,
@@ -106,6 +106,15 @@ export default function TabLayout() {
             fontSize: 10,
             fontWeight: '800',
           },
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'notifications' : 'notifications-outline'} size={22} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Profile',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={focused ? 'person' : 'person-outline'} size={22} color={color} />
           ),

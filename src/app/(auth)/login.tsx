@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
 import { useAppTheme } from '@/context/ThemeContext';
 import { useToast } from '@/context/ToastContext';
+import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import {
   AuthDivider,
   AuthSocialRow,
@@ -79,6 +80,27 @@ export default function LoginScreen() {
       passwordRef.current?.focus();
       scrollRef.current?.scrollToEnd({ animated: true });
     }, 100);
+  };
+
+  const handleForgotPassword = async () => {
+    setError('');
+    const trimmed = email.trim();
+    if (!trimmed) {
+      setError('Enter your email address, then tap Forgot password.');
+      return;
+    }
+    if (!isSupabaseConfigured) {
+      showToast('Password recovery needs Supabase configured in this build.', 'warning');
+      return;
+    }
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(trimmed, {
+      redirectTo: 'exp://127.0.0.1:8081/--/reset-password',
+    });
+    if (resetError) {
+      setError(resetError.message || 'Could not send the recovery email.');
+      return;
+    }
+    showToast('Password recovery link sent to your email.', 'info');
   };
 
   return (
@@ -243,7 +265,7 @@ export default function LoginScreen() {
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  onPress={() => showToast('Password recovery link sent to your email.', 'info')}
+                  onPress={handleForgotPassword}
                   accessibilityRole="link"
                   accessibilityLabel="Forgot password"
                 >
