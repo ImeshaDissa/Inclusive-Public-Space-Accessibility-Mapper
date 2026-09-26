@@ -107,6 +107,10 @@ interface AppContextType {
   selectedPlaceId: string | null;
   setSelectedPlaceId: (id: string | null) => void;
   toggleSavePlace: (placeId: string) => void;
+  /** Places discovered or added by the AI assistant, rendered as map pins. */
+  aiMarkers: Place[];
+  addAiMarker: (place: Place) => void;
+  setAiMarkers: (places: Place[]) => void;
   addReport: (reportData: {
     placeId?: string;
     placeName: string;
@@ -142,6 +146,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [notifications, setNotifications] = useState<AppNotification[]>(INITIAL_NOTIFICATIONS);
   const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_USER_PROFILE);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
+  // AI assistant results live here so the Map tab can show them even though
+  // the chat itself now runs on its own tab.
+  const [aiMarkers, setAiMarkers] = useState<Place[]>([]);
+
+  const addAiMarker = (place: Place) => {
+    setAiMarkers((prev) => (prev.some((m) => m.id === place.id) ? prev : [...prev, place]));
+  };
 
   // Initialize Data & Load Supabase or Storage state
   useEffect(() => {
@@ -705,6 +716,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         selectedPlaceId,
         setSelectedPlaceId,
         toggleSavePlace,
+        aiMarkers,
+        addAiMarker,
+        setAiMarkers,
         addReport,
         confirmReport,
         disputeReport,
