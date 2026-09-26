@@ -25,7 +25,7 @@ type FilterType = 'all' | 'verified' | 'ramp' | 'stepFree' | 'toilet';
 export default function MapScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { places, selectedPlaceId, setSelectedPlaceId, toggleSavePlace } = useApp();
+  const { places, selectedPlaceId, setSelectedPlaceId, toggleSavePlace, aiMarkers } = useApp();
   const { colors } = useAppTheme();
   const { showToast } = useToast();
 
@@ -58,6 +58,16 @@ export default function MapScreen() {
       }
     });
   }, [places, searchQuery, activeFilter]);
+
+  // Base places + AI assistant markers (set on the assistant tab), deduped by id.
+  const mapPlaces = useMemo(() => {
+    const seen = new Set<string>();
+    return [...filteredPlaces, ...aiMarkers].filter((p) => {
+      if (seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
+    });
+  }, [filteredPlaces, aiMarkers]);
 
   const handleSelectPlace = (place: Place) => {
     setSelectedPlaceId(place.id);
@@ -191,7 +201,7 @@ export default function MapScreen() {
       {viewMode === 'map' ? (
         <ScrollView style={styles.scrollWrapper} showsVerticalScrollIndicator={false}>
           <InteractiveMap
-            places={filteredPlaces}
+            places={mapPlaces}
             selectedPlaceId={selectedPlaceId}
             onSelectPlace={handleSelectPlace}
           />
