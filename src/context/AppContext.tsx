@@ -22,6 +22,7 @@ import {
   insertReportToSupabase,
   updateReportConfirmInSupabase,
   updateReportDisputeInSupabase,
+  insertDisputeReasonToSupabase,
 } from '@/features/reviews/api';
 import {
   fetchNotificationsFromSupabase,
@@ -510,6 +511,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     if (isSupabaseConfigured) {
       updateReportDisputeInSupabase(reportId, newDisputes, updatedReasons, newStatus);
+      insertDisputeReasonToSupabase({
+        reportId,
+        placeId: targetReport.placeId,
+        userId: userId || undefined,
+        userName: userProfile.name,
+        reason,
+        note,
+      });
     }
 
     setPlaces((prevPlaces) =>

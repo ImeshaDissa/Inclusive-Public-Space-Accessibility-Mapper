@@ -86,8 +86,19 @@ create table if not exists public.notifications (
   old_status text,
   new_status text not null,
   message text not null,
-  category text default 'saved_place',
   read boolean default false,
+  created_at timestamptz default now()
+);
+
+-- 7. DISPUTE REASONS TABLE
+create table if not exists public.dispute_reasons (
+  id uuid primary key default gen_random_uuid(),
+  report_id text references public.reports(id) on delete cascade,
+  place_id text references public.places(id) on delete cascade,
+  user_id uuid references public.profiles(id) on delete set null,
+  user_name text,
+  reason text not null,
+  note text,
   created_at timestamptz default now()
 );
 
@@ -312,6 +323,17 @@ drop policy if exists "Users can delete their notifications" on public.notificat
 create policy "Users can delete their notifications" on public.notifications
   for delete to authenticated
   using (auth.uid() = user_id);
+
+-- Dispute Reasons Policies
+alter table public.dispute_reasons enable row level security;
+
+drop policy if exists "Dispute reasons are viewable by everyone" on public.dispute_reasons;
+create policy "Dispute reasons are viewable by everyone" on public.dispute_reasons
+  for select using (true);
+
+drop policy if exists "Anyone can submit a dispute reason" on public.dispute_reasons;
+create policy "Anyone can submit a dispute reason" on public.dispute_reasons
+  for insert with check (true);
 
 -- ====================================================================
 -- AVATAR STORAGE BUCKET (Profile Photos)

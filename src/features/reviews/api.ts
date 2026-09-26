@@ -132,6 +132,47 @@ export async function updateReportDisputeInSupabase(
   }
 }
 
+/**
+ * Insert a detailed record into Supabase `dispute_reasons` table.
+ */
+export async function insertDisputeReasonToSupabase({
+  reportId,
+  placeId,
+  userId,
+  userName,
+  reason,
+  note,
+}: {
+  reportId?: string;
+  placeId?: string;
+  userId?: string;
+  userName?: string;
+  reason: string;
+  note?: string;
+}): Promise<boolean> {
+  if (!isSupabaseConfigured) return true;
+
+  try {
+    const { error } = await supabase.from('dispute_reasons').insert({
+      report_id: reportId || null,
+      place_id: placeId || null,
+      user_id: userId || null,
+      user_name: userName || null,
+      reason,
+      note: note || null,
+    });
+
+    if (error) {
+      console.error('Error inserting dispute reason into Supabase:', error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('Error inserting dispute reason into Supabase:', err);
+    return false;
+  }
+}
+
 function formatTimeAgo(isoString?: string): string {
   if (!isoString) return 'Just now';
   try {
