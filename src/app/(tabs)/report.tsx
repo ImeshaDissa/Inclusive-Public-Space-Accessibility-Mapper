@@ -100,28 +100,6 @@ export default function SubmitReportScreen() {
     []
   );
 
-  // Listen for iframe map events on web
-  useEffect(() => {
-    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
-
-    const handleWebMessage = (event: MessageEvent) => {
-      try {
-        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-        if (data && data.type === 'pin') {
-          setCoords({ latitude: data.lat, longitude: data.lng });
-          setAddress('');
-        }
-      } catch (err) {
-        // ignore
-      }
-    };
-
-    window.addEventListener('message', handleWebMessage);
-    return () => {
-      window.removeEventListener('message', handleWebMessage);
-    };
-  }, []);
-
   // ── Wizard step ──────────────────────────────────────────────────────
   const [step, setStep] = useState<1 | 2>(1);
 
@@ -136,9 +114,34 @@ export default function SubmitReportScreen() {
   const [isSearching, setIsSearching] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   const [mapKey, setMapKey] = useState(0); // force webview reload on recenter jumps
+  const [isMapExpanded, setIsMapExpanded] = useState<boolean>(false);
+  const [hasUserInteracted, setHasUserInteracted] = useState(false);
 
   // Selected venue (either picked from saved database places or custom added under category)
   const [selectedVenue, setSelectedVenue] = useState<SelectedVenuePayload | null>(null);
+
+  // Listen for iframe map events on web
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+
+    const handleWebMessage = (event: MessageEvent) => {
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (data && data.type === 'pin') {
+          setHasUserInteracted(true);
+          setCoords({ latitude: data.lat, longitude: data.lng });
+          setAddress('');
+        }
+      } catch (err) {
+        // ignore
+      }
+    };
+
+    window.addEventListener('message', handleWebMessage);
+    return () => {
+      window.removeEventListener('message', handleWebMessage);
+    };
+  }, []);
 
   // Reverse-geocode pinned map coordinates to get place & address
   useEffect(() => {
@@ -166,13 +169,17 @@ export default function SubmitReportScreen() {
             'Pinned Location';
           setDetectedSpotName(spotName);
 
-          setSelectedVenue((prev) => ({
-            name: spotName,
-            category: prev?.category || 'Shopping Mall',
-            categoryId: prev?.categoryId || 'mall',
-            address: fullAddr,
-            isNewCustomPlace: true,
-          }));
+          // ONLY auto-populate the selected venue if the user has intentionally interacted with the map or search!
+          // We don't want to force the default starting Colombo coordinates into their selection on page reload.
+          if (hasUserInteracted) {
+            setSelectedVenue((prev) => ({
+              name: spotName,
+              category: prev?.category || 'Shopping Mall',
+              categoryId: prev?.categoryId || 'mall',
+              address: fullAddr,
+              isNewCustomPlace: true,
+            }));
+          }
         }
       } catch (e) {
         // ignore
@@ -233,6 +240,7 @@ export default function SubmitReportScreen() {
     try {
       const data = JSON.parse(event.nativeEvent.data);
       if (data.type === 'pin') {
+        setHasUserInteracted(true);
         setCoords({ latitude: data.lat, longitude: data.lng });
         setAddress(''); // clear stale label until reverse-geocoded / re-searched
         setDetectedSpotName('');
@@ -280,6 +288,7 @@ export default function SubmitReportScreen() {
   };
 
   const selectSearchResult = (result: { display_name: string; lat: string; lon: string }) => {
+    setHasUserInteracted(true);
     const lat = parseFloat(result.lat);
     const lng = parseFloat(result.lon);
     recenterMap(lat, lng);
@@ -299,6 +308,7 @@ export default function SubmitReportScreen() {
   };
 
   const useMyLocation = async () => {
+    setHasUserInteracted(true);
     setIsLocating(true);
     try {
       if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.geolocation) {
@@ -576,8 +586,22 @@ export default function SubmitReportScreen() {
 
           {/* ── Map ─────────────────────────────────────────────── */}
           <View style={styles.section}>
-            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>PIN THE EXACT SPOT</Text>
-            <View style={[styles.mapCard, { borderColor: colors.cardBorder }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <Text style={[styles.sectionLabel, { color: colors.textSecondary, marginBottom: 0 }]}>PIN THE EXACT SPOT</Text>
+              <TouchableOpacity
+                onPress={() => setIsMapExpanded(!isMapExpanded)}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, padding: 8, backgroundColor: colors.chipBg, borderRadius: 12, borderWidth: 1, borderColor: colors.chipBorder }}
+                accessibilityRole="button"
+                accessibilityLabel={isMapExpanded ? 'Shrink map' : 'Expand map for better visibility'}
+              >
+                <Ionicons name={isMapExpanded ? "contract" : "expand"} size={18} color={colors.accent} />
+                <Text style={{ color: colors.accent, fontWeight: '700', fontSize: 13 }}>
+                  {isMapExpanded ? 'Shrink Map' : 'Enlarge Map'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={[styles.mapCard, { borderColor: colors.cardBorder, height: isMapExpanded ? 550 : 260, borderWidth: isMapExpanded ? 3 : 1 }]}>
               {Platform.OS === 'web' ? (
                 // @ts-ignore: iframe supported in react-native-web
                 <iframe
@@ -602,13 +626,13 @@ export default function SubmitReportScreen() {
                 />
               )}
               <View style={[styles.mapOverlayBadge, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-                <Ionicons name="pin" size={14} color={colors.accent} />
-                <Text style={[styles.mapOverlayText, { color: colors.textSecondary }]} numberOfLines={1}>
+                <Ionicons name="pin" size={16} color={colors.accent} />
+                <Text style={[styles.mapOverlayText, { color: colors.textSecondary, fontSize: 14 }]} numberOfLines={2}>
                   {address || `${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)}`}
                 </Text>
               </View>
             </View>
-            <Text style={[styles.mapHint, { color: colors.textMuted }]}>
+            <Text style={[styles.mapHint, { color: colors.textMuted, fontSize: 13 }]}>
               Tap anywhere on the map, or drag the pin, to fine-tune the exact location. This text also
               confirms your selection for screen-reader users who can't see the map.
             </Text>
@@ -758,21 +782,21 @@ const styles = StyleSheet.create({
   sectionLabelCount: { fontSize: 14, fontWeight: '700' },
 
   searchBar: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    borderWidth: 1, borderRadius: 16, paddingHorizontal: 16, height: 56,
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    borderWidth: 1, borderRadius: 16, paddingHorizontal: 18, height: 64,
   },
-  searchInput: { flex: 1, fontSize: 16 },
-  searchResults: { marginTop: 8, borderWidth: 1, borderRadius: 14, overflow: 'hidden' },
-  searchResultRow: { flexDirection: 'row', gap: 12, padding: 16, alignItems: 'center' },
-  searchResultText: { flex: 1, fontSize: 15, lineHeight: 22 },
+  searchInput: { flex: 1, fontSize: 18 },
+  searchResults: { marginTop: 10, borderWidth: 1, borderRadius: 14, overflow: 'hidden' },
+  searchResultRow: { flexDirection: 'row', gap: 14, padding: 20, alignItems: 'center' },
+  searchResultText: { flex: 1, fontSize: 16, lineHeight: 24 },
 
   myLocationBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    borderWidth: 1, borderRadius: 12, paddingVertical: 12, marginTop: 10,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    borderWidth: 1, borderRadius: 14, paddingVertical: 16, marginTop: 14,
   },
-  myLocationText: { fontSize: 13, fontWeight: '700' },
+  myLocationText: { fontSize: 15, fontWeight: '700' },
 
-  mapCard: { height: 220, borderRadius: 18, overflow: 'hidden', borderWidth: 1 },
+  mapCard: { height: 260, borderRadius: 18, overflow: 'hidden', borderWidth: 1 },
   map: { flex: 1 },
   mapOverlayBadge: {
     position: 'absolute', bottom: 10, left: 10, right: 10,
@@ -782,10 +806,10 @@ const styles = StyleSheet.create({
   mapOverlayText: { fontSize: 12, flex: 1, fontWeight: '600' },
   mapHint: { fontSize: 11.5, marginTop: 8, lineHeight: 16 },
 
-  bottomBar: { borderTopWidth: 1, paddingHorizontal: 16, paddingTop: 12 },
+  bottomBar: { borderTopWidth: 1, paddingHorizontal: 16, paddingTop: 16 },
   primaryBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    paddingVertical: 16, borderRadius: 16,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    paddingVertical: 18, borderRadius: 16,
   },
-  primaryBtnText: { fontSize: 15, fontWeight: '800' },
+  primaryBtnText: { fontSize: 17, fontWeight: '800' },
 });

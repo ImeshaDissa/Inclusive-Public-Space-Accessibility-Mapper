@@ -64,4 +64,13 @@ export const PLACE_CATEGORIES: PlaceCategory[] = [
     bgColor: '#FDF2F8',
     description: 'Accessible eateries, food courts, restaurants & cafés',
   },
+  {
+    id: 'other',
+    name: 'Other / Custom',
+    shortLabel: 'Other',
+    icon: 'add-circle-outline',
+    color: '#64748B',
+    bgColor: '#F1F5F9',
+    description: 'Custom place types not listed above (e.g. Museum, Gym)',
+  },
 ];

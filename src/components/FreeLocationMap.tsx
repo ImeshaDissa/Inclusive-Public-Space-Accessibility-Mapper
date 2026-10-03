@@ -64,6 +64,7 @@ export const FreeLocationMap: React.FC<FreeLocationMapProps> = ({
   const [mapTheme, setMapTheme] = useState<'standard' | 'dark' | 'contrast'>(
     isDark ? 'dark' : 'standard'
   );
+  const [isExpanded, setIsExpanded] = useState<boolean>(false);
 
   const iframeRef = useRef<any>(null);
   const searchTimeoutRef = useRef<any>(null);
@@ -555,8 +556,8 @@ export const FreeLocationMap: React.FC<FreeLocationMapProps> = ({
       <View
         style={[
           styles.mapFrame,
-          { height },
-          highContrast && { borderWidth: 2, borderColor: colors.accent },
+          { height: isExpanded ? 550 : height },
+          highContrast && { borderWidth: 3, borderColor: colors.accent },
         ]}
       >
         {/* Web Interactive OpenStreetMap Leaflet View */}
@@ -576,22 +577,35 @@ export const FreeLocationMap: React.FC<FreeLocationMapProps> = ({
         ) : (
           /* Native Canvas Fallback */
           <View style={[styles.nativeFallback, { backgroundColor: colors.card }]}>
-            <Ionicons name="map-outline" size={48} color={colors.accent} />
-            <Text style={[styles.nativeText, { color: colors.textPrimary }]}>
+            <Ionicons name="map-outline" size={64} color={colors.accent} />
+            <Text style={[styles.nativeText, { color: colors.textPrimary, fontSize: 18 }]}>
               Map Preview Active (Google Maps Engine)
             </Text>
-            <Text style={[styles.nativeSubtext, { color: colors.textSecondary }]}>
+            <Text style={[styles.nativeSubtext, { color: colors.textSecondary, fontSize: 14 }]}>
               Lat: {currentLat.toFixed(5)} | Lng: {currentLng.toFixed(5)}
             </Text>
           </View>
         )}
 
         {/* Floating Map Overlays */}
-        {/* Theme / Style Switcher */}
         <View style={styles.mapTopActions}>
-          <View style={styles.badgeOSM}>
-            <Ionicons name="earth" size={12} color="#10B981" />
-            <Text style={styles.badgeOSMText}>Google Maps</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <View style={styles.badgeOSM}>
+              <Ionicons name="earth" size={14} color="#10B981" />
+              <Text style={[styles.badgeOSMText, { fontSize: 12 }]}>Google Maps</Text>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.expandBtn, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+              onPress={() => setIsExpanded(!isExpanded)}
+              accessibilityLabel={isExpanded ? 'Shrink map size' : 'Expand map for better visibility'}
+              accessibilityRole="button"
+            >
+              <Ionicons name={isExpanded ? "contract" : "expand"} size={18} color={colors.accent} />
+              <Text style={{ color: colors.accent, fontWeight: '700', fontSize: 13, marginLeft: 6 }}>
+                {isExpanded ? 'Shrink Map' : 'Enlarge Map'}
+              </Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.styleButtonsRow}>
@@ -609,6 +623,7 @@ export const FreeLocationMap: React.FC<FreeLocationMapProps> = ({
                   style={[
                     styles.stylePillText,
                     mapTheme === styleOption && styles.stylePillTextActive,
+                    { fontSize: 14, paddingVertical: 4 }
                   ]}
                 >
                   {styleOption === 'standard' ? 'Light' : styleOption === 'dark' ? 'Dark' : 'High-Vis'}
@@ -842,6 +857,19 @@ const styles = StyleSheet.create({
     color: '#E2E8F0',
     fontSize: 10,
     fontWeight: '700',
+  },
+  expandBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 6,
   },
   styleButtonsRow: {
     flexDirection: 'row',

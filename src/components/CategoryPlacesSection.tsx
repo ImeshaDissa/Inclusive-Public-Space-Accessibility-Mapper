@@ -40,6 +40,7 @@ export function CategoryPlacesSection({
   );
   const [isAddingCustom, setIsAddingCustom] = useState<boolean>(false);
   const [customNameInput, setCustomNameInput] = useState<string>('');
+  const [customCategoryInput, setCustomCategoryInput] = useState<string>('');
 
   // Keep activeCategoryId in sync if selectedVenue categoryId changes externally
   React.useEffect(() => {
@@ -121,12 +122,19 @@ export function CategoryPlacesSection({
 
   // Handle submitting a new custom place under this category
   const handleConfirmCustomPlace = () => {
-    const trimmed = customNameInput.trim();
-    if (!trimmed) return;
+    const trimmedName = customNameInput.trim();
+    if (!trimmedName) return;
+    
+    let finalCategoryName = activeCategory.name;
+    if (activeCategoryId === 'other') {
+      const trimmedCat = customCategoryInput.trim();
+      if (!trimmedCat) return; // Must provide custom category name
+      finalCategoryName = trimmedCat;
+    }
 
     onSelectVenue({
-      name: trimmed,
-      category: activeCategory.name,
+      name: trimmedName,
+      category: finalCategoryName,
       categoryId: activeCategoryId,
       address: detectedAddress || `${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)}`,
       isNewCustomPlace: true,
@@ -248,22 +256,6 @@ export function CategoryPlacesSection({
       )}
 
       {/* ── 4. Mapped Places Nearby for Category ─────────────────── */}
-      <View style={styles.subSectionHeader}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <Ionicons name="file-tray-full-outline" size={15} color={colors.accent} />
-          <Text style={[styles.subSectionTitle, { color: colors.textPrimary }]}>
-            Mapped {activeCategory.name}s Nearby
-          </Text>
-        </View>
-        <Text style={[styles.savedDbCount, { color: colors.textMuted }]}>
-          {matchingSavedPlaces.length} mapped
-        </Text>
-      </View>
-
-      <Text style={[styles.subSectionHint, { color: colors.textMuted }]}>
-        Select a verified location or confirm accessibility for your pinned spot:
-      </Text>
-
       {/* ── Horizontal list of mapped places ─────────────────────── */}
       <ScrollView
         horizontal
@@ -437,6 +429,24 @@ export function CategoryPlacesSection({
             onChangeText={setCustomNameInput}
             autoFocus
           />
+
+          {activeCategoryId === 'other' && (
+            <TextInput
+              style={[
+                styles.customInput,
+                {
+                  backgroundColor: colors.chipBg,
+                  borderColor: colors.chipBorder,
+                  color: colors.textPrimary,
+                  marginTop: 8,
+                },
+              ]}
+              placeholder="Enter Custom Category (e.g. Museum, Gym, Office)..."
+              placeholderTextColor={colors.textMuted}
+              value={customCategoryInput}
+              onChangeText={setCustomCategoryInput}
+            />
+          )}
 
           <TouchableOpacity
             style={[styles.confirmBtn, { backgroundColor: colors.accent }]}
