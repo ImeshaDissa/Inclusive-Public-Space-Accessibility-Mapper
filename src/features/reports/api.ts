@@ -19,6 +19,12 @@ export async function uploadReportPhotoToSupabase(
     return photoUri;
   }
 
+  // Bypass dummy Supabase URL to prevent network crash logs in console
+  const dummyUrl = 'vevjkvbkmanzihstkrxm.supabase.co';
+  if (process.env.EXPO_PUBLIC_SUPABASE_URL?.includes(dummyUrl)) {
+    return photoUri; // Return local uri immediately for offline mock mode
+  }
+
   try {
     const bucketName = 'report-photos';
     const filePath = `${reportId}/${Date.now()}_${index}.jpg`;
@@ -146,10 +152,22 @@ export async function createReportInBackend(
   };
 
   // 3. Prepare Supabase database row payload
+  let submitterId = null;
+
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      submitterId = user.id;
+    }
+  } catch (e) {
+    // Ignore auth errors
+  }
+
   const dbRow: Partial<ReportDbRow> = {
     id: reportId,
     place_id: targetPlaceId,
     place_name: input.placeName,
+    submitter_id: submitterId,
     submitter_name: frontendReport.submitterName,
     submitter_avatar: frontendReport.submitterAvatar,
     note: frontendReport.note,
@@ -167,10 +185,31 @@ export async function createReportInBackend(
 
   // 4. Insert into Supabase table 'reports'
   try {
+    const isDummy = process.env.EXPO_PUBLIC_SUPABASE_URL?.includes('vevjkvbkmanzihstkrxm');
+    if (isDummy) {
+      return {
+        success: true,
+        report: frontendReport,
+        persistedToSupabase: false,
+      };
+    }
+
+    const { error } = await supabase.from('reports').insert(dbRow);
+    
+    if (error) {
+      console.warn('[Backend Supabase] Insert failed, falling back to local state:', error.message);
+      return {
+        success: true,
+        report: frontendReport,
+        persistedToSupabase: false,
+        error: error.message,
+      };
+    }
+
     return {
       success: true,
       report: frontendReport,
-      persistedToSupabase: false,
+      persistedToSupabase: true,
     };
   } catch (err: any) {
     console.warn('[Backend Supabase] Network or connection issue:', err);
@@ -184,12 +223,22 @@ export async function createReportInBackend(
 }
 
 /**
- * Fetch all verified/pending reports from Supabase backend.
+ * Fetch reports from Supabase backend. If userId is provided, fetch only for that user.
  */
-export async function fetchReportsFromBackend(): Promise<Report[]> {
+export async function fetchReportsFromBackend(userId?: string): Promise<Report[]> {
   try {
-    // Front-end only mode: disable real network fetch to dummy Supabase to prevent console/network errors
-    return [];
+    const isDummy = process.env.EXPO_PUBLIC_SUPABASE_URL?.includes('vevjkvbkmanzihstkrxm');
+    if (isDummy) {
+      return []; // Return empty array for offline mock mode instead of failing network request
+    }
+
+    let query = supabase.from('reports').select('*').order('created_at', { ascending: false });
+    
+    if (userId) {
+      query = query.eq('submitter_id', userId);
+    }
+
+    const { data, error } = await query;
 
     if (error || !data) {
       console.warn('[Backend Supabase] Could not fetch reports:', error?.message);
