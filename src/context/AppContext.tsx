@@ -149,7 +149,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setReports(parseArray<Report>(storedReports, MOCK_REPORTS));
         setNotifications(parseArray<AppNotification>(storedNotifications, INITIAL_NOTIFICATIONS));
 
-        // Background sync: pull reports from Supabase backend
+        // Background sync disabled (Front-end mode only)
+        /*
         fetchReportsFromBackend()
           .then((backendReports) => {
             if (backendReports && backendReports.length > 0 && isActive) {
@@ -162,6 +163,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             }
           })
           .catch(() => {});
+        */
       } catch {
         if (!isActive) return;
         setAccounts([DEMO_ACCOUNT]);

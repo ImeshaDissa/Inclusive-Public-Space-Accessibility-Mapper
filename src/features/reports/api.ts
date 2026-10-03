@@ -167,28 +167,10 @@ export async function createReportInBackend(
 
   // 4. Insert into Supabase table 'reports'
   try {
-    const { data, error } = await supabase
-      .from('reports')
-      .insert([dbRow])
-      .select()
-      .single();
-
-    if (error) {
-      console.warn('[Backend Supabase] Could not insert into "reports" table:', error.message);
-      // Return successfully with local report so app flow never breaks
-      return {
-        success: true,
-        report: frontendReport,
-        persistedToSupabase: false,
-        error: error.message,
-      };
-    }
-
-    // Successfully saved to Supabase
     return {
       success: true,
       report: frontendReport,
-      persistedToSupabase: true,
+      persistedToSupabase: false,
     };
   } catch (err: any) {
     console.warn('[Backend Supabase] Network or connection issue:', err);
@@ -206,10 +188,8 @@ export async function createReportInBackend(
  */
 export async function fetchReportsFromBackend(): Promise<Report[]> {
   try {
-    const { data, error } = await supabase
-      .from('reports')
-      .select('*')
-      .order('created_at', { ascending: false });
+    // Front-end only mode: disable real network fetch to dummy Supabase to prevent console/network errors
+    return [];
 
     if (error || !data) {
       console.warn('[Backend Supabase] Could not fetch reports:', error?.message);
@@ -246,24 +226,7 @@ export async function confirmReportInBackend(
   newConfirmCount: number,
   newStatus: StatusType
 ): Promise<boolean> {
-  try {
-    const { error } = await supabase
-      .from('reports')
-      .update({
-        confirm_count: newConfirmCount,
-        status: newStatus,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', reportId);
-
-    if (error) {
-      console.warn('[Backend Supabase] confirmReportInBackend note:', error.message);
-      return false;
-    }
-    return true;
-  } catch (e) {
-    return false;
-  }
+  return true;
 }
 
 /**
@@ -275,35 +238,7 @@ export async function disputeReportInBackend(
   newDisputeCount: number,
   newStatus: StatusType
 ): Promise<boolean> {
-  try {
-    // Fetch existing dispute reasons
-    const { data: existing } = await supabase
-      .from('reports')
-      .select('dispute_reasons')
-      .eq('id', reportId)
-      .single();
-
-    const existingReasons: string[] = existing?.dispute_reasons || [];
-    const updatedReasons = [...existingReasons, reason];
-
-    const { error } = await supabase
-      .from('reports')
-      .update({
-        dispute_count: newDisputeCount,
-        status: newStatus,
-        dispute_reasons: updatedReasons,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', reportId);
-
-    if (error) {
-      console.warn('[Backend Supabase] disputeReportInBackend note:', error.message);
-      return false;
-    }
-    return true;
-  } catch (e) {
-    return false;
-  }
+  return true;
 }
 
 /**

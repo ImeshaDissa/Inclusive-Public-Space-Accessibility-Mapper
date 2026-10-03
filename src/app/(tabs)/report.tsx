@@ -45,8 +45,8 @@ function buildMapHtml(lat: number, lng: number, zoom = 15) {
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([${lat}, ${lng}], ${zoom});
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
+    L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+      maxZoom: 20,
     }).addTo(map);
 
     let marker = L.marker([${lat}, ${lng}], { draggable: true }).addTo(map);
@@ -138,13 +138,7 @@ export default function SubmitReportScreen() {
   const [mapKey, setMapKey] = useState(0); // force webview reload on recenter jumps
 
   // Selected venue (either picked from saved database places or custom added under category)
-  const [selectedVenue, setSelectedVenue] = useState<SelectedVenuePayload | null>({
-    name: 'Selected Pinned Spot',
-    category: 'Shopping Mall',
-    categoryId: 'mall',
-    address: 'Pinned on map',
-    isNewCustomPlace: true,
-  });
+  const [selectedVenue, setSelectedVenue] = useState<SelectedVenuePayload | null>(null);
 
   // Reverse-geocode pinned map coordinates to get place & address
   useEffect(() => {
@@ -225,38 +219,6 @@ export default function SubmitReportScreen() {
   const featureCount = Object.values(features).filter(Boolean).length;
 
   // ── Map helpers & OSM API ────────────────────────────────────────────
-  const fetchReportMapData = async () => {
-    try {
-      const response = await fetch('http://wiki.openstreetmap.org/wiki/API', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-      return response;
-    } catch (error) {
-      console.warn('Failed to fetch OpenStreetMap API for report map:', error);
-      return null;
-    }
-  };
-
-  useEffect(() => {
-    const initReportMapData = async () => {
-      try {
-        const response = await fetch('http://wiki.openstreetmap.org/wiki/API', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
-      } catch (error) {
-        console.warn('Failed to fetch OpenStreetMap API for report map:', error);
-      }
-    };
-
-    initReportMapData();
-  }, []);
-
   const recenterMap = (lat: number, lng: number) => {
     setCoords({ latitude: lat, longitude: lng });
     const payload = JSON.stringify({ type: 'recenter', lat, lng, zoom: 16 });
@@ -299,7 +261,7 @@ export default function SubmitReportScreen() {
         const res = await fetch(
           `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
             query
-          )}&limit=6`,
+          )}&countrycodes=lk&limit=6`,
           { headers: { 'Accept-Language': 'en' } }
         );
         const json = await res.json();
@@ -436,6 +398,12 @@ export default function SubmitReportScreen() {
 
   const handleSubmit = async () => {
     if (isSubmitting) return;
+
+    if (featureCount === 0 && !note.trim() && photos.length === 0) {
+      Alert.alert('Validation Error', 'Please verify at least one feature, add a note, or upload a photo to submit.');
+      return;
+    }
+
     const finalPlaceName = selectedVenue?.name || 'Selected Place';
     setIsSubmitting(true);
 
@@ -766,37 +734,37 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   backBtn: { width: 30, height: 30, justifyContent: 'center' },
-  headerTitle: { fontSize: 21, fontWeight: '800', letterSpacing: 0.2 },
-  headerSubtitle: { fontSize: 12.5, marginTop: 3 },
+  headerTitle: { fontSize: 24, fontWeight: '800', letterSpacing: 0.2 },
+  headerSubtitle: { fontSize: 14, marginTop: 4 },
 
-  stepperRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4 },
-  stepDotWrap: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  stepDot: { width: 26, height: 26, borderRadius: 13, borderWidth: 1.5, justifyContent: 'center', alignItems: 'center' },
-  stepDotNumber: { fontSize: 12, fontWeight: '800' },
-  stepDotLabel: { fontSize: 12.5 },
-  stepConnector: { flex: 1, height: 2, marginHorizontal: 10, borderRadius: 1 },
+  stepperRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4, marginTop: 8 },
+  stepDotWrap: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  stepDot: { width: 32, height: 32, borderRadius: 16, borderWidth: 1.5, justifyContent: 'center', alignItems: 'center' },
+  stepDotNumber: { fontSize: 14, fontWeight: '800' },
+  stepDotLabel: { fontSize: 14 },
+  stepConnector: { flex: 1, height: 3, marginHorizontal: 12, borderRadius: 1.5 },
 
   successToast: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
-    borderWidth: 1, padding: 14, marginHorizontal: 16, marginTop: 12, borderRadius: 14,
+    borderWidth: 1, padding: 16, marginHorizontal: 16, marginTop: 12, borderRadius: 16,
   },
-  successToastTitle: { fontSize: 14, fontWeight: '800' },
-  successToastText: { fontSize: 12 },
+  successToastTitle: { fontSize: 16, fontWeight: '800' },
+  successToastText: { fontSize: 14, marginTop: 2 },
 
   scrollContainer: { flex: 1, paddingHorizontal: 16, paddingTop: 16 },
-  section: { marginBottom: 22 },
-  sectionLabel: { fontSize: 11.5, fontWeight: '800', letterSpacing: 1, marginBottom: 10 },
-  sectionLabelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  sectionLabelCount: { fontSize: 12, fontWeight: '700' },
+  section: { marginBottom: 28 },
+  sectionLabel: { fontSize: 14, fontWeight: '800', letterSpacing: 1, marginBottom: 12 },
+  sectionLabelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  sectionLabelCount: { fontSize: 14, fontWeight: '700' },
 
   searchBar: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, height: 48,
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    borderWidth: 1, borderRadius: 16, paddingHorizontal: 16, height: 56,
   },
-  searchInput: { flex: 1, fontSize: 14 },
+  searchInput: { flex: 1, fontSize: 16 },
   searchResults: { marginTop: 8, borderWidth: 1, borderRadius: 14, overflow: 'hidden' },
-  searchResultRow: { flexDirection: 'row', gap: 10, padding: 12, alignItems: 'flex-start' },
-  searchResultText: { flex: 1, fontSize: 12.5, lineHeight: 17 },
+  searchResultRow: { flexDirection: 'row', gap: 12, padding: 16, alignItems: 'center' },
+  searchResultText: { flex: 1, fontSize: 15, lineHeight: 22 },
 
   myLocationBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,

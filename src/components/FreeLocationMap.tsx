@@ -80,25 +80,6 @@ export const FreeLocationMap: React.FC<FreeLocationMapProps> = ({
     }
   }, [selectedAddress]);
 
-  useEffect(() => {
-    const fetchReportMapData = async () => {
-      try {
-        const response = await fetch('http://wiki.openstreetmap.org/wiki/API', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
-        return response;
-      } catch (error) {
-        console.warn('Failed to fetch OpenStreetMap API for report map:', error);
-        return null;
-      }
-    };
-
-    fetchReportMapData();
-  }, []);
-
   // Handle incoming messages from the embedded Leaflet OpenStreetMap
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
@@ -282,12 +263,13 @@ export const FreeLocationMap: React.FC<FreeLocationMapProps> = ({
 
   // Generate Leaflet HTML embed
   const generateLeafletHtml = () => {
+    // Using Google Maps Tiles
     const tileUrl =
       mapTheme === 'dark'
-        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+        ? 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}' // Usually requires specific styling for dark mode with Google Maps API, so falling back to standard
         : mapTheme === 'contrast'
-        ? 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
-        : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+        ? 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}' // Hybrid (Satellite + Labels) for high contrast
+        : 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}'; // Standard Roadmap
 
     const bgMapColor = mapTheme === 'dark' ? '#0F172A' : '#F8FAFC';
 
@@ -380,8 +362,8 @@ export const FreeLocationMap: React.FC<FreeLocationMapProps> = ({
           L.control.zoom({ position: 'bottomright' }).addTo(map);
 
           L.tileLayer('${tileUrl}', {
-            maxZoom: 19,
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>'
+            maxZoom: 20,
+            attribution: '&copy; Google Maps'
           }).addTo(map);
 
           var markerHtml = '<div class="custom-marker-icon" title="Drag to adjust accessibility audit pin">♿</div>';
@@ -596,7 +578,7 @@ export const FreeLocationMap: React.FC<FreeLocationMapProps> = ({
           <View style={[styles.nativeFallback, { backgroundColor: colors.card }]}>
             <Ionicons name="map-outline" size={48} color={colors.accent} />
             <Text style={[styles.nativeText, { color: colors.textPrimary }]}>
-              Map Preview Active (OpenStreetMap Engine)
+              Map Preview Active (Google Maps Engine)
             </Text>
             <Text style={[styles.nativeSubtext, { color: colors.textSecondary }]}>
               Lat: {currentLat.toFixed(5)} | Lng: {currentLng.toFixed(5)}
@@ -609,7 +591,7 @@ export const FreeLocationMap: React.FC<FreeLocationMapProps> = ({
         <View style={styles.mapTopActions}>
           <View style={styles.badgeOSM}>
             <Ionicons name="earth" size={12} color="#10B981" />
-            <Text style={styles.badgeOSMText}>Free OpenStreetMap</Text>
+            <Text style={styles.badgeOSMText}>Google Maps</Text>
           </View>
 
           <View style={styles.styleButtonsRow}>
