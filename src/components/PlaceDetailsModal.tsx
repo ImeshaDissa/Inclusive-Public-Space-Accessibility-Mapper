@@ -85,7 +85,7 @@ export const PlaceDetailsModal: React.FC<PlaceDetailsModalProps> = ({
               <Ionicons
                 name={place.saved ? 'bookmark' : 'bookmark-outline'}
                 size={18}
-                color={place.saved ? '#6366F1' : '#FFF'}
+                color={place.saved ? '#FF5A36' : '#FFF'}
               />
               <Text style={[styles.saveBtnText, place.saved && styles.savedTextActive]}>
                 {place.saved ? 'Saved' : 'Save Place'}
@@ -237,8 +237,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   savedBtnActive: {
-    backgroundColor: '#312E81',
-    borderColor: '#6366F1',
+    backgroundColor: 'rgba(255, 90, 54, 0.14)',
+    borderColor: '#FF5A36',
   },
   saveBtnText: {
     color: '#FFF',
@@ -246,7 +246,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   savedTextActive: {
-    color: '#818CF8',
+    color: '#FF7A5C',
   },
   scrollContent: {
     paddingHorizontal: 20,
@@ -267,7 +267,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   categoryText: {
-    color: '#6366F1',
+    color: '#FF5A36',
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1,
@@ -375,7 +375,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#4F46E5',
+    backgroundColor: '#FF5A36',
     paddingVertical: 14,
     borderRadius: 14,
     marginTop: 24,

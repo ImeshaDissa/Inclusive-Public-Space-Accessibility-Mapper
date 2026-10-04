@@ -59,7 +59,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         return { bg: '#78350F', border: '#F59E0B', iconColor: '#F59E0B', defaultIcon: 'warning' as const };
       case 'info':
       default:
-        return { bg: '#1E1B4B', border: '#6366F1', iconColor: '#818CF8', defaultIcon: 'information-circle' as const };
+        return { bg: 'rgba(255, 90, 54, 0.12)', border: '#FF5A36', iconColor: '#FF7A5C', defaultIcon: 'information-circle' as const };
     }
   };
 

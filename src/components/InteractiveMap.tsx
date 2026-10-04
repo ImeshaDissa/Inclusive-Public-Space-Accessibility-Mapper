@@ -162,25 +162,90 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
         </View>
       </View>
 
-      {Platform.OS === 'web' ? (
-        // @ts-ignore
-        <iframe
-          srcDoc={mapHtml}
-          style={{ width: '100%', height: '100%', border: 'none' }}
-        />
-      ) : (
-        <WebView
-          ref={webviewRef}
-          key={mapKey}
-          originWhitelist={['*']}
-          source={{ html: mapHtml }}
-          onMessage={handleMessage}
-          style={styles.map}
-          scrollEnabled={false}
-          showsVerticalScrollIndicator={false}
-          showsHorizontalScrollIndicator={false}
-        />
-      )}
+      {/* Visual Canvas Vector Graphic & Roads */}
+      <View style={[styles.canvasWrapper, { transform: [{ scale: zoomLevel }] }]}>
+        {/* Decorative Grid / Simulated Map Features */}
+        <View style={styles.mapRoadHorizontal1} />
+        <View style={styles.mapRoadHorizontal2} />
+        <View style={styles.mapRoadVertical1} />
+        <View style={styles.mapRiver} />
+        <View style={styles.mapParkZone} />
+
+        {/* Place Pin Markers */}
+        {places.map((place, index) => {
+          const { top, left } = getCoordinatesPercentage(place.lat, place.lng, index);
+          const isSelected = selectedPlaceId === place.id;
+          const statusColor = getStatusColor(place.status);
+
+          return (
+            <TouchableOpacity
+              key={place.id}
+              activeOpacity={0.8}
+              style={[
+                styles.markerWrapper,
+                { top: `${top}%`, left: `${left}%` },
+                isSelected && styles.selectedMarkerWrapper,
+              ]}
+              onPress={() => onSelectPlace(place)}
+            >
+              {/* Marker Pin Icon */}
+              <View
+                style={[
+                  styles.markerBadge,
+                  { backgroundColor: statusColor, borderColor: isSelected ? '#FFFFFF' : statusColor },
+                ]}
+              >
+                <Ionicons
+                  name={
+                    place.status === 'verified'
+                      ? 'checkmark-circle'
+                      : place.status === 'disputed'
+                      ? 'alert-circle'
+                      : 'time'
+                  }
+                  size={16}
+                  color="#FFF"
+                />
+              </View>
+
+              {/* Label Pill */}
+              <View style={[styles.markerPill, isSelected && styles.selectedPill]}>
+                <Text style={styles.markerName} numberOfLines={1}>
+                  {place.name}
+                </Text>
+                <Text style={[styles.markerStatusTag, { color: statusColor }]}>
+                  {getStatusBadge(place.status)}
+                </Text>
+              </View>
+
+              {/* Pulsing indicator if selected */}
+              {isSelected && <View style={[styles.pulseRing, { borderColor: statusColor }]} />}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {/* Map Zoom Controls Floating Buttons */}
+      <View style={styles.floatingControls}>
+        <TouchableOpacity
+          style={styles.zoomButton}
+          onPress={() => setZoomLevel((prev) => Math.min(prev + 0.15, 1.4))}
+        >
+          <Ionicons name="add" size={20} color="#FFF" />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.zoomButton}
+          onPress={() => setZoomLevel((prev) => Math.max(prev - 0.15, 0.85))}
+        >
+          <Ionicons name="remove" size={20} color="#FFF" />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.zoomButton}
+          onPress={() => setZoomLevel(1)}
+        >
+          <Ionicons name="locate" size={18} color="#FF5A36" />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 };
@@ -236,8 +301,13 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 5,
   },
-  legendText: {
-    fontSize: 12,
+  selectedPill: {
+    borderColor: '#FF5A36',
+    backgroundColor: 'rgba(255, 90, 54, 0.2)',
+  },
+  markerName: {
+    color: '#FFF',
+    fontSize: 10,
     fontWeight: '700',
   },
 });

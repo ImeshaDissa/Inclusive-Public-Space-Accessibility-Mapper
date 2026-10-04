@@ -1,180 +1,410 @@
-import { Image } from 'expo-image';
-import { SymbolView } from 'expo-symbols';
-import { Platform, Pressable, ScrollView, StyleSheet } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  FlatList,
+  Image,
+} from 'react-native';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { useApp } from '@/context/AppContext';
+import { useAppTheme } from '@/context/ThemeContext';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { PlaceDetailsModal } from '@/components/PlaceDetailsModal';
+import { Place, StatusType } from '@/types/accessibility';
 
-import { ExternalLink } from '@/components/external-link';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Collapsible } from '@/components/ui/collapsible';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
+type FilterCategory = 'all' | 'stepFree' | 'ramp' | 'elevator' | 'toilet' | 'parking' | 'tactilePaving';
 
-export default function TabTwoScreen() {
-  const safeAreaInsets = useSafeAreaInsets();
-  const insets = {
-    ...safeAreaInsets,
-    bottom: safeAreaInsets.bottom + BottomTabInset + Spacing.three,
+export default function ExploreSearchScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { places, toggleSavePlace, setSelectedPlaceId } = useApp();
+  const { colors, isDark } = useAppTheme();
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeFilter, setActiveFilter] = useState<FilterCategory>('all');
+  const [selectedPlaceModal, setSelectedPlaceModal] = useState<Place | null>(null);
+
+  const getStatusColor = (status: StatusType) => {
+    switch (status) {
+      case 'verified':
+        return colors.statusDotVerified;
+      case 'disputed':
+        return colors.statusDotDisputed;
+      case 'pending':
+      default:
+        return colors.statusDotPending;
+    }
   };
-  const theme = useTheme();
 
-  const contentPlatformStyle = Platform.select({
-    android: {
-      paddingTop: insets.top,
-      paddingLeft: insets.left,
-      paddingRight: insets.right,
-      paddingBottom: insets.bottom,
-    },
-    web: {
-      paddingTop: Spacing.six,
-      paddingBottom: Spacing.four,
-    },
+  // Filter Places based on query and selected feature tag
+  const filteredPlaces = places.filter((place) => {
+    const matchesSearch =
+      place.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      place.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      place.address.toLowerCase().includes(searchQuery.toLowerCase());
+
+    if (!matchesSearch) return false;
+
+    if (activeFilter === 'all') return true;
+    return Boolean(place.features[activeFilter]);
   });
 
+  const filterChips: { id: FilterCategory; label: string; icon: string }[] = [
+    { id: 'all', label: 'All Places', icon: 'apps' },
+    { id: 'stepFree', label: 'Step-Free', icon: 'walk' },
+    { id: 'ramp', label: 'Wheelchair Ramp', icon: 'wheelchair' },
+    { id: 'elevator', label: 'Elevator', icon: 'elevator-passenger' },
+    { id: 'toilet', label: 'Restroom', icon: 'human-handsdown' },
+    { id: 'parking', label: 'Parking', icon: 'car' },
+  ];
+
   return (
-    <ScrollView
-      style={[styles.scrollView, { backgroundColor: theme.background }]}
-      contentInset={insets}
-      contentContainerStyle={[styles.contentContainer, contentPlatformStyle]}>
-      <ThemedView style={styles.container}>
-        <ThemedView style={styles.titleContainer}>
-          <ThemedText type="subtitle">Explore</ThemedText>
-          <ThemedText style={styles.centerText} themeColor="textSecondary">
-            This starter app includes example{'\n'}code to help you get started.
-          </ThemedText>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Header & Search Bar */}
+      <View style={[styles.header, { backgroundColor: colors.headerBg, borderBottomColor: colors.headerBorder, paddingTop: Math.max(insets.top + 8, 16) }]}>
+        <Text style={[styles.title, { color: colors.textPrimary }]}>Search & Filter Places</Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+          Find verified accessible venues & step-free paths
+        </Text>
 
-          <ExternalLink href="https://docs.expo.dev" asChild>
-            <Pressable style={({ pressed }) => pressed && styles.pressed}>
-              <ThemedView type="backgroundElement" style={styles.linkButton}>
-                <ThemedText type="link">Expo documentation</ThemedText>
-                <SymbolView
-                  tintColor={theme.text}
-                  name="arrow.up.right.square"
-                  size={12}
+        {/* Search Input Box */}
+        <View style={[styles.searchBox, { backgroundColor: colors.chipBg, borderColor: colors.chipBorder }]}>
+          <Ionicons name="search" size={20} color={colors.accent} style={{ marginRight: 8 }} />
+          <TextInput
+            style={[styles.searchInput, { color: colors.textPrimary }]}
+            placeholder="Search venue name, category, or address..."
+            placeholderTextColor={colors.textMuted}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')} style={{ padding: 4 }}>
+              <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Filter Pills Scroll */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
+          {filterChips.map((chip) => {
+            const isActive = activeFilter === chip.id;
+            return (
+              <TouchableOpacity
+                key={chip.id}
+                style={[
+                  styles.filterChip,
+                  { backgroundColor: colors.chipBg, borderColor: colors.chipBorder },
+                  isActive && { backgroundColor: colors.segmentActiveBg, borderColor: colors.accent },
+                ]}
+                onPress={() => setActiveFilter(chip.id)}
+                activeOpacity={0.8}
+              >
+                <MaterialCommunityIcons
+                  name={chip.icon as any}
+                  size={14}
+                  color={isActive ? colors.filterActiveText : colors.accent}
                 />
-              </ThemedView>
-            </Pressable>
-          </ExternalLink>
-        </ThemedView>
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    { color: isActive ? colors.filterActiveText : colors.textSecondary },
+                    isActive && { fontWeight: '700' },
+                  ]}
+                >
+                  {chip.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
 
-        <ThemedView style={styles.sectionsWrapper}>
-          <Collapsible title="File-based routing">
-            <ThemedText type="small">
-              This app has two screens: <ThemedText type="code">src/app/index.tsx</ThemedText> and{' '}
-              <ThemedText type="code">src/app/explore.tsx</ThemedText>
-            </ThemedText>
-            <ThemedText type="small">
-              The layout file in <ThemedText type="code">src/app/_layout.tsx</ThemedText> sets up
-              the tab navigator.
-            </ThemedText>
-            <ExternalLink href="https://docs.expo.dev/router/introduction">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
+      {/* Results Header */}
+      <View style={styles.resultsHeader}>
+        <Text style={[styles.resultsCount, { color: colors.textMuted }]}>
+          FOUND {filteredPlaces.length} ACCESSIBLE VENUES
+        </Text>
+      </View>
 
-          <Collapsible title="Android, iOS, and web support">
-            <ThemedView type="backgroundElement" style={styles.collapsibleContent}>
-              <ThemedText type="small">
-                You can open this project on Android, iOS, and the web. To open the web version,
-                press <ThemedText type="smallBold">w</ThemedText> in the terminal running this
-                project.
-              </ThemedText>
-              <Image
-                source={require('@/assets/images/tutorial-web.png')}
-                style={styles.imageTutorial}
-              />
-            </ThemedView>
-          </Collapsible>
+      {/* Venues List */}
+      <FlatList
+        data={filteredPlaces}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.listContainer}
+        renderItem={({ item }) => {
+          const statusColor = getStatusColor(item.status);
+          return (
+            <TouchableOpacity
+              style={[styles.placeCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+              onPress={() => {
+                setSelectedPlaceId(item.id);
+                setSelectedPlaceModal(item);
+              }}
+              activeOpacity={0.9}
+            >
+              <Image source={{ uri: item.photos[0] }} style={styles.placeImage} />
 
-          <Collapsible title="Images">
-            <ThemedText type="small">
-              For static images, you can use the <ThemedText type="code">@2x</ThemedText> and{' '}
-              <ThemedText type="code">@3x</ThemedText> suffixes to provide files for different
-              screen densities.
-            </ThemedText>
-            <Image source={require('@/assets/images/react-logo.png')} style={styles.imageReact} />
-            <ExternalLink href="https://reactnative.dev/docs/images">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
+              <View style={styles.placeContent}>
+                <View style={styles.placeTitleRow}>
+                  <Text style={[styles.placeName, { color: colors.textPrimary }]} numberOfLines={1}>
+                    {item.name}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.bookmarkBtn}
+                    onPress={() => toggleSavePlace(item.id)}
+                    hitSlop={8}
+                  >
+                    <Ionicons
+                      name={item.saved ? 'bookmark' : 'bookmark-outline'}
+                      size={20}
+                      color={item.saved ? '#FF5A36' : colors.textMuted}
+                    />
+                  </TouchableOpacity>
+                </View>
 
-          <Collapsible title="Light and dark mode components">
-            <ThemedText type="small">
-              This template has light and dark mode support. The{' '}
-              <ThemedText type="code">useColorScheme()</ThemedText> hook lets you inspect what the
-              user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
-            </ThemedText>
-            <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
+                <Text style={[styles.placeCategory, { color: colors.accentLight }]}>{item.category}</Text>
+                <Text style={[styles.placeAddress, { color: colors.textSecondary }]} numberOfLines={1}>
+                  {item.address}
+                </Text>
 
-          <Collapsible title="Animations">
-            <ThemedText type="small">
-              This template includes an example of an animated component. The{' '}
-              <ThemedText type="code">src/components/ui/collapsible.tsx</ThemedText> component uses
-              the powerful <ThemedText type="code">react-native-reanimated</ThemedText> library to
-              animate opening this hint.
-            </ThemedText>
-          </Collapsible>
-        </ThemedView>
-        {Platform.OS === 'web' && <WebBadge />}
-      </ThemedView>
-    </ScrollView>
+                {/* Features Badges */}
+                <View style={styles.featuresRow}>
+                  {item.features.ramp && (
+                    <View style={[styles.featureBadge, { backgroundColor: colors.chipBg }]}>
+                      <MaterialCommunityIcons name="wheelchair" size={10} color={colors.statusDotVerified} />
+                      <Text style={[styles.featureText, { color: colors.textSecondary }]}>Ramp</Text>
+                    </View>
+                  )}
+                  {item.features.elevator && (
+                    <View style={[styles.featureBadge, { backgroundColor: colors.chipBg }]}>
+                      <MaterialCommunityIcons name="elevator-passenger" size={10} color={colors.statusDotVerified} />
+                      <Text style={[styles.featureText, { color: colors.textSecondary }]}>Elevator</Text>
+                    </View>
+                  )}
+                  {item.features.toilet && (
+                    <View style={[styles.featureBadge, { backgroundColor: colors.chipBg }]}>
+                      <MaterialCommunityIcons name="human-handsdown" size={10} color={colors.statusDotVerified} />
+                      <Text style={[styles.featureText, { color: colors.textSecondary }]}>Restroom</Text>
+                    </View>
+                  )}
+                  {item.features.stepFree && (
+                    <View style={[styles.featureBadge, { backgroundColor: colors.chipBg }]}>
+                      <MaterialCommunityIcons name="walk" size={10} color={colors.statusDotVerified} />
+                      <Text style={[styles.featureText, { color: colors.textSecondary }]}>Step-Free</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Card Status Footer */}
+                <View style={styles.cardFooter}>
+                  <View style={styles.statusDotRow}>
+                    <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+                    <Text style={[styles.statusTagText, { color: statusColor }]}>
+                      {item.status.toUpperCase()}
+                    </Text>
+                  </View>
+                  <Text style={[styles.confirmsText, { color: colors.textMuted }]}>
+                    {item.confirmCount} confirms · {item.disputeCount} disputes
+                  </Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          );
+        }}
+        ListEmptyComponent={
+          <View style={[styles.emptyContainer, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+            <Ionicons name="search-outline" size={40} color={colors.emptyIcon} />
+            <Text style={[styles.emptyTitle, { color: colors.emptyTitle }]}>No Matching Venues Found</Text>
+            <Text style={[styles.emptySubtext, { color: colors.emptySubtext }]}>
+              Try adjusting your search query or selecting a different feature filter pill.
+            </Text>
+          </View>
+        }
+      />
+
+      <PlaceDetailsModal
+        place={selectedPlaceModal}
+        visible={!!selectedPlaceModal}
+        onClose={() => setSelectedPlaceModal(null)}
+        onToggleSave={toggleSavePlace}
+        onReportUpdate={() => {
+          setSelectedPlaceModal(null);
+          router.push('/report' as any);
+        }}
+      />
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  scrollView: {
+  container: {
     flex: 1,
   },
-  contentContainer: {
+  header: {
+    paddingHorizontal: 16,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  subtitle: {
+    fontSize: 12,
+    marginTop: 2,
+    marginBottom: 12,
+  },
+  searchBox: {
     flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  container: {
-    maxWidth: MaxContentWidth,
-    flexGrow: 1,
-  },
-  titleContainer: {
-    gap: Spacing.three,
     alignItems: 'center',
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.six,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    height: 48,
+    marginBottom: 12,
   },
-  centerText: {
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  filterScroll: {
+    flexDirection: 'row',
+  },
+  filterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 9999,
+    borderWidth: 1,
+    marginRight: 8,
+  },
+  filterChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  resultsHeader: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
+  resultsCount: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  listContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 30,
+  },
+  placeCard: {
+    flexDirection: 'row',
+    borderRadius: 18,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    gap: 12,
+  },
+  placeImage: {
+    width: 90,
+    height: 90,
+    borderRadius: 14,
+  },
+  placeContent: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  placeTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  placeName: {
+    fontSize: 15,
+    fontWeight: '800',
+    flex: 1,
+    paddingRight: 6,
+  },
+  bookmarkBtn: {
+    padding: 2,
+  },
+  placeCategory: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 1,
+  },
+  placeAddress: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  featuresRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginTop: 6,
+  },
+  featureBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  featureText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  statusDotRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusTagText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
+  confirmsText: {
+    fontSize: 10,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    borderRadius: 18,
+    borderWidth: 1,
+    marginTop: 12,
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginTop: 10,
+  },
+  emptySubtext: {
+    fontSize: 12,
     textAlign: 'center',
-  },
-  pressed: {
-    opacity: 0.7,
-  },
-  linkButton: {
-    flexDirection: 'row',
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.two,
-    borderRadius: Spacing.five,
-    justifyContent: 'center',
-    gap: Spacing.one,
-    alignItems: 'center',
-  },
-  sectionsWrapper: {
-    gap: Spacing.five,
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.three,
-  },
-  collapsibleContent: {
-    alignItems: 'center',
-  },
-  imageTutorial: {
-    width: '100%',
-    aspectRatio: 296 / 171,
-    borderRadius: Spacing.three,
-    marginTop: Spacing.two,
-  },
-  imageReact: {
-    width: 100,
-    height: 100,
-    alignSelf: 'center',
+    paddingHorizontal: 30,
+    marginTop: 4,
   },
 });

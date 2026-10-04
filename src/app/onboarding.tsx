@@ -9,74 +9,205 @@ import {
   Animated,
   NativeSyntheticEvent,
   NativeScrollEvent,
+  Image,
+  ImageSourcePropType,
+  Platform,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useAppTheme } from '@/context/ThemeContext';
 
-const { width } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+interface BadgeItem {
+  text: string;
+  emoji: string;
+  bg: string;
+  border: string;
+  color: string;
+  style: {
+    top?: number;
+    bottom?: number;
+    left?: number;
+    right?: number;
+  };
+}
 
 interface OnboardingSlide {
   id: string;
-  icon: string;
-  iconLib: 'Ionicons' | 'MaterialCommunityIcons';
   title: string;
   description: string;
-  color: string;
-  bgColor: string;
-  iconBg: string;
+  img1: ImageSourcePropType;
+  img2: ImageSourcePropType;
+  img3: ImageSourcePropType;
+  badges: BadgeItem[];
 }
 
 const SLIDES: OnboardingSlide[] = [
   {
     id: '1',
-    icon: 'accessibility',
-    iconLib: 'Ionicons',
-    title: 'Welcome to InclusiveMapper',
+    title: 'Make your journey absolute effortless',
     description:
-      'A community-powered app that maps wheelchair ramps, elevators, accessible restrooms, and step-free paths so everyone can move freely.',
-    color: '#1E40AF',
-    bgColor: '#EFF6FF',
-    iconBg: '#DBEAFE',
+      'Find verified ramps, tactile paths, and step-free venues before you head out. Powered by direct community audits.',
+    img1: require('@/assets/images/onboarding/wheelchair-user.png'),
+    img2: require('@/assets/images/onboarding/auditor.png'),
+    img3: require('@/assets/images/onboarding/tactile-guide.png'),
+    badges: [
+      {
+        text: 'Verified Access',
+        emoji: '♿',
+        bg: '#E6F8EE',
+        border: '#BBF7D0',
+        color: '#0E8345',
+        style: { bottom: 12, left: 10 },
+      },
+      {
+        text: 'Smart Alerts',
+        emoji: '⚡',
+        bg: '#FEF6E4',
+        border: '#FDE047',
+        color: '#B45309',
+        style: { top: 12, right: 10 },
+      },
+      {
+        text: 'Step-Free Ramp',
+        emoji: '📐',
+        bg: '#FEF9C3',
+        border: '#FDE047',
+        color: '#713F12',
+        style: { top: 24, left: 12 },
+      },
+      {
+        text: 'Tactile Path',
+        emoji: '🧭',
+        bg: '#E8F5FE',
+        border: '#BAE6FD',
+        color: '#0369A1',
+        style: { bottom: 20, right: 10 },
+      },
+    ],
   },
   {
     id: '2',
-    icon: 'map-marker-radius',
-    iconLib: 'MaterialCommunityIcons',
-    title: 'Find Accessible Places',
+    title: 'Report barriers & update city access in seconds',
     description:
-      'Search for verified accessible venues near you. See ramp status, elevator availability, and restroom access before you go.',
-    color: '#047857',
-    bgColor: '#ECFDF5',
-    iconBg: '#D1FAE5',
+      'Snap photos of steep slopes, broken elevators, or new ramps to keep the community database accurate and live.',
+    img1: require('@/assets/images/onboarding/auditor.png'),
+    img2: require('@/assets/images/onboarding/wheelchair-user.png'),
+    img3: require('@/assets/images/onboarding/scenic-terrace.png'),
+    badges: [
+      {
+        text: 'Photo Evidence',
+        emoji: '📸',
+        bg: '#FEF08A',
+        border: '#FDE047',
+        color: '#713F12',
+        style: { bottom: 12, right: 10 },
+      },
+      {
+        text: '1:12 Incline Passed',
+        emoji: '📏',
+        bg: '#E6F8EE',
+        border: '#BBF7D0',
+        color: '#0E8345',
+        style: { top: 14, left: 10 },
+      },
+      {
+        text: 'Barrier Flagged',
+        emoji: '⚠️',
+        bg: '#FFF1EE',
+        border: '#FECDD3',
+        color: '#C2410C',
+        style: { bottom: 14, left: 10 },
+      },
+      {
+        text: 'Real-Time Pin',
+        emoji: '📍',
+        bg: '#E8F5FE',
+        border: '#BAE6FD',
+        color: '#0369A1',
+        style: { top: 16, right: 10 },
+      },
+    ],
   },
   {
     id: '3',
-    icon: 'shield-checkmark',
-    iconLib: 'Ionicons',
-    title: 'Community Verification',
+    title: 'Community verified data you can genuinely trust',
     description:
-      'Submit accessibility reports and help verify community data. Three or more confirmations mark a place as verified.',
-    color: '#B45309',
-    bgColor: '#FFFBEB',
-    iconBg: '#FEF3C7',
+      'Official blueprints are often outdated. Our vibrant navigator community inspects and rates routes so you step forward with confidence.',
+    img1: require('@/assets/images/onboarding/tactile-guide.png'),
+    img2: require('@/assets/images/onboarding/scenic-terrace.png'),
+    img3: require('@/assets/images/onboarding/wheelchair-user.png'),
+    badges: [
+      {
+        text: 'Community Verified',
+        emoji: '🛡️',
+        bg: '#E6F8EE',
+        border: '#BBF7D0',
+        color: '#0E8345',
+        style: { top: 16, left: 12 },
+      },
+      {
+        text: '99.4% Accuracy',
+        emoji: '⭐',
+        bg: '#FEF6E4',
+        border: '#FDE047',
+        color: '#B45309',
+        style: { top: 10, right: 12 },
+      },
+      {
+        text: '3x Peer Checks',
+        emoji: '👥',
+        bg: '#E8F5FE',
+        border: '#BAE6FD',
+        color: '#0369A1',
+        style: { bottom: 18, right: 12 },
+      },
+    ],
   },
   {
     id: '4',
-    icon: 'heart',
-    iconLib: 'Ionicons',
-    title: 'Save and Get Updates',
+    title: 'Save favorites & navigate your city with freedom',
     description:
-      'Bookmark your favorite accessible spots. Get notified when a place is verified, disputed, or updated by the community.',
-    color: '#DC2626',
-    bgColor: '#FEF2F2',
-    iconBg: '#FEE2E2',
+      'Bookmark accessible spots and receive live alerts when transit elevators go down or access improves.',
+    img1: require('@/assets/images/onboarding/scenic-terrace.png'),
+    img2: require('@/assets/images/onboarding/auditor.png'),
+    img3: require('@/assets/images/onboarding/tactile-guide.png'),
+    badges: [
+      {
+        text: 'Saved Places',
+        emoji: '❤️',
+        bg: '#FFF1EE',
+        border: '#FECDD3',
+        color: '#E11D48',
+        style: { top: 16, left: 12 },
+      },
+      {
+        text: 'Route Alert Active',
+        emoji: '🔔',
+        bg: '#FEF6E4',
+        border: '#FDE047',
+        color: '#B45309',
+        style: { top: 28, right: 12 },
+      },
+      {
+        text: 'SDG 10 & 11',
+        emoji: '🌍',
+        bg: '#E6F8EE',
+        border: '#BBF7D0',
+        color: '#0D9488',
+        style: { bottom: 16, left: 14 },
+      },
+    ],
   },
 ];
 
 export default function OnboardingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { isDark } = useAppTheme();
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
@@ -84,14 +215,16 @@ export default function OnboardingScreen() {
   const handleNext = () => {
     if (currentIndex < SLIDES.length - 1) {
       flatListRef.current?.scrollToIndex({ index: currentIndex + 1, animated: true });
+    } else {
+      handleGetStarted();
     }
   };
 
-  const handleSkip = async () => {
+  const handleSkip = () => {
     router.replace('/login');
   };
 
-  const handleGetStarted = async () => {
+  const handleGetStarted = () => {
     router.replace('/login');
   };
 
@@ -101,96 +234,131 @@ export default function OnboardingScreen() {
       useNativeDriver: false,
       listener: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
         const contentOffset = event.nativeEvent.contentOffset.x;
-        const index = Math.round(contentOffset / width);
+        const index = Math.round(contentOffset / SCREEN_WIDTH);
         setCurrentIndex(index);
       },
     },
   );
 
   const renderSlide = ({ item, index }: { item: OnboardingSlide; index: number }) => {
-    const inputRange = [(index - 1) * width, index * width, (index + 1) * width];
-
-    const scale = scrollX.interpolate({
-      inputRange,
-      outputRange: [0.7, 1, 0.7],
-      extrapolate: 'clamp',
-    });
+    const inputRange = [(index - 1) * SCREEN_WIDTH, index * SCREEN_WIDTH, (index + 1) * SCREEN_WIDTH];
 
     const opacity = scrollX.interpolate({
       inputRange,
-      outputRange: [0.2, 1, 0.2],
+      outputRange: [0.3, 1, 0.3],
       extrapolate: 'clamp',
     });
 
     const translateY = scrollX.interpolate({
       inputRange,
-      outputRange: [50, 0, 50],
+      outputRange: [30, 0, 30],
       extrapolate: 'clamp',
     });
 
     return (
-      <View style={[styles.slide, { width, backgroundColor: item.bgColor }]}>
-        {/* Icon Circle */}
-        <Animated.View
-          style={[
-            styles.iconContainer,
-            {
-              backgroundColor: item.iconBg,
-              borderColor: item.color,
-              transform: [{ scale }],
-              opacity,
-            },
-          ]}
-        >
-          {item.iconLib === 'Ionicons' ? (
-            <Ionicons name={item.icon as any} size={90} color={item.color} />
-          ) : (
-            <MaterialCommunityIcons name={item.icon as any} size={90} color={item.color} />
-          )}
-        </Animated.View>
+      <View style={[styles.slideContainer, { width: SCREEN_WIDTH }]}>
+        {/* Top Visual Masonry Section */}
+        <View style={styles.collageContainer}>
+          <View style={styles.masonryGrid}>
+            {/* Left Column (Staggered Downwards) */}
+            <View style={[styles.column, styles.leftColumn]}>
+              <View style={[styles.cardFrame, { height: '56%' }]}>
+                <Image source={item.img1} style={styles.cardImage} resizeMode="cover" />
+              </View>
+              <View style={[styles.cardFrame, { height: '40%' }]}>
+                <Image source={item.img3} style={styles.cardImage} resizeMode="cover" />
+              </View>
+            </View>
 
-        {/* Text Content */}
+            {/* Right Column (Staggered Upwards) */}
+            <View style={[styles.column, styles.rightColumn]}>
+              <View style={[styles.cardFrame, { height: '42%' }]}>
+                <Image source={item.img2} style={styles.cardImage} resizeMode="cover" />
+              </View>
+              <View style={[styles.cardFrame, { height: '54%' }]}>
+                <Image source={item.img1} style={styles.cardImage} resizeMode="cover" />
+              </View>
+            </View>
+          </View>
+
+          {/* Floating Pill Badges */}
+          {item.badges.map((badge, bIdx) => (
+            <View
+              key={bIdx}
+              style={[
+                styles.badgePill,
+                {
+                  backgroundColor: badge.bg,
+                  borderColor: badge.border,
+                },
+                badge.style,
+              ]}
+            >
+              <Text style={styles.badgeEmoji}>{badge.emoji}</Text>
+              <Text style={[styles.badgeText, { color: badge.color }]}>{badge.text}</Text>
+            </View>
+          ))}
+
+          {/* Bottom Gradient Overlay Mask */}
+          <LinearGradient
+            colors={[
+              'rgba(255, 255, 255, 0)',
+              isDark ? 'rgba(9, 13, 22, 0.75)' : 'rgba(255, 255, 255, 0.75)',
+              isDark ? '#090D16' : '#FFFFFF',
+            ]}
+            style={styles.gradientFade}
+            pointerEvents="none"
+          />
+        </View>
+
+        {/* Bottom Card Content */}
         <Animated.View
           style={[
-            styles.textContainer,
+            styles.bottomContent,
             {
+              backgroundColor: isDark ? '#090D16' : '#FFFFFF',
+              opacity,
               transform: [{ translateY }],
-              opacity,
             },
           ]}
         >
-          <Text style={[styles.title, { color: '#111827' }]}>{item.title}</Text>
-
-          <View style={[styles.divider, { backgroundColor: item.color }]} />
-
-          <Text style={[styles.description, { color: '#374151' }]}>{item.description}</Text>
+          <View style={styles.textContainer}>
+            <Text style={[styles.headline, { color: isDark ? '#F8FAFC' : '#0F172A' }]}>
+              {item.title}
+            </Text>
+            <Text style={[styles.subtitle, { color: isDark ? '#94A3B8' : '#64748B' }]}>
+              {item.description}
+            </Text>
+          </View>
         </Animated.View>
       </View>
     );
   };
 
   const isLastSlide = currentIndex === SLIDES.length - 1;
-  const activeColor = SLIDES[currentIndex].color;
 
   return (
-    <View style={styles.container}>
-      {/* Top Controls */}
-      <View style={[styles.topBar, { paddingTop: insets.top + 12 }]}>
-        {!isLastSlide ? (
-          <TouchableOpacity
-            onPress={handleSkip}
-            style={[styles.skipBtn, { borderColor: '#D1D5DB' }]}
-            accessibilityLabel="Skip onboarding"
-            accessibilityRole="button"
+    <View style={[styles.container, { backgroundColor: isDark ? '#090D16' : '#FFFFFF' }]}>
+      {/* Brand Header */}
+      <View style={[styles.header, { paddingTop: Math.max(insets.top + 8, 16) }]}>
+        <View style={styles.brandRow}>
+          <LinearGradient
+            colors={['#FF5A36', '#F43F5E', '#F59E0B']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.logoGradient}
           >
-            <Text style={styles.skipText}>Skip</Text>
-          </TouchableOpacity>
-        ) : (
-          <View />
-        )}
+            <View style={styles.logoInner}>
+              <Ionicons name="compass" size={16} color="#FF5A36" />
+            </View>
+          </LinearGradient>
+          <Text style={[styles.brandTitle, { color: isDark ? '#F8FAFC' : '#0F172A' }]}>
+            Inclusive<Text style={styles.brandTitleAccent}>Mapper</Text>
+          </Text>
+        </View>
       </View>
 
-      {/* Slides */}
+      {/* Main Slides List */}
       <FlatList
         ref={flatListRef}
         data={SLIDES}
@@ -204,20 +372,24 @@ export default function OnboardingScreen() {
         bounces={false}
       />
 
-      {/* Pagination & Buttons */}
-      <View style={[styles.bottomSection, { paddingBottom: insets.bottom + 20 }]}>
+      {/* Footer Navigation Controls */}
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom + 12, 20) }]}>
         {/* Pagination Dots */}
-        <View style={styles.pagination}>
+        <View style={styles.paginationRow}>
           {SLIDES.map((_, index) => {
             const isActive = index === currentIndex;
             return (
-              <View
+              <Animated.View
                 key={index}
                 style={[
                   styles.dot,
                   {
-                    backgroundColor: isActive ? activeColor : '#D1D5DB',
-                    width: isActive ? 32 : 10,
+                    backgroundColor: isActive
+                      ? '#FF5A36'
+                      : isDark
+                      ? '#334155'
+                      : '#CBD5E1',
+                    width: isActive ? 24 : 8,
                   },
                 ]}
               />
@@ -225,30 +397,57 @@ export default function OnboardingScreen() {
           })}
         </View>
 
-        {/* Action Buttons */}
-        <View style={styles.actions}>
-          {isLastSlide ? (
-            <TouchableOpacity
-              style={[styles.getStartedBtn, { backgroundColor: activeColor }]}
-              onPress={handleGetStarted}
-              activeOpacity={0.85}
-              accessibilityLabel="Get started"
-              accessibilityRole="button"
-            >
-              <Text style={styles.getStartedText}>Get Started</Text>
-              <Ionicons name="arrow-forward" size={22} color="#FFFFFF" />
-            </TouchableOpacity>
+        {/* Action Controls */}
+        <View style={styles.actionControls}>
+          {!isLastSlide ? (
+            <>
+              <TouchableOpacity
+                onPress={handleSkip}
+                style={styles.skipButton}
+                activeOpacity={0.7}
+                accessibilityLabel="Skip onboarding"
+                accessibilityRole="button"
+              >
+                <Text style={[styles.skipText, { color: isDark ? '#64748B' : '#94A3B8' }]}>
+                  Skip
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={handleNext}
+                style={styles.nextTextButton}
+                activeOpacity={0.8}
+                accessibilityLabel="Next slide"
+                accessibilityRole="button"
+              >
+                <Text style={styles.nextText}>Next</Text>
+              </TouchableOpacity>
+            </>
           ) : (
-            <TouchableOpacity
-              style={[styles.nextBtn, { backgroundColor: activeColor }]}
-              onPress={handleNext}
-              activeOpacity={0.85}
-              accessibilityLabel="Next slide"
-              accessibilityRole="button"
-            >
-              <Text style={styles.nextText}>Next</Text>
-              <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
-            </TouchableOpacity>
+            <>
+              <TouchableOpacity
+                onPress={handleSkip}
+                style={styles.skipButton}
+                activeOpacity={0.7}
+                accessibilityLabel="Sign in"
+                accessibilityRole="button"
+              >
+                <Text style={[styles.skipText, { color: isDark ? '#94A3B8' : '#64748B' }]}>
+                  Sign In
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={handleGetStarted}
+                style={styles.getStartedPillBtn}
+                activeOpacity={0.85}
+                accessibilityLabel="Get started"
+                accessibilityRole="button"
+              >
+                <Text style={styles.getStartedPillText}>Get Started</Text>
+                <Ionicons name="arrow-forward" size={18} color="#FFFFFF" style={{ marginLeft: 6 }} />
+              </TouchableOpacity>
+            </>
           )}
         </View>
       </View>
@@ -259,113 +458,219 @@ export default function OnboardingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
-  topBar: {
+  header: {
     paddingHorizontal: 24,
     paddingBottom: 8,
+    zIndex: 30,
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-  },
-  skipBtn: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 2,
-  },
-  skipText: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#6B7280',
-  },
-  slide: {
-    flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 36,
+    justifyContent: 'space-between',
   },
-  iconContainer: {
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 4,
-    marginBottom: 48,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  textContainer: {
-    alignItems: 'center',
-    gap: 16,
-  },
-  title: {
-    fontSize: 30,
-    fontWeight: '900',
-    textAlign: 'center',
-    lineHeight: 40,
-    letterSpacing: -0.3,
-  },
-  divider: {
-    width: 60,
-    height: 4,
-    borderRadius: 2,
-  },
-  description: {
-    fontSize: 19,
-    lineHeight: 30,
-    textAlign: 'center',
-    paddingHorizontal: 4,
-    fontWeight: '500',
-  },
-  bottomSection: {
-    paddingHorizontal: 28,
-    gap: 28,
-  },
-  pagination: {
+  brandRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
     gap: 8,
   },
-  dot: {
-    height: 10,
-    borderRadius: 5,
-  },
-  actions: {
+  logoGradient: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    padding: 2,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  nextBtn: {
+  logoInner: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  brandTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  brandTitleAccent: {
+    color: '#FF5A36',
+  },
+  slideContainer: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  collageContainer: {
+    height: SCREEN_HEIGHT * 0.48,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  masonryGrid: {
+    flex: 1,
+    flexDirection: 'row',
+    gap: 12,
+  },
+  column: {
+    flex: 1,
+    gap: 12,
+  },
+  leftColumn: {
+    paddingTop: 12,
+  },
+  rightColumn: {
+    marginTop: -8,
+  },
+  cardFrame: {
+    borderRadius: 22,
+    overflow: 'hidden',
+    backgroundColor: '#F1F5F9',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.1,
+        shadowRadius: 12,
+      },
+      android: {
+        elevation: 4,
+      },
+      web: {
+        boxShadow: '0 8px 24px -4px rgba(15, 23, 42, 0.08)',
+      },
+    }),
+  },
+  cardImage: {
+    width: '100%',
+    height: '100%',
+  },
+  badgePill: {
+    position: 'absolute',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 48,
-    paddingVertical: 18,
-    borderRadius: 16,
-    minWidth: 200,
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 9999,
+    borderWidth: 1,
+    zIndex: 25,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.12,
+        shadowRadius: 8,
+      },
+      android: {
+        elevation: 5,
+      },
+      web: {
+        boxShadow: '0 4px 14px 0 rgba(0, 0, 0, 0.08)',
+      },
+    }),
+  },
+  badgeEmoji: {
+    fontSize: 13,
+  },
+  badgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: -0.1,
+  },
+  gradientFade: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 90,
+    zIndex: 20,
+  },
+  bottomContent: {
+    paddingHorizontal: 28,
+    paddingTop: 16,
+    paddingBottom: 24,
     justifyContent: 'center',
+  },
+  textContainer: {
+    gap: 12,
+  },
+  headline: {
+    fontSize: 28,
+    fontWeight: '800',
+    lineHeight: 34,
+    letterSpacing: -0.4,
+  },
+  subtitle: {
+    fontSize: 14,
+    fontWeight: '400',
+    lineHeight: 22,
+    letterSpacing: 0.1,
+  },
+  footer: {
+    paddingHorizontal: 28,
+    paddingTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    zIndex: 30,
+  },
+  paginationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  dot: {
+    height: 8,
+    borderRadius: 4,
+  },
+  actionControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 20,
+  },
+  skipButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+  },
+  skipText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  nextTextButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
   },
   nextText: {
-    color: '#FFFFFF',
-    fontSize: 19,
+    fontSize: 16,
     fontWeight: '800',
+    color: '#FF5A36',
   },
-  getStartedBtn: {
+  getStartedPillBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 52,
-    paddingVertical: 20,
-    borderRadius: 16,
-    width: '100%',
-    justifyContent: 'center',
+    backgroundColor: '#FF5A36',
+    paddingHorizontal: 22,
+    paddingVertical: 14,
+    borderRadius: 9999,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#FF5A36',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 4,
+      },
+      web: {
+        boxShadow: '0 4px 14px 0 rgba(255, 90, 54, 0.35)',
+      },
+    }),
   },
-  getStartedText: {
+  getStartedPillText: {
     color: '#FFFFFF',
-    fontSize: 21,
+    fontSize: 15,
     fontWeight: '800',
   },
 });

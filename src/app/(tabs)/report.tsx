@@ -8,7 +8,6 @@ import {
   ScrollView,
   Switch,
   Image,
-  SafeAreaView,
   Alert,
   Platform,
   ActivityIndicator,
@@ -21,69 +20,7 @@ import * as Location from 'expo-location';
 import { useApp } from '@/context/AppContext';
 import { useAppTheme } from '@/context/ThemeContext';
 import { useToast } from '@/context/ToastContext';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CategoryPlacesSection } from '@/components/CategoryPlacesSection';
-import { ReportDetailsSection } from '@/components/ReportDetailsSection';
-import { SelectedVenuePayload } from '@/types/categoryPlaces';
-import { FeatureKey } from '@/constants/reportFeatures';
-
-const DEFAULT_CENTER = { latitude: 6.9271, longitude: 79.8612 }; // Colombo fallback
-
-function buildMapHtml(lat: number, lng: number, zoom = 15) {
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <style>
-    html, body, #map { height: 100%; margin: 0; padding: 0; background:#e9edf1; }
-  </style>
-</head>
-<body>
-  <div id="map"></div>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script>
-    const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([${lat}, ${lng}], ${zoom});
-    L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
-      maxZoom: 20,
-    }).addTo(map);
-
-    let marker = L.marker([${lat}, ${lng}], { draggable: true }).addTo(map);
-
-    function post(payload) {
-      if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
-        window.ReactNativeWebView.postMessage(JSON.stringify(payload));
-      } else if (window.parent && window.parent !== window) {
-        window.parent.postMessage(JSON.stringify(payload), '*');
-      }
-    }
-
-    marker.on('dragend', function (e) {
-      const pos = marker.getLatLng();
-      post({ type: 'pin', lat: pos.lat, lng: pos.lng });
-    });
-
-    map.on('click', function (e) {
-      marker.setLatLng(e.latlng);
-      post({ type: 'pin', lat: e.latlng.lat, lng: e.latlng.lng });
-    });
-
-    document.addEventListener('message', handleMessage);
-    window.addEventListener('message', handleMessage);
-    function handleMessage(e) {
-      try {
-        const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
-        if (data && data.type === 'recenter') {
-          map.setView([data.lat, data.lng], data.zoom || 16);
-          marker.setLatLng([data.lat, data.lng]);
-        }
-      } catch (err) {}
-    }
-  </script>
-</body>
-</html>`;
-}
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function SubmitReportScreen() {
   const router = useRouter();

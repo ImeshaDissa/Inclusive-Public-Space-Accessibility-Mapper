@@ -30,7 +30,7 @@ export const DisputeModal: React.FC<DisputeModalProps> = ({
   onClose,
   onSubmitDispute,
 }) => {
-  const { colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const [selectedReason, setSelectedReason] = useState<string>(PRESET_REASONS[0].label);
   const [note, setNote] = useState<string>('');
 
@@ -41,40 +41,55 @@ export const DisputeModal: React.FC<DisputeModalProps> = ({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={[styles.backdrop, { backgroundColor: colors.overlay }]}>
-        <View style={[styles.modalCard, { backgroundColor: colors.modalCard, borderColor: colors.modalBorder }]}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={[styles.backdrop, { backgroundColor: colors.overlay || 'rgba(0, 0, 0, 0.65)' }]}>
+        <TouchableOpacity style={styles.backdropDismiss} activeOpacity={1} onPress={onClose} />
+        
+        {/* Bottom Sheet Container */}
+        <View style={[styles.sheetCard, { backgroundColor: colors.modalCard || colors.card, borderColor: colors.modalBorder || colors.cardBorder }]}>
+          {/* Top Sheet Drag Handle */}
+          <View style={[styles.sheetHandle, { backgroundColor: colors.cardBorder || colors.divider }]} />
+
           {/* Header */}
           <View style={styles.header}>
-            <View style={styles.headerTitleRow}>
-              <Ionicons name="alert-circle" size={22} color={colors.error} />
-              <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Dispute Accessibility Report</Text>
-            </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-              <Ionicons name="close" size={18} color={colors.closeBtn} />
+            <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>
+              Reason for Dispute
+            </Text>
+            <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.7}>
+              <Ionicons name="close" size={22} color={colors.closeBtn || colors.textPrimary} />
             </TouchableOpacity>
           </View>
 
-          <Text style={[styles.subtext, { color: colors.textSecondary }]}>
-            Disputing entry for <Text style={[styles.placeHighlight, { color: colors.textPrimary }]}>placeName</Text>. Choose a reason chip:
-          </Text>
+          {/* Subtext */}
+          {placeName ? (
+            <Text style={[styles.subtext, { color: colors.textSecondary }]}>
+              Disputing entry for <Text style={[styles.placeHighlight, { color: colors.textPrimary }]}>{placeName}</Text>. Select a reason below:
+            </Text>
+          ) : null}
 
-          {/* Reason Chips */}
-          <View style={styles.chipsContainer}>
+          {/* Wrapped Reason Chips */}
+          <View style={styles.chipsRow}>
             {PRESET_REASONS.map((item) => {
               const isSelected = selectedReason === item.label;
               return (
                 <TouchableOpacity
                   key={item.id}
-                  style={[styles.chip, { backgroundColor: colors.chipBg, borderColor: colors.chipBorder }, isSelected && { backgroundColor: colors.chipSelectedBg, borderColor: colors.chipSelectedBorder }]}
+                  style={[
+                    styles.chip,
+                    {
+                      backgroundColor: isSelected ? (isDark ? colors.accent : '#1B2A4A') : colors.chipBg,
+                      borderColor: isSelected ? (isDark ? colors.accent : '#1B2A4A') : colors.chipBorder,
+                    },
+                  ]}
                   onPress={() => setSelectedReason(item.label)}
+                  activeOpacity={0.8}
                 >
-                  <Ionicons
-                    name={isSelected ? 'radio-button-on' : 'radio-button-off'}
-                    size={14}
-                    color={isSelected ? colors.error : colors.textMuted}
-                  />
-                  <Text style={[styles.chipText, { color: isSelected ? colors.chipSelectedText : colors.textSecondary }]}>
+                  <Text
+                    style={[
+                      styles.chipText,
+                      { color: isSelected ? '#FFFFFF' : colors.textPrimary },
+                    ]}
+                  >
                     {item.label}
                   </Text>
                 </TouchableOpacity>
@@ -82,10 +97,19 @@ export const DisputeModal: React.FC<DisputeModalProps> = ({
             })}
           </View>
 
-          {/* Optional Note Field */}
-          <Text style={[styles.inputLabel, { color: colors.modalInputLabel }]}>Additional Context (Optional):</Text>
+          {/* Additional Details (Optional) */}
+          <Text style={[styles.inputLabel, { color: colors.modalInputLabel || colors.textPrimary }]}>
+            Additional Details (Optional)
+          </Text>
           <TextInput
-            style={[styles.textInput, { backgroundColor: colors.modalTextInputBg, borderColor: colors.modalTextInputBorder, color: colors.modalTextInput }]}
+            style={[
+              styles.textInput,
+              {
+                backgroundColor: colors.modalTextInputBg || colors.inputBg,
+                borderColor: colors.modalTextInputBorder || colors.inputBorder,
+                color: colors.modalTextInput || colors.textPrimary,
+              },
+            ]}
             placeholder="Explain why this report is inaccurate or outdated..."
             placeholderTextColor={colors.textMuted}
             multiline
@@ -94,34 +118,52 @@ export const DisputeModal: React.FC<DisputeModalProps> = ({
             onChangeText={setNote}
           />
 
-          {/* Action Buttons */}
-          <View style={styles.actionRow}>
-            <TouchableOpacity style={[styles.cancelBtn, { backgroundColor: colors.modalCancelBg }]} onPress={onClose}>
-              <Text style={[styles.cancelText, { color: colors.modalCancelText }]}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.submitBtn, { backgroundColor: colors.modalSubmitBg }]} onPress={handleSubmit}>
-              <Ionicons name="warning-outline" size={16} color={colors.modalSubmitText} />
-              <Text style={[styles.submitText, { color: colors.modalSubmitText }]}>Submit Dispute (+1)</Text>
-            </TouchableOpacity>
-          </View>
+          {/* Attach Photo (Optional) Upload Area */}
+          <TouchableOpacity style={[styles.uploadArea, { borderColor: colors.cardBorder, backgroundColor: colors.chipBg }]} activeOpacity={0.7}>
+            <Ionicons name="image-outline" size={20} color={colors.accent} />
+            <Text style={[styles.uploadText, { color: colors.textPrimary }]}>Attach Photo (Optional)</Text>
+          </TouchableOpacity>
+
+          {/* Full-width Submit Dispute Button */}
+          <TouchableOpacity style={[styles.submitBtn, { backgroundColor: colors.modalSubmitBg || colors.accent }]} onPress={handleSubmit} activeOpacity={0.85}>
+            <Text style={[styles.submitBtnText, { color: colors.modalSubmitText || '#FFFFFF' }]}>Submit Dispute</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </Modal>
   );
 };
 
+export const DisputeReasonModal = DisputeModal;
+
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 20,
+    justifyContent: 'flex-end',
   },
-  modalCard: {
+  backdropDismiss: {
+    flex: 1,
+  },
+  sheetCard: {
     width: '100%',
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 1,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 32,
+    borderTopWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  sheetHandle: {
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 16,
   },
   header: {
     flexDirection: 'row',
@@ -129,14 +171,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
   },
-  headerTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
   headerTitle: {
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 18,
+    fontWeight: '700',
   },
   closeBtn: {
     padding: 4,
@@ -149,17 +186,16 @@ const styles = StyleSheet.create({
   placeHighlight: {
     fontWeight: '700',
   },
-  chipsContainer: {
+  chipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
     marginBottom: 16,
   },
   chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 20,
     borderWidth: 1,
   },
   chipText: {
@@ -175,36 +211,35 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 12,
     fontSize: 13,
-    minHeight: 70,
+    minHeight: 76,
     textAlignVertical: 'top',
     borderWidth: 1,
-    marginBottom: 18,
+    marginBottom: 14,
   },
-  actionRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  cancelBtn: {
-    flex: 1,
-    paddingVertical: 12,
+  uploadArea: {
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
     borderRadius: 12,
-    alignItems: 'center',
-  },
-  cancelText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  submitBtn: {
-    flex: 1.5,
+    paddingVertical: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 12,
-    borderRadius: 12,
+    gap: 8,
+    marginBottom: 20,
   },
-  submitText: {
+  uploadText: {
     fontSize: 13,
+    fontWeight: '600',
+  },
+  submitBtn: {
+    width: '100%',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  submitBtnText: {
+    fontSize: 15,
     fontWeight: '700',
   },
 });
