@@ -15,7 +15,11 @@ function RootLayoutInner() {
     <NavThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#090D16' : '#F8FAFC'} />
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <Stack screenOptions={{ headerShown: false }} />
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="place/[id]" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="report-issue" options={{ presentation: 'modal', title: 'Report Issue' }} />
+        </Stack>
         <NotificationBanner />
       </View>
     </NavThemeProvider>

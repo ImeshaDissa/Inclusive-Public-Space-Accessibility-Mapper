@@ -72,7 +72,7 @@ const DEMO_ACCOUNT: LocalAccount = {
 const parseArray = <T,>(value: string | null, fallback: T[]): T[] => {
   if (!value) return fallback;
   try {
-    const parsed = JSON.parse(value) as T[];
+    const parsed = JSON.parse(value);
     return Array.isArray(parsed) ? parsed : fallback;
   } catch {
     return fallback;
@@ -119,7 +119,8 @@ interface AppContextType {
     featuresReported: Record<string, boolean>;
     photos: string[];
     priority?: 'High' | 'Medium' | 'Low';
-  }) => void;
+    location?: { latitude: number; longitude: number; address: string };
+  }) => Promise<CreateReportResult>;
   confirmReport: (reportId: string) => void;
   disputeReport: (reportId: string, reason: string, note?: string) => void;
   updateUserProfile: (updates: Partial<UserProfile>) => void;
@@ -391,13 +392,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
-  const addReport = ({
+  const addReport = async ({
     placeId,
     placeName,
     note,
     featuresReported,
     photos,
     priority = 'Medium',
+    location,
   }: {
     placeId?: string;
     placeName: string;
@@ -405,7 +407,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     featuresReported: Record<string, boolean>;
     photos: string[];
     priority?: 'High' | 'Medium' | 'Low';
-  }) => {
+    location?: { latitude: number; longitude: number; address: string };
+  }): Promise<CreateReportResult> => {
     let targetPlaceId = placeId;
     let existingPlace = places.find((p) => p.id === placeId || p.name.toLowerCase() === placeName.toLowerCase());
 
@@ -415,9 +418,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         id: targetPlaceId,
         name: placeName,
         category: 'Community Reported Venue',
-        address: 'User Submitted Location',
-        lat: 37.775 + (Math.random() - 0.5) * 0.03,
-        lng: -122.418 + (Math.random() - 0.5) * 0.03,
+        address: location?.address || 'User Submitted Location',
+        lat: location?.latitude || (37.775 + (Math.random() - 0.5) * 0.03),
+        lng: location?.longitude || (-122.418 + (Math.random() - 0.5) * 0.03),
         features: {
           ramp: !!featuresReported.ramp,
           elevator: !!featuresReported.elevator,
@@ -443,21 +446,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       targetPlaceId = existingPlace.id;
     }
 
-    const newReport: Report = {
-      id: `report-${Date.now()}`,
-      placeId: targetPlaceId!,
+    // Call Supabase backend service (with automatic offline/local fallback)
+    const result = await createReportInBackend({
+      placeId: targetPlaceId,
       placeName: existingPlace ? existingPlace.name : placeName,
-      submitterName: userProfile.name + ' (You)',
-      submitterAvatar: userProfile.avatar,
-      timestamp: 'Just now',
       note: note || 'Community accessibility audit submitted.',
       featuresReported,
-      photos: photos.length > 0 ? photos : ['https://images.unsplash.com/photo-1517649763962-0c623266010b?auto=format&fit=crop&w=800&q=80'],
+      photos,
       priority,
-      confirmCount: 1,
-      disputeCount: 0,
-      status: 'pending',
-    };
+      submitterName: userProfile.name + ' (You)',
+      submitterAvatar: userProfile.avatar,
+      location,
+    });
 
     setReports((prev) => [newReport, ...prev]);
 
@@ -498,6 +498,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return { ...p, confirmCount: placeConfirms, status: updatedPlaceStatus };
       })
     );
+
+    // Sync to Supabase backend in the background
+    confirmReportInBackend(reportId, newConfirm, newStatus);
   };
 
   const disputeReport = (reportId: string, reason: string, note?: string) => {
@@ -558,6 +561,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return { ...p, disputeCount: placeDisputes, status: updatedPlaceStatus };
       })
     );
+
+    // Sync to Supabase backend in the background
+    disputeReportInBackend(reportId, reason, newDisputes, newStatus);
   };
 
   const updateUserProfile = (updates: Partial<UserProfile>) => {

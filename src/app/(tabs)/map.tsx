@@ -339,7 +339,7 @@ export default function MapScreen() {
         onToggleSave={handleToggleSave}
         onReportUpdate={() => {
           setActiveModalPlace(null);
-          router.push('/report' as any);
+          router.push({ pathname: '/report-issue', params: { placeId: activeModalPlace?.id, placeName: activeModalPlace?.name, category: activeModalPlace?.category, address: activeModalPlace?.address, lat: activeModalPlace?.lat, lng: activeModalPlace?.lng, step: '2' } } as any);
         }}
       />
     </SafeAreaView>

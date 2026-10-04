@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,9 +9,14 @@ import {
   Switch,
   Image,
   Alert,
+  Platform,
+  ActivityIndicator,
+  Keyboard,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { WebView } from 'react-native-webview';
+import * as Location from 'expo-location';
 import { useApp } from '@/context/AppContext';
 import { useAppTheme } from '@/context/ThemeContext';
 import { useToast } from '@/context/ToastContext';
@@ -23,80 +28,406 @@ export default function SubmitReportScreen() {
   const { colors } = useAppTheme();
   const { showToast } = useToast();
   const insets = useSafeAreaInsets();
+  const webviewRef = useRef<WebView>(null);
+  const iframeRef = useRef<any>(null);
+  const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [selectedPlaceId, setSelectedPlaceId] = useState<string>(places[0]?.id || '');
-  const [customPlaceName, setCustomPlaceName] = useState<string>('');
-  const [isCustomPlace, setIsCustomPlace] = useState<boolean>(false);
+  const initialMapHtml = useMemo(
+    () => buildMapHtml(DEFAULT_CENTER.latitude, DEFAULT_CENTER.longitude),
+    []
+  );
 
-  const [features, setFeatures] = useState({
-    ramp: true,
+  // ── Wizard step ──────────────────────────────────────────────────────
+  const [step, setStep] = useState<1 | 2>(1);
+
+  // ── Step 1: location ─────────────────────────────────────────────────
+  const [coords, setCoords] = useState<{ latitude: number; longitude: number }>(DEFAULT_CENTER);
+  const [address, setAddress] = useState<string>('');
+  const [detectedSpotName, setDetectedSpotName] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<
+    { display_name: string; lat: string; lon: string }[]
+  >([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
+  const [mapKey, setMapKey] = useState(0); // force webview reload on recenter jumps
+  const [isMapExpanded, setIsMapExpanded] = useState<boolean>(false);
+  const [hasUserInteracted, setHasUserInteracted] = useState(false);
+
+  // Selected venue (either picked from saved database places or custom added under category)
+  const [selectedVenue, setSelectedVenue] = useState<SelectedVenuePayload | null>(null);
+
+  // Listen for iframe map events on web
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+
+    const handleWebMessage = (event: MessageEvent) => {
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (data && data.type === 'pin') {
+          setHasUserInteracted(true);
+          setCoords({ latitude: data.lat, longitude: data.lng });
+          setAddress('');
+        }
+      } catch (err) {
+        // ignore
+      }
+    };
+
+    window.addEventListener('message', handleWebMessage);
+    return () => {
+      window.removeEventListener('message', handleWebMessage);
+    };
+  }, []);
+
+  // Reverse-geocode pinned map coordinates to get place & address
+  useEffect(() => {
+    let isCancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.latitude}&lon=${coords.longitude}&zoom=18&addressdetails=1`,
+          { headers: { 'Accept-Language': 'en' } }
+        );
+        const data = await res.json();
+        if (isCancelled) return;
+
+        if (data && data.address) {
+          const fullAddr = data.display_name || '';
+          setAddress(fullAddr);
+          const spotName =
+            data.name ||
+            data.address.amenity ||
+            data.address.building ||
+            data.address.shop ||
+            data.address.leisure ||
+            data.address.tourism ||
+            data.address.road ||
+            'Pinned Location';
+          setDetectedSpotName(spotName);
+
+          // ONLY auto-populate the selected venue if the user has intentionally interacted with the map or search!
+          // We don't want to force the default starting Colombo coordinates into their selection on page reload.
+          if (hasUserInteracted) {
+            setSelectedVenue((prev) => ({
+              name: spotName,
+              category: prev?.category || 'Shopping Mall',
+              categoryId: prev?.categoryId || 'mall',
+              address: fullAddr,
+              isNewCustomPlace: true,
+            }));
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+    }, 450);
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(timer);
+    };
+  }, [coords.latitude, coords.longitude]);
+
+  // ── Step 2: details ──────────────────────────────────────────────────
+  const [features, setFeatures] = useState<Record<FeatureKey, boolean>>({
+    ramp: false,
     elevator: false,
-    toilet: true,
-    parking: true,
-    stepFree: true,
+    toilet: false,
+    parking: false,
+    stepFree: false,
     tactilePaving: false,
     automaticDoor: false,
   });
-
   const [note, setNote] = useState<string>('');
-  const [photos, setPhotos] = useState<string[]>([
-    'https://images.unsplash.com/photo-1517649763962-0c623266010b?auto=format&fit=crop&w=800&q=80',
-  ]);
-  const [priority, setPriority] = useState<'High' | 'Medium' | 'Low'>('High');
+  const [photos, setPhotos] = useState<string[]>([]);
   const [showSuccessToast, setShowSuccessToast] = useState<boolean>(false);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
-  const toggleFeature = (key: keyof typeof features) => {
+  const toggleFeature = (key: FeatureKey) => {
     setFeatures((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const handleAddSamplePhoto = () => {
-    const samplePhotos = [
-      'https://images.unsplash.com/photo-1585320806297-9794b3e4eeae?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1521587760476-6c12a4b040da?auto=format&fit=crop&w=800&q=80',
-    ];
-    const nextPhoto = samplePhotos[photos.length % samplePhotos.length];
-    setPhotos((prev) => [...prev, nextPhoto]);
+  const handleSetAllFeatures = (allOn: boolean) => {
+    setFeatures({
+      ramp: allOn,
+      elevator: allOn,
+      toilet: allOn,
+      parking: allOn,
+      stepFree: allOn,
+      tactilePaving: allOn,
+      automaticDoor: allOn,
+    });
+  };
+
+  const featureCount = Object.values(features).filter(Boolean).length;
+
+  // ── Map helpers & OSM API ────────────────────────────────────────────
+  const recenterMap = (lat: number, lng: number) => {
+    setCoords({ latitude: lat, longitude: lng });
+    const payload = JSON.stringify({ type: 'recenter', lat, lng, zoom: 16 });
+    if (Platform.OS === 'web') {
+      iframeRef.current?.contentWindow?.postMessage(payload, '*');
+    } else {
+      webviewRef.current?.postMessage(payload);
+    }
+  };
+
+  const handleMapMessage = (event: any) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      if (data.type === 'pin') {
+        setHasUserInteracted(true);
+        setCoords({ latitude: data.lat, longitude: data.lng });
+        setAddress(''); // clear stale label until reverse-geocoded / re-searched
+        setDetectedSpotName('');
+        setSelectedVenue((prev) => ({
+          name: 'Pinned Location',
+          category: prev?.category || 'Shopping Mall',
+          categoryId: prev?.categoryId || 'mall',
+          address: `${data.lat.toFixed(4)}, ${data.lng.toFixed(4)}`,
+          isNewCustomPlace: true,
+        }));
+      }
+    } catch (e) {
+      // ignore malformed messages
+    }
+  };
+
+  const runSearch = useCallback((query: string) => {
+    if (searchDebounce.current) clearTimeout(searchDebounce.current);
+    if (!query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    searchDebounce.current = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+            query
+          )}&countrycodes=lk&limit=6`,
+          { headers: { 'Accept-Language': 'en' } }
+        );
+        const json = await res.json();
+        setSearchResults(json || []);
+      } catch (e) {
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 450);
+  }, []);
+
+  const onChangeSearch = (text: string) => {
+    setSearchQuery(text);
+    runSearch(text);
+  };
+
+  const selectSearchResult = (result: { display_name: string; lat: string; lon: string }) => {
+    setHasUserInteracted(true);
+    const lat = parseFloat(result.lat);
+    const lng = parseFloat(result.lon);
+    recenterMap(lat, lng);
+    setAddress(result.display_name);
+    const spotName = result.display_name.split(',')[0] || 'Selected Place';
+    setDetectedSpotName(spotName);
+    setSearchQuery(result.display_name);
+    setSearchResults([]);
+    setSelectedVenue((prev) => ({
+      name: spotName,
+      category: prev?.category || 'Shopping Mall',
+      categoryId: prev?.categoryId || 'mall',
+      address: result.display_name,
+      isNewCustomPlace: true,
+    }));
+    Keyboard.dismiss();
+  };
+
+  const useMyLocation = async () => {
+    setHasUserInteracted(true);
+    setIsLocating(true);
+    try {
+      if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+            recenterMap(lat, lng);
+            try {
+              const res = await fetch(
+                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+                { headers: { 'Accept-Language': 'en' } }
+              );
+              if (res.ok) {
+                const data = await res.json();
+                if (data && data.display_name) {
+                  const spotName = data.name || data.address?.amenity || data.address?.road || 'Current Location';
+                  setAddress(data.display_name);
+                  setDetectedSpotName(spotName);
+                  setSearchQuery(data.display_name);
+                  setSelectedVenue((prev) => ({
+                    name: spotName,
+                    category: prev?.category || 'Shopping Mall',
+                    categoryId: prev?.categoryId || 'mall',
+                    address: data.display_name,
+                    isNewCustomPlace: true,
+                  }));
+                }
+              }
+            } catch (err) {}
+            setIsLocating(false);
+          },
+          (err) => {
+            Alert.alert('Could not get location', 'Please try again or search manually.');
+            setIsLocating(false);
+          },
+          { enableHighAccuracy: true, timeout: 8000 }
+        );
+        return;
+      }
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Location permission needed',
+          'Enable location access in settings to auto-fill your current position.'
+        );
+        return;
+      }
+      const pos = await Location.getCurrentPositionAsync({});
+      recenterMap(pos.coords.latitude, pos.coords.longitude);
+      const [place] = await Location.reverseGeocodeAsync({
+        latitude: pos.coords.latitude,
+        longitude: pos.coords.longitude,
+      });
+      if (place) {
+        const label = [place.name, place.street, place.city, place.region]
+          .filter(Boolean)
+          .join(', ');
+        const placeName = place.name || place.street || 'Current Location';
+        setAddress(label);
+        setDetectedSpotName(placeName);
+        setSearchQuery(label);
+        setSelectedVenue((prev) => ({
+          name: placeName,
+          category: prev?.category || 'Shopping Mall',
+          categoryId: prev?.categoryId || 'mall',
+          address: label,
+          isNewCustomPlace: true,
+        }));
+      }
+    } catch (e) {
+      Alert.alert('Could not get location', 'Please try again or search manually.');
+    } finally {
+      if (Platform.OS !== 'web') {
+        setIsLocating(false);
+      }
+    }
+  };
+
+  const handleAddPhoto = (uri: string) => {
+    setPhotos((prev) => [...prev, uri]);
   };
 
   const removePhoto = (index: number) => {
     setPhotos((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = () => {
-    const targetPlace = places.find((p) => p.id === selectedPlaceId);
-    const placeName = isCustomPlace ? customPlaceName.trim() : targetPlace ? targetPlace.name : 'Unknown Place';
+  const canContinueFromStep1 = !!selectedVenue && selectedVenue.name.trim().length > 0;
 
-    if (isCustomPlace && !customPlaceName.trim()) {
-      Alert.alert('Required Field', 'Please enter a venue name.');
+  const goToDetails = () => {
+    if (!canContinueFromStep1) {
+      Alert.alert('Almost there', 'Please select or add a venue in this category to continue.');
+      return;
+    }
+    setStep(2);
+  };
+
+  const handleSubmit = async () => {
+    if (isSubmitting) return;
+
+    if (featureCount === 0 && !note.trim() && photos.length === 0) {
+      Alert.alert('Validation Error', 'Please verify at least one feature, add a note, or upload a photo to submit.');
       return;
     }
 
-    addReport({
-      placeId: isCustomPlace ? undefined : selectedPlaceId,
-      placeName,
-      note: note.trim() || 'Accessibility check performed.',
-      featuresReported: features,
-      photos,
-      priority,
-    });
+    const finalPlaceName = selectedVenue?.name || 'Selected Place';
+    setIsSubmitting(true);
 
-    showToast(`Report submitted for ${placeName}`, 'success', 'checkmark-circle');
-    setShowSuccessToast(true);
+    try {
+      const result = await addReport({
+        placeId: selectedVenue?.isNewCustomPlace ? undefined : selectedVenue?.placeId,
+        placeName: finalPlaceName,
+        note: note.trim() || 'Accessibility check performed.',
+        featuresReported: features,
+        photos,
+        priority: 'Medium',
+        location: {
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+          address: address || selectedVenue?.address || finalPlaceName,
+        },
+      });
 
-    setTimeout(() => {
-      setNote('');
-      setShowSuccessToast(false);
+      if (result && result.persistedToSupabase) {
+        showToast(`Report saved & synced to Supabase for ${finalPlaceName}`, 'success', 'checkmark-circle');
+      } else {
+        showToast(`Report submitted for ${finalPlaceName}`, 'success', 'checkmark-circle');
+      }
+      setShowSuccessToast(true);
+
+      setTimeout(() => {
+        setNote('');
+        setPhotos([]);
+        setShowSuccessToast(false);
+        setIsSubmitting(false);
+        router.push('/verify' as any);
+      }, 1500);
+    } catch (error) {
+      showToast(`Report submitted for ${finalPlaceName}`, 'success', 'checkmark-circle');
+      setIsSubmitting(false);
       router.push('/verify' as any);
-    }, 1500);
+    }
   };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { backgroundColor: colors.headerBg, borderBottomColor: colors.headerBorder, paddingTop: insets.top + 16 }]}>
-        <View>
-          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>Submit Accessibility Report</Text>
-          <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>Help map step-free paths & features in your community</Text>
+      {/* ── Header ────────────────────────────────────────────────── */}
+      <View
+        style={[
+          styles.header,
+          { backgroundColor: colors.headerBg, borderBottomColor: colors.headerBorder, paddingTop: insets.top + 14 },
+        ]}
+      >
+        <View style={styles.headerTopRow}>
+          {step === 2 ? (
+            <TouchableOpacity
+              onPress={() => setStep(1)}
+              accessibilityRole="button"
+              accessibilityLabel="Go back to location step"
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              style={styles.backBtn}
+            >
+              <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.backBtn} />
+          )}
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>
+              Report an Accessibility Feature
+            </Text>
+            <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
+              Help map step-free paths for your community
+            </Text>
+          </View>
+        </View>
+
+        {/* Progress stepper */}
+        <View style={styles.stepperRow} accessibilityRole="progressbar" accessibilityLabel={`Step ${step} of 2`}>
+          <StepDot label="Location" active={step === 1} done={step > 1} colors={colors} number={1} />
+          <View style={[styles.stepConnector, { backgroundColor: step > 1 ? colors.accent : colors.chipBorder }]} />
+          <StepDot label="Details" active={step === 2} done={false} colors={colors} number={2} />
         </View>
       </View>
 
@@ -105,393 +436,317 @@ export default function SubmitReportScreen() {
           <Ionicons name="checkmark-circle" size={24} color={colors.statusDotVerified} />
           <View style={{ flex: 1 }}>
             <Text style={[styles.successToastTitle, { color: colors.successToastTitle }]}>Report Submitted!</Text>
-            <Text style={[styles.successToastText, { color: colors.successToastText }]}>Added to Verification Queue for community audit.</Text>
+            <Text style={[styles.successToastText, { color: colors.successToastText }]}>
+              Added to the Verification Queue for community audit.
+            </Text>
           </View>
         </View>
       )}
 
-      <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-        {/* Step 1: Select or Enter Location */}
-        <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-          <View style={styles.sectionTitleRow}>
-            <View style={[styles.stepBadge, { backgroundColor: colors.stepBadgeBg }]}>
-              <Text style={[styles.stepBadgeText, { color: colors.stepBadgeText }]}>1</Text>
-            </View>
-            <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>SELECT VENUE OR LOCATION</Text>
-          </View>
-
-          {!isCustomPlace ? (
-            <View style={styles.venuePickerContainer}>
-              <Text style={[styles.label, { color: colors.textSecondary }]}>Select from Existing Places:</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.venueChipsScroll}>
-                {places.map((place) => {
-                  const isSelected = selectedPlaceId === place.id;
-                  return (
-                    <TouchableOpacity
-                      key={place.id}
-                      style={[styles.venueChip, { backgroundColor: colors.chipBg, borderColor: colors.chipBorder }, isSelected && { backgroundColor: colors.segmentActiveBg, borderColor: colors.accent }]}
-                      onPress={() => setSelectedPlaceId(place.id)}
-                    >
-                      <Ionicons name={isSelected ? 'location' : 'location-outline'} size={14} color={isSelected ? colors.filterActiveText : colors.accent} />
-                      <Text style={[styles.venueChipText, { color: isSelected ? colors.filterActiveText : colors.textSecondary }, isSelected && { fontWeight: '700' }]}>
-                        {place.name}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-
-              <TouchableOpacity style={styles.customToggleBtn} onPress={() => setIsCustomPlace(true)}>
-                <Ionicons name="add" size={16} color={colors.accentLight} />
-                <Text style={[styles.customToggleText, { color: colors.accentLight }]}>+ Enter a New Venue Name</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={styles.customInputContainer}>
-              <Text style={[styles.label, { color: colors.textSecondary }]}>Enter Custom Venue Name:</Text>
+      {step === 1 ? (
+        <ScrollView
+          style={styles.scrollContainer}
+          contentContainerStyle={{ paddingBottom: 24 }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* ── Search ──────────────────────────────────────────── */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>SEARCH FOR A PLACE</Text>
+            <View style={[styles.searchBar, { backgroundColor: colors.chipBg, borderColor: colors.chipBorder }]}>
+              <Ionicons name="search" size={18} color={colors.textMuted} />
               <TextInput
-                style={[styles.textInput, { backgroundColor: colors.chipBg, borderColor: colors.chipBorder, color: colors.textPrimary }]}
-                placeholder="e.g. Metro West Library, Grand Cinema..."
+                style={[styles.searchInput, { color: colors.textPrimary }]}
+                placeholder="Search an address, venue, or landmark…"
                 placeholderTextColor={colors.textMuted}
-                value={customPlaceName}
-                onChangeText={setCustomPlaceName}
+                value={searchQuery}
+                onChangeText={onChangeSearch}
+                accessibilityLabel="Search for an address or venue"
+                accessibilityHint="Type to search, then choose a result to place it on the map"
+                returnKeyType="search"
               />
-              <TouchableOpacity style={styles.customToggleBtn} onPress={() => setIsCustomPlace(false)}>
-                <Text style={[styles.customToggleText, { color: colors.accentLight }]}>← Pick from existing places list</Text>
+              {isSearching && <ActivityIndicator size="small" color={colors.accent} />}
+              {!!searchQuery && !isSearching && (
+                <TouchableOpacity
+                  onPress={() => {
+                    setSearchQuery('');
+                    setSearchResults([]);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear search"
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {searchResults.length > 0 && (
+              <View style={[styles.searchResults, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+                {searchResults.map((r, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    style={[
+                      styles.searchResultRow,
+                      idx !== searchResults.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.cardBorder },
+                    ]}
+                    onPress={() => selectSearchResult(r)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Use location: ${r.display_name}`}
+                  >
+                    <Ionicons name="location-outline" size={16} color={colors.accent} />
+                    <Text numberOfLines={2} style={[styles.searchResultText, { color: colors.textPrimary }]}>
+                      {r.display_name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            <TouchableOpacity
+              onPress={useMyLocation}
+              style={[styles.myLocationBtn, { backgroundColor: colors.chipBg, borderColor: colors.chipBorder }]}
+              accessibilityRole="button"
+              accessibilityLabel="Use my current location"
+              disabled={isLocating}
+            >
+              {isLocating ? (
+                <ActivityIndicator size="small" color={colors.textPrimary} />
+              ) : (
+                <Ionicons name="navigate-outline" size={16} color={colors.textPrimary} />
+              )}
+              <Text style={[styles.myLocationText, { color: colors.textPrimary }]}>
+                {isLocating ? 'Finding you…' : 'Use my current location'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* ── Map ─────────────────────────────────────────────── */}
+          <View style={styles.section}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <Text style={[styles.sectionLabel, { color: colors.textSecondary, marginBottom: 0 }]}>PIN THE EXACT SPOT</Text>
+              <TouchableOpacity
+                onPress={() => setIsMapExpanded(!isMapExpanded)}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, padding: 8, backgroundColor: colors.chipBg, borderRadius: 12, borderWidth: 1, borderColor: colors.chipBorder }}
+                accessibilityRole="button"
+                accessibilityLabel={isMapExpanded ? 'Shrink map' : 'Expand map for better visibility'}
+              >
+                <Ionicons name={isMapExpanded ? "contract" : "expand"} size={18} color={colors.accent} />
+                <Text style={{ color: colors.accent, fontWeight: '700', fontSize: 13 }}>
+                  {isMapExpanded ? 'Shrink Map' : 'Enlarge Map'}
+                </Text>
               </TouchableOpacity>
             </View>
-          )}
-        </View>
 
-        {/* Step 2: Accessibility Checklist Toggles */}
-        <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-          <View style={styles.sectionTitleRow}>
-            <View style={[styles.stepBadge, { backgroundColor: colors.stepBadgeBg }]}>
-              <Text style={[styles.stepBadgeText, { color: colors.stepBadgeText }]}>2</Text>
+            <View style={[styles.mapCard, { borderColor: colors.cardBorder, height: isMapExpanded ? 550 : 260, borderWidth: isMapExpanded ? 3 : 1 }]}>
+              {Platform.OS === 'web' ? (
+                // @ts-ignore: iframe supported in react-native-web
+                <iframe
+                  ref={iframeRef}
+                  title="Report Location Map"
+                  srcDoc={initialMapHtml}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    border: 'none',
+                  }}
+                />
+              ) : (
+                <WebView
+                  ref={webviewRef}
+                  key={mapKey}
+                  originWhitelist={['*']}
+                  source={{ html: initialMapHtml }}
+                  onMessage={handleMapMessage}
+                  style={styles.map}
+                  accessibilityLabel="Map for choosing the report location. Drag the pin or tap the map to move it."
+                />
+              )}
+              <View style={[styles.mapOverlayBadge, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+                <Ionicons name="pin" size={16} color={colors.accent} />
+                <Text style={[styles.mapOverlayText, { color: colors.textSecondary, fontSize: 14 }]} numberOfLines={2}>
+                  {address || `${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)}`}
+                </Text>
+              </View>
             </View>
-            <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>VERIFY ACCESSIBILITY FEATURES</Text>
+            <Text style={[styles.mapHint, { color: colors.textMuted, fontSize: 13 }]}>
+              Tap anywhere on the map, or drag the pin, to fine-tune the exact location. This text also
+              confirms your selection for screen-reader users who can't see the map.
+            </Text>
           </View>
 
-          <View style={styles.toggleList}>
-            <View style={styles.toggleRow}>
-              <View style={styles.toggleLabelGroup}>
-                <MaterialCommunityIcons name="wheelchair" size={20} color={colors.statusDotVerified} />
-                <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>Wheelchair Ramp</Text>
-              </View>
-              <Switch value={features.ramp} onValueChange={() => toggleFeature('ramp')} trackColor={{ false: colors.toggleTrack, true: colors.accent }} thumbColor={features.ramp ? colors.accentLight : colors.toggleThumb} />
-            </View>
-
-            <View style={styles.toggleRow}>
-              <View style={styles.toggleLabelGroup}>
-                <MaterialCommunityIcons name="elevator-passenger" size={20} color={colors.statusDotVerified} />
-                <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>Elevator Access</Text>
-              </View>
-              <Switch value={features.elevator} onValueChange={() => toggleFeature('elevator')} trackColor={{ false: colors.toggleTrack, true: colors.accent }} thumbColor={features.elevator ? colors.accentLight : colors.toggleThumb} />
-            </View>
-
-            <View style={styles.toggleRow}>
-              <View style={styles.toggleLabelGroup}>
-                <MaterialCommunityIcons name="human-handsdown" size={20} color={colors.statusDotVerified} />
-                <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>Accessible Restroom</Text>
-              </View>
-              <Switch value={features.toilet} onValueChange={() => toggleFeature('toilet')} trackColor={{ false: colors.toggleTrack, true: colors.accent }} thumbColor={features.toilet ? colors.accentLight : colors.toggleThumb} />
-            </View>
-
-            <View style={styles.toggleRow}>
-              <View style={styles.toggleLabelGroup}>
-                <MaterialCommunityIcons name="car" size={20} color={colors.statusDotVerified} />
-                <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>Reserved Disabled Parking</Text>
-              </View>
-              <Switch value={features.parking} onValueChange={() => toggleFeature('parking')} trackColor={{ false: colors.toggleTrack, true: colors.accent }} thumbColor={features.parking ? colors.accentLight : colors.toggleThumb} />
-            </View>
-
-            <View style={styles.toggleRow}>
-              <View style={styles.toggleLabelGroup}>
-                <MaterialCommunityIcons name="walk" size={20} color={colors.statusDotVerified} />
-                <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>Step-Free Entrance</Text>
-              </View>
-              <Switch value={features.stepFree} onValueChange={() => toggleFeature('stepFree')} trackColor={{ false: colors.toggleTrack, true: colors.accent }} thumbColor={features.stepFree ? colors.accentLight : colors.toggleThumb} />
-            </View>
-          </View>
-        </View>
-
-        {/* Step 3: Audit Note & Priority */}
-        <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-          <View style={styles.sectionTitleRow}>
-            <View style={[styles.stepBadge, { backgroundColor: colors.stepBadgeBg }]}>
-              <Text style={[styles.stepBadgeText, { color: colors.stepBadgeText }]}>3</Text>
-            </View>
-            <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>AUDIT NOTES & PRIORITY</Text>
-          </View>
-
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Audit Details / Notes:</Text>
-          <TextInput
-            style={[styles.textInput, styles.textArea, { backgroundColor: colors.chipBg, borderColor: colors.chipBorder, color: colors.textPrimary }]}
-            placeholder="Describe condition, maintenance status, door width, slope steepness, etc..."
-            placeholderTextColor={colors.textMuted}
-            multiline
-            numberOfLines={4}
-            value={note}
-            onChangeText={setNote}
+          {/* ── Category & Saved Places in Database Section ────────── */}
+          <CategoryPlacesSection
+            coords={coords}
+            detectedAddress={address}
+            detectedSpotName={detectedSpotName}
+            registeredPlaces={places}
+            selectedVenue={selectedVenue}
+            onSelectVenue={setSelectedVenue}
           />
+        </ScrollView>
+      ) : (
+        <ReportDetailsSection
+          selectedVenue={selectedVenue}
+          coords={coords}
+          features={features}
+          onToggleFeature={toggleFeature}
+          onSetAllFeatures={handleSetAllFeatures}
+          note={note}
+          onChangeNote={setNote}
+          photos={photos}
+          onAddPhoto={handleAddPhoto}
+          onRemovePhoto={removePhoto}
+          onBackToLocation={() => setStep(1)}
+        />
+      )}
 
-          <Text style={[styles.label, { color: colors.textSecondary, marginTop: 12 }]}>Report Priority Level:</Text>
-          <View style={styles.priorityRow}>
-            {(['High', 'Medium', 'Low'] as const).map((p) => {
-              const isSelected = priority === p;
-              const colorMap = { High: colors.priorityHighBorder, Medium: colors.priorityMediumBorder, Low: colors.priorityLowBorder };
-              const bgMap = { High: colors.priorityHighBg, Medium: colors.priorityMediumBg, Low: colors.priorityLowBg };
-              const textMap = { High: colors.priorityHighText, Medium: colors.priorityMediumText, Low: colors.priorityLowText };
-              return (
-                <TouchableOpacity
-                  key={p}
-                  style={[styles.priorityChip, { backgroundColor: colors.chipBg, borderColor: colors.chipBorder }, isSelected && { backgroundColor: bgMap[p], borderColor: colorMap[p] }]}
-                  onPress={() => setPriority(p)}
-                >
-                  <Text style={[styles.priorityChipText, { color: isSelected ? textMap[p] : colors.textSecondary }, isSelected && { fontWeight: '800' }]}>
-                    {p} Priority
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* Step 4: Photo Evidence */}
-        <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-          <View style={styles.sectionTitleRow}>
-            <View style={[styles.stepBadge, { backgroundColor: colors.stepBadgeBg }]}>
-              <Text style={[styles.stepBadgeText, { color: colors.stepBadgeText }]}>4</Text>
-            </View>
-            <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>ATTACH PHOTO EVIDENCE</Text>
-          </View>
-
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photoList}>
-            {photos.map((uri, idx) => (
-              <View key={idx} style={styles.photoItem}>
-                <Image source={{ uri }} style={styles.photoThumbnail} />
-                <TouchableOpacity style={styles.removePhotoBtn} onPress={() => removePhoto(idx)}>
-                  <Ionicons name="close" size={14} color="#FFF" />
-                </TouchableOpacity>
-              </View>
-            ))}
-
-            <TouchableOpacity style={[styles.addPhotoBtn, { backgroundColor: colors.chipBg, borderColor: colors.chipBorder }]} onPress={handleAddSamplePhoto}>
-              <Ionicons name="camera-outline" size={24} color={colors.accent} />
-              <Text style={[styles.addPhotoText, { color: colors.accentLight }]}>+ Attach Photo</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
-
-        {/* Submit Action Button */}
-        <TouchableOpacity style={[styles.submitBtn, { backgroundColor: colors.submitBtn }]} onPress={handleSubmit}>
-          <Ionicons name="send" size={18} color={colors.submitBtnText} />
-          <Text style={[styles.submitBtnText, { color: colors.submitBtnText }]}>Submit Community Audit Report</Text>
-        </TouchableOpacity>
-      </ScrollView>
+      {/* ── Sticky bottom action bar ─────────────────────────────── */}
+      <View style={[styles.bottomBar, { backgroundColor: colors.headerBg, borderTopColor: colors.headerBorder, paddingBottom: insets.bottom + 12 }]}>
+        {step === 1 ? (
+          <TouchableOpacity
+            style={[styles.primaryBtn, { backgroundColor: canContinueFromStep1 ? colors.submitBtn : colors.chipBorder }]}
+            onPress={goToDetails}
+            accessibilityRole="button"
+            accessibilityLabel="Continue to report details"
+            disabled={!canContinueFromStep1}
+          >
+            <Text style={[styles.primaryBtnText, { color: colors.submitBtnText }]}>Continue</Text>
+            <Ionicons name="arrow-forward" size={18} color={colors.submitBtnText} />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={[
+              styles.primaryBtn,
+              { backgroundColor: colors.submitBtn },
+              isSubmitting && { opacity: 0.75 },
+            ]}
+            onPress={handleSubmit}
+            disabled={isSubmitting}
+            accessibilityRole="button"
+            accessibilityLabel={isSubmitting ? 'Submitting audit report...' : 'Submit community audit report'}
+          >
+            {isSubmitting ? (
+              <>
+                <ActivityIndicator size="small" color={colors.submitBtnText} />
+                <Text style={[styles.primaryBtnText, { color: colors.submitBtnText, marginLeft: 8 }]}>
+                  Submitting Report...
+                </Text>
+              </>
+            ) : (
+              <>
+                <Ionicons name="send" size={18} color={colors.submitBtnText} />
+                <Text style={[styles.primaryBtnText, { color: colors.submitBtnText }]}>Submit Report</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
+      </View>
     </SafeAreaView>
   );
 }
 
+function StepDot({
+  label,
+  active,
+  done,
+  colors,
+  number,
+}: {
+  label: string;
+  active: boolean;
+  done: boolean;
+  colors: any;
+  number: number;
+}) {
+  return (
+    <View style={styles.stepDotWrap} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <View
+        style={[
+          styles.stepDot,
+          { borderColor: colors.chipBorder, backgroundColor: colors.chipBg },
+          (active || done) && { backgroundColor: colors.accent, borderColor: colors.accent },
+        ]}
+      >
+        {done ? (
+          <Ionicons name="checkmark" size={13} color="#FFF" />
+        ) : (
+          <Text style={[styles.stepDotNumber, { color: active ? '#FFF' : colors.textMuted }]}>{number}</Text>
+        )}
+      </View>
+      <Text style={[styles.stepDotLabel, { color: active ? colors.textPrimary : colors.textMuted }, active && { fontWeight: '700' }]}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   header: {
     paddingHorizontal: 20,
-    paddingBottom: 14,
+    paddingBottom: 16,
     borderBottomWidth: 1,
+    gap: 14,
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '800',
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  headerSubtitle: {
-    fontSize: 12,
-    marginTop: 2,
-  },
+  backBtn: { width: 30, height: 30, justifyContent: 'center' },
+  headerTitle: { fontSize: 24, fontWeight: '800', letterSpacing: 0.2 },
+  headerSubtitle: { fontSize: 14, marginTop: 4 },
+
+  stepperRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4, marginTop: 8 },
+  stepDotWrap: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  stepDot: { width: 32, height: 32, borderRadius: 16, borderWidth: 1.5, justifyContent: 'center', alignItems: 'center' },
+  stepDotNumber: { fontSize: 14, fontWeight: '800' },
+  stepDotLabel: { fontSize: 14 },
+  stepConnector: { flex: 1, height: 3, marginHorizontal: 12, borderRadius: 1.5 },
+
   successToast: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderWidth: 1,
-    padding: 14,
-    marginHorizontal: 16,
-    marginTop: 12,
-    borderRadius: 14,
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    borderWidth: 1, padding: 16, marginHorizontal: 16, marginTop: 12, borderRadius: 16,
   },
-  successToastTitle: {
-    fontSize: 14,
-    fontWeight: '800',
+  successToastTitle: { fontSize: 16, fontWeight: '800' },
+  successToastText: { fontSize: 14, marginTop: 2 },
+
+  scrollContainer: { flex: 1, paddingHorizontal: 16, paddingTop: 16 },
+  section: { marginBottom: 28 },
+  sectionLabel: { fontSize: 14, fontWeight: '800', letterSpacing: 1, marginBottom: 12 },
+  sectionLabelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  sectionLabelCount: { fontSize: 14, fontWeight: '700' },
+
+  searchBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    borderWidth: 1, borderRadius: 16, paddingHorizontal: 18, height: 64,
   },
-  successToastText: {
-    fontSize: 12,
+  searchInput: { flex: 1, fontSize: 18 },
+  searchResults: { marginTop: 10, borderWidth: 1, borderRadius: 14, overflow: 'hidden' },
+  searchResultRow: { flexDirection: 'row', gap: 14, padding: 20, alignItems: 'center' },
+  searchResultText: { flex: 1, fontSize: 16, lineHeight: 24 },
+
+  myLocationBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    borderWidth: 1, borderRadius: 14, paddingVertical: 16, marginTop: 14,
   },
-  scrollContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 40,
+  myLocationText: { fontSize: 15, fontWeight: '700' },
+
+  mapCard: { height: 260, borderRadius: 18, overflow: 'hidden', borderWidth: 1 },
+  map: { flex: 1 },
+  mapOverlayBadge: {
+    position: 'absolute', bottom: 10, left: 10, right: 10,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    borderWidth: 1, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 10,
   },
-  sectionCard: {
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 14,
-    borderWidth: 1,
+  mapOverlayText: { fontSize: 12, flex: 1, fontWeight: '600' },
+  mapHint: { fontSize: 11.5, marginTop: 8, lineHeight: 16 },
+
+  bottomBar: { borderTopWidth: 1, paddingHorizontal: 16, paddingTop: 16 },
+  primaryBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    paddingVertical: 18, borderRadius: 16,
   },
-  sectionTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 14,
-  },
-  stepBadge: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  stepBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  sectionTitle: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
-  venuePickerContainer: {
-    gap: 8,
-  },
-  label: {
-    fontSize: 12,
-    fontWeight: '700',
-    marginBottom: 6,
-  },
-  venueChipsScroll: {
-    flexDirection: 'row',
-  },
-  venueChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginRight: 8,
-    borderWidth: 1,
-  },
-  venueChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  customToggleBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 8,
-  },
-  customToggleText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  customInputContainer: {
-    gap: 8,
-  },
-  textInput: {
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 13,
-    borderWidth: 1,
-  },
-  textArea: {
-    minHeight: 80,
-    textAlignVertical: 'top',
-  },
-  toggleList: {
-    gap: 12,
-  },
-  toggleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
-  toggleLabelGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  toggleLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  priorityRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  priorityChip: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 10,
-    alignItems: 'center',
-    borderWidth: 1,
-  },
-  priorityChipText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  photoList: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  photoItem: {
-    position: 'relative',
-    marginRight: 10,
-  },
-  photoThumbnail: {
-    width: 80,
-    height: 80,
-    borderRadius: 12,
-  },
-  removePhotoBtn: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: '#EF4444',
-    borderRadius: 10,
-    width: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  addPhotoBtn: {
-    width: 80,
-    height: 80,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderStyle: 'dashed',
-  },
-  addPhotoText: {
-    fontSize: 10,
-    fontWeight: '700',
-    marginTop: 4,
-  },
-  submitBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 16,
-    borderRadius: 16,
-    marginTop: 8,
-    marginBottom: 30,
-  },
-  submitBtnText: {
-    fontSize: 15,
-    fontWeight: '800',
-  },
+  primaryBtnText: { fontSize: 17, fontWeight: '800' },
 });
