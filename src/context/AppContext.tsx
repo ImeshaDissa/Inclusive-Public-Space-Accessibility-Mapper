@@ -445,6 +445,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
     } else {
       targetPlaceId = existingPlace.id;
+      if (photos.length > 0) {
+        setPlaces((prev) =>
+          prev.map((p) => {
+            if (p.id === existingPlace.id) {
+              const mergedPhotos = Array.from(new Set([...photos, ...p.photos]));
+              return { ...p, photos: mergedPhotos };
+            }
+            return p;
+          })
+        );
+      }
     }
 
     // Call Supabase backend service (with automatic offline/local fallback)

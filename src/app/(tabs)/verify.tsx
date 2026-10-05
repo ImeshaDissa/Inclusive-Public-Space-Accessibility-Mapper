@@ -19,17 +19,36 @@ import { DisputeModal } from '@/components/DisputeModal';
 import { Report, StatusType } from '@/types/accessibility';
 import { matchesQuery } from '@/lib/placeSearch';
 
-// Bundled local image assets to guarantee 100% reliable rendering without network block issues
 const LOCAL_REPORT_IMAGES: Record<string, any> = {
   'report-1': require('@/assets/images/train_station.jpg'),
   'report-2': require('@/assets/images/botanical_gardens.jpg'),
   'report-3': require('@/assets/images/public_restroom.jpg'),
 };
 
-const ReportCardImage = ({ photoUri, reportId }: { photoUri?: string; reportId: string }) => {
-  const localImage = LOCAL_REPORT_IMAGES[reportId] || LOCAL_REPORT_IMAGES['report-1'];
+const BUNDLED_FALLBACK_IMAGES = [
+  require('@/assets/images/train_station.jpg'),
+  require('@/assets/images/botanical_gardens.jpg'),
+  require('@/assets/images/public_restroom.jpg'),
+];
+
+const getReportFallbackImage = (reportId: string, placeName?: string) => {
+  if (LOCAL_REPORT_IMAGES[reportId]) {
+    return LOCAL_REPORT_IMAGES[reportId];
+  }
+  const seed = reportId + (placeName || '');
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = (hash << 5) - hash + seed.charCodeAt(i);
+    hash |= 0;
+  }
+  const idx = Math.abs(hash) % BUNDLED_FALLBACK_IMAGES.length;
+  return BUNDLED_FALLBACK_IMAGES[idx];
+};
+
+const ReportCardImage = ({ photoUri, reportId, placeName }: { photoUri?: string; reportId: string; placeName?: string }) => {
+  const localImage = getReportFallbackImage(reportId, placeName);
   const [useFallback, setUseFallback] = useState(false);
-  const imageSource = (!useFallback && photoUri && photoUri.startsWith('http')) 
+  const imageSource = (!useFallback && photoUri) 
     ? { uri: photoUri } 
     : localImage;
 
@@ -262,7 +281,7 @@ export default function VerificationQueueScreen() {
               </View>
 
               {/* Full-width Photo (~180px height, cover) */}
-              <ReportCardImage photoUri={photoUri} reportId={item.id} />
+              <ReportCardImage photoUri={photoUri} reportId={item.id} placeName={item.placeName} />
 
               {/* Accessibility Note Section */}
               <View style={styles.noteContainer}>
