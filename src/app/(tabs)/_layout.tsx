@@ -60,11 +60,11 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="scan"
+        name="assistant"
         options={{
-          title: 'Scan',
+          title: 'AI',
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'scan' : 'scan-outline'} size={22} color={color} />
+            <Ionicons name={focused ? 'sparkles' : 'sparkles-outline'} size={22} color={color} />
           ),
         }}
       />

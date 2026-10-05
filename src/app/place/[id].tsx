@@ -10,7 +10,7 @@ import { StatusType } from '@/types/accessibility';
 
 /**
  * Place detail route: /place/[id]
- * The QR scanner (scan.tsx) navigates here after a successful scan.
+ * Deep-linked place page, reachable from QR codes and from list/map cards.
  * Reuses PlaceDetailsModal in "page" mode so the design stays consistent.
  */
 export default function PlaceDetailsScreen() {

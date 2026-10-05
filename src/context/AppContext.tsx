@@ -19,7 +19,6 @@ import {
 } from '@/features/places/api';
 import {
   fetchReportsFromSupabase,
-  insertReportToSupabase,
   updateReportConfirmInSupabase,
   updateReportDisputeInSupabase,
   insertDisputeReasonToSupabase,
@@ -32,6 +31,8 @@ import {
 } from '@/features/notifications/api';
 import { registerPushToken } from '@/lib/pushNotifications';
 import { sendPlaceUpdateEmail, sendWelcomeEmail } from '@/features/notifications/actions';
+import { createReportInBackend } from '@/features/reports/api';
+import { CreateReportResult } from '@/features/reports/types';
 
 type LocalAccount = {
   name: string;
@@ -72,7 +73,7 @@ const DEMO_ACCOUNT: LocalAccount = {
 const parseArray = <T,>(value: string | null, fallback: T[]): T[] => {
   if (!value) return fallback;
   try {
-    const parsed = JSON.parse(value) as T[];
+    const parsed = JSON.parse(value);
     return Array.isArray(parsed) ? parsed : fallback;
   } catch {
     return fallback;
@@ -108,6 +109,10 @@ interface AppContextType {
   selectedPlaceId: string | null;
   setSelectedPlaceId: (id: string | null) => void;
   toggleSavePlace: (placeId: string) => void;
+  /** Places discovered or added by the AI assistant, rendered as map pins. */
+  aiMarkers: Place[];
+  addAiMarker: (place: Place) => void;
+  setAiMarkers: (places: Place[]) => void;
   addReport: (reportData: {
     placeId?: string;
     placeName: string;
@@ -115,7 +120,8 @@ interface AppContextType {
     featuresReported: Record<string, boolean>;
     photos: string[];
     priority?: 'High' | 'Medium' | 'Low';
-  }) => void;
+    location?: { latitude: number; longitude: number; address: string };
+  }) => Promise<CreateReportResult>;
   confirmReport: (reportId: string) => void;
   disputeReport: (reportId: string, reason: string, note?: string) => void;
   updateUserProfile: (updates: Partial<UserProfile>) => void;
@@ -143,6 +149,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [notifications, setNotifications] = useState<AppNotification[]>(INITIAL_NOTIFICATIONS);
   const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_USER_PROFILE);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
+  // AI assistant results live here so the Map tab can show them even though
+  // the chat itself now runs on its own tab.
+  const [aiMarkers, setAiMarkers] = useState<Place[]>([]);
+
+  const addAiMarker = (place: Place) => {
+    setAiMarkers((prev) => (prev.some((m) => m.id === place.id) ? prev : [...prev, place]));
+  };
 
   // Initialize Data & Load Supabase or Storage state
   useEffect(() => {
@@ -380,13 +393,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
-  const addReport = ({
+  const addReport = async ({
     placeId,
     placeName,
     note,
     featuresReported,
     photos,
     priority = 'Medium',
+    location,
   }: {
     placeId?: string;
     placeName: string;
@@ -394,7 +408,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     featuresReported: Record<string, boolean>;
     photos: string[];
     priority?: 'High' | 'Medium' | 'Low';
-  }) => {
+    location?: { latitude: number; longitude: number; address: string };
+  }): Promise<CreateReportResult> => {
     let targetPlaceId = placeId;
     let existingPlace = places.find((p) => p.id === placeId || p.name.toLowerCase() === placeName.toLowerCase());
 
@@ -404,9 +419,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         id: targetPlaceId,
         name: placeName,
         category: 'Community Reported Venue',
-        address: 'User Submitted Location',
-        lat: 37.775 + (Math.random() - 0.5) * 0.03,
-        lng: -122.418 + (Math.random() - 0.5) * 0.03,
+        address: location?.address || 'User Submitted Location',
+        lat: location?.latitude || (37.775 + (Math.random() - 0.5) * 0.03),
+        lng: location?.longitude || (-122.418 + (Math.random() - 0.5) * 0.03),
         features: {
           ramp: !!featuresReported.ramp,
           elevator: !!featuresReported.elevator,
@@ -443,27 +458,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
     }
 
-    const newReport: Report = {
-      id: `report-${Date.now()}`,
-      placeId: targetPlaceId!,
+    // Call Supabase backend service (with automatic offline/local fallback)
+    const result = await createReportInBackend({
+      placeId: targetPlaceId,
       placeName: existingPlace ? existingPlace.name : placeName,
-      submitterName: userProfile.name + ' (You)',
-      submitterAvatar: userProfile.avatar,
-      timestamp: 'Just now',
       note: note || 'Community accessibility audit submitted.',
       featuresReported,
       photos,
       priority,
-      confirmCount: 1,
-      disputeCount: 0,
-      status: 'pending',
-    };
+      submitterName: userProfile.name + ' (You)',
+      submitterAvatar: userProfile.avatar,
+      location,
+    });
 
-    setReports((prev) => [newReport, ...prev]);
+    setReports((prev) => [result.report, ...prev]);
 
-    if (isSupabaseConfigured) {
-      insertReportToSupabase(newReport, userId || undefined);
-    }
+    return result;
   };
 
   const confirmReport = (reportId: string) => {
@@ -725,6 +735,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         selectedPlaceId,
         setSelectedPlaceId,
         toggleSavePlace,
+        aiMarkers,
+        addAiMarker,
+        setAiMarkers,
         addReport,
         confirmReport,
         disputeReport,
