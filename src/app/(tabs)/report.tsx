@@ -1,4 +1,3 @@
-```tsx
 import React, {
   useState,
   useRef,
@@ -2515,4 +2514,3 @@ const styles =
         '800',
     },
   });
-```
