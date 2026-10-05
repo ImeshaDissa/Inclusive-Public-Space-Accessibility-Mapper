@@ -1,8 +1,8 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Platform, TouchableOpacity, Text } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
-import { Place, StatusType } from '@/types/accessibility';
+import { Place } from '@/types/accessibility';
 import { useAppTheme } from '@/context/ThemeContext';
 
 interface InteractiveMapProps {
@@ -11,6 +11,8 @@ interface InteractiveMapProps {
   onSelectPlace: (place: Place) => void;
 }
 
+type MapCommand = 'zoomIn' | 'zoomOut' | 'reset';
+
 export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   places,
   selectedPlaceId,
@@ -18,7 +20,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 }) => {
   const { colors } = useAppTheme();
   const webviewRef = useRef<WebView>(null);
-  const [mapKey, setMapKey] = useState(0);
+  const iframeRef = useRef<any>(null);
 
   // Modern UI Map HTML using Leaflet and free CartoDB Voyager tiles (shows real Sri Lanka places)
   const mapHtml = `
@@ -30,7 +32,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   <style>
     html, body, #map { height: 100%; margin: 0; padding: 0; background: ${colors.background}; }
     .leaflet-control-attribution { display: none !important; }
-    
+
     .custom-marker {
       border-radius: 50%;
       border: 2.5px solid white;
@@ -56,7 +58,8 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     const map = L.map('map', { zoomControl: false, attributionControl: false });
-    
+    window.map = map;
+
     // Google Maps Standard Roadmap Tiles
     L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
       maxZoom: 20,
@@ -64,7 +67,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
     const places = ${JSON.stringify(places)};
     const selectedId = "${selectedPlaceId || ''}";
-    
+
     const markers = {};
     let bounds = L.latLngBounds();
 
@@ -76,16 +79,24 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       }
     }
 
-    if (places.length === 0) {
-      // Default center to Sri Lanka
-      map.setView([7.8731, 80.7718], 7);
-    } else {
+    function fitToPlaces() {
+      if (selectedId && markers[selectedId]) {
+        map.setView(markers[selectedId].getLatLng(), 15);
+      } else if (places.length > 0) {
+        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
+      } else {
+        // Default center to Sri Lanka
+        map.setView([7.8731, 80.7718], 7);
+      }
+    }
+
+    if (places.length > 0) {
       places.forEach(place => {
         const isSelected = place.id === selectedId;
         const statusClass = place.status;
-        
+
         const html = '<div class="custom-marker ' + statusClass + (isSelected ? ' selected-marker' : '') + '" style="width: 100%; height: 100%;"></div>';
-                     
+
         const icon = L.divIcon({
           html: html,
           className: '',
@@ -97,27 +108,50 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
         marker.on('click', () => {
           post({ type: 'select', placeId: place.id });
         });
-        
+
         markers[place.id] = marker;
         bounds.extend([place.lat, place.lng]);
       });
-
-      if (selectedId && markers[selectedId]) {
-        map.setView(markers[selectedId].getLatLng(), 15);
-      } else {
-        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 14 });
-      }
     }
+
+    fitToPlaces();
+
+    window.mapCommand = function (cmd) {
+      if (cmd === 'zoomIn') {
+        map.zoomIn();
+      } else if (cmd === 'zoomOut') {
+        map.zoomOut();
+      } else if (cmd === 'reset') {
+        fitToPlaces();
+      }
+    };
+
+    window.addEventListener('message', function (event) {
+      const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+      if (data && data.type === 'MAP_COMMAND') {
+        window.mapCommand(data.cmd);
+      }
+    });
   </script>
 </body>
 </html>`;
 
+  const sendMapCommand = (cmd: MapCommand) => {
+    if (Platform.OS === 'web') {
+      iframeRef.current?.contentWindow?.postMessage({ type: 'MAP_COMMAND', cmd }, '*');
+      return;
+    }
+    webviewRef.current?.injectJavaScript(
+      `if (window.mapCommand) { window.mapCommand(${JSON.stringify(cmd)}); } true;`
+    );
+  };
+
   const handleMessage = (event: any) => {
     try {
-      const data = typeof event.nativeEvent === 'object' && event.nativeEvent.data 
-        ? JSON.parse(event.nativeEvent.data) 
+      const data = typeof event.nativeEvent === 'object' && event.nativeEvent.data
+        ? JSON.parse(event.nativeEvent.data)
         : typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-        
+
       if (data && data.type === 'select') {
         const place = places.find(p => p.id === data.placeId);
         if (place) {
@@ -139,7 +173,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
     } catch (e) {}
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       window.addEventListener('message', handleWebMessage);
       return () => window.removeEventListener('message', handleWebMessage);
@@ -148,6 +182,26 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
 
   return (
     <View style={[styles.container, { borderColor: colors.cardBorder }]}>
+      {Platform.OS === 'web' ? (
+        // @ts-ignore: iframe is supported in react-native-web
+        <iframe
+          ref={iframeRef}
+          title="Interactive accessibility map"
+          srcDoc={mapHtml}
+          style={{ width: '100%', height: '100%', border: 'none' }}
+        />
+      ) : (
+        <WebView
+          ref={webviewRef}
+          style={styles.map}
+          originWhitelist={['*']}
+          source={{ html: mapHtml }}
+          onMessage={handleMessage}
+          javaScriptEnabled
+          domStorageEnabled
+        />
+      )}
+
       {/* Legend Overlay for Modern UI */}
       <View style={styles.topControlOverlay}>
         <View style={[styles.legendContainer, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
@@ -162,86 +216,29 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
         </View>
       </View>
 
-      {/* Visual Canvas Vector Graphic & Roads */}
-      <View style={[styles.canvasWrapper, { transform: [{ scale: zoomLevel }] }]}>
-        {/* Decorative Grid / Simulated Map Features */}
-        <View style={styles.mapRoadHorizontal1} />
-        <View style={styles.mapRoadHorizontal2} />
-        <View style={styles.mapRoadVertical1} />
-        <View style={styles.mapRiver} />
-        <View style={styles.mapParkZone} />
-
-        {/* Place Pin Markers */}
-        {places.map((place, index) => {
-          const { top, left } = getCoordinatesPercentage(place.lat, place.lng, index);
-          const isSelected = selectedPlaceId === place.id;
-          const statusColor = getStatusColor(place.status);
-
-          return (
-            <TouchableOpacity
-              key={place.id}
-              activeOpacity={0.8}
-              style={[
-                styles.markerWrapper,
-                { top: `${top}%`, left: `${left}%` },
-                isSelected && styles.selectedMarkerWrapper,
-              ]}
-              onPress={() => onSelectPlace(place)}
-            >
-              {/* Marker Pin Icon */}
-              <View
-                style={[
-                  styles.markerBadge,
-                  { backgroundColor: statusColor, borderColor: isSelected ? '#FFFFFF' : statusColor },
-                ]}
-              >
-                <Ionicons
-                  name={
-                    place.status === 'verified'
-                      ? 'checkmark-circle'
-                      : place.status === 'disputed'
-                      ? 'alert-circle'
-                      : 'time'
-                  }
-                  size={16}
-                  color="#FFF"
-                />
-              </View>
-
-              {/* Label Pill */}
-              <View style={[styles.markerPill, isSelected && styles.selectedPill]}>
-                <Text style={styles.markerName} numberOfLines={1}>
-                  {place.name}
-                </Text>
-                <Text style={[styles.markerStatusTag, { color: statusColor }]}>
-                  {getStatusBadge(place.status)}
-                </Text>
-              </View>
-
-              {/* Pulsing indicator if selected */}
-              {isSelected && <View style={[styles.pulseRing, { borderColor: statusColor }]} />}
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
       {/* Map Zoom Controls Floating Buttons */}
       <View style={styles.floatingControls}>
         <TouchableOpacity
           style={styles.zoomButton}
-          onPress={() => setZoomLevel((prev) => Math.min(prev + 0.15, 1.4))}
+          onPress={() => sendMapCommand('zoomIn')}
+          accessibilityRole="button"
+          accessibilityLabel="Zoom in on map"
         >
           <Ionicons name="add" size={20} color="#FFF" />
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.zoomButton}
-          onPress={() => setZoomLevel((prev) => Math.max(prev - 0.15, 0.85))}
+          onPress={() => sendMapCommand('zoomOut')}
+          accessibilityRole="button"
+          accessibilityLabel="Zoom out of map"
         >
           <Ionicons name="remove" size={20} color="#FFF" />
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.zoomButton}
-          onPress={() => setZoomLevel(1)}
+          onPress={() => sendMapCommand('reset')}
+          accessibilityRole="button"
+          accessibilityLabel="Reset map view"
         >
           <Ionicons name="locate" size={18} color="#FF5A36" />
         </TouchableOpacity>
@@ -277,6 +274,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    pointerEvents: 'box-none',
   },
   legendContainer: {
     flexDirection: 'row',
@@ -301,13 +299,31 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 5,
   },
-  selectedPill: {
-    borderColor: '#FF5A36',
-    backgroundColor: 'rgba(255, 90, 54, 0.2)',
-  },
-  markerName: {
-    color: '#FFF',
-    fontSize: 10,
+  legendText: {
+    fontSize: 11,
     fontWeight: '700',
+  },
+  floatingControls: {
+    position: 'absolute',
+    right: 12,
+    bottom: 12,
+    zIndex: 20,
+    gap: 8,
+    alignItems: 'center',
+  },
+  zoomButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(9, 13, 22, 0.85)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
   },
 });

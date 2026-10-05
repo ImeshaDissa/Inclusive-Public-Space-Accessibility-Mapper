@@ -1,7 +1,9 @@
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { AppNotification, Place } from '@/types/accessibility';
-import * as Notifications from 'expo-notifications';
+import { loadNotifications } from '@/lib/loadNotifications';
 import { Platform } from 'react-native';
+
+const Notifications = loadNotifications();
 
 /**
  * Client-side actions for Tier 2 (device push) and

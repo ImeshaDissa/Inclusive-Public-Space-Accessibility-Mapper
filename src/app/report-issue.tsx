@@ -140,6 +140,7 @@ export default function ReportIssueScreen() {
           photos={photos}
           onAddPhoto={handleAddPhoto}
           onRemovePhoto={handleRemovePhoto}
+          onBackToLocation={() => router.back()}
         />
       </ScrollView>
 

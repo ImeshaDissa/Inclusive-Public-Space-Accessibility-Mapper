@@ -19,7 +19,6 @@ import {
 } from '@/features/places/api';
 import {
   fetchReportsFromSupabase,
-  insertReportToSupabase,
   updateReportConfirmInSupabase,
   updateReportDisputeInSupabase,
   insertDisputeReasonToSupabase,
@@ -32,6 +31,8 @@ import {
 } from '@/features/notifications/api';
 import { registerPushToken } from '@/lib/pushNotifications';
 import { sendPlaceUpdateEmail, sendWelcomeEmail } from '@/features/notifications/actions';
+import { createReportInBackend } from '@/features/reports/api';
+import { CreateReportResult } from '@/features/reports/types';
 
 type LocalAccount = {
   name: string;
@@ -459,11 +460,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       location,
     });
 
-    setReports((prev) => [newReport, ...prev]);
+    setReports((prev) => [result.report, ...prev]);
 
-    if (isSupabaseConfigured) {
-      insertReportToSupabase(newReport, userId || undefined);
-    }
+    return result;
   };
 
   const confirmReport = (reportId: string) => {
@@ -498,9 +497,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return { ...p, confirmCount: placeConfirms, status: updatedPlaceStatus };
       })
     );
-
-    // Sync to Supabase backend in the background
-    confirmReportInBackend(reportId, newConfirm, newStatus);
   };
 
   const disputeReport = (reportId: string, reason: string, note?: string) => {
@@ -561,9 +557,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return { ...p, disputeCount: placeDisputes, status: updatedPlaceStatus };
       })
     );
-
-    // Sync to Supabase backend in the background
-    disputeReportInBackend(reportId, reason, newDisputes, newStatus);
   };
 
   const updateUserProfile = (updates: Partial<UserProfile>) => {

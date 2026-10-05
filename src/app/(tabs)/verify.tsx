@@ -17,6 +17,7 @@ import { useToast } from '@/context/ToastContext';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DisputeModal } from '@/components/DisputeModal';
 import { Report, StatusType } from '@/types/accessibility';
+import { matchesQuery } from '@/lib/placeSearch';
 
 // Bundled local image assets to guarantee 100% reliable rendering without network block issues
 const LOCAL_REPORT_IMAGES: Record<string, any> = {
@@ -58,12 +59,11 @@ export default function VerificationQueueScreen() {
   // Filter queue reports based on search query
   const filteredReports = useMemo(() => {
     if (!searchQuery.trim()) return reports;
-    const q = searchQuery.toLowerCase().trim();
     return reports.filter(
       (r) =>
-        r.placeName.toLowerCase().includes(q) ||
-        r.submitterName.toLowerCase().includes(q) ||
-        r.note.toLowerCase().includes(q)
+        matchesQuery(r.placeName, searchQuery) ||
+        matchesQuery(r.submitterName, searchQuery) ||
+        matchesQuery(r.note, searchQuery)
     );
   }, [reports, searchQuery]);
 

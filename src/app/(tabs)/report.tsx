@@ -21,6 +21,70 @@ import { useApp } from '@/context/AppContext';
 import { useAppTheme } from '@/context/ThemeContext';
 import { useToast } from '@/context/ToastContext';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CategoryPlacesSection } from '@/components/CategoryPlacesSection';
+import { ReportDetailsSection } from '@/components/ReportDetailsSection';
+import { SelectedVenuePayload } from '@/types/categoryPlaces';
+import { FeatureKey } from '@/constants/reportFeatures';
+import { PlaceSearchResult, searchPlaces } from '@/lib/placeSearch';
+import { searchPlacesWithAi } from '@/lib/aiSearch';
+
+const DEFAULT_CENTER = { latitude: 6.9271, longitude: 79.8612 }; // Colombo fallback
+
+function buildMapHtml(lat: number, lng: number, zoom = 15) {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    html, body, #map { height: 100%; margin: 0; padding: 0; background:#e9edf1; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([${lat}, ${lng}], ${zoom});
+    L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+      maxZoom: 20,
+    }).addTo(map);
+
+    let marker = L.marker([${lat}, ${lng}], { draggable: true }).addTo(map);
+
+    function post(payload) {
+      if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+        window.ReactNativeWebView.postMessage(JSON.stringify(payload));
+      } else if (window.parent && window.parent !== window) {
+        window.parent.postMessage(JSON.stringify(payload), '*');
+      }
+    }
+
+    marker.on('dragend', function (e) {
+      const pos = marker.getLatLng();
+      post({ type: 'pin', lat: pos.lat, lng: pos.lng });
+    });
+
+    map.on('click', function (e) {
+      marker.setLatLng(e.latlng);
+      post({ type: 'pin', lat: e.latlng.lat, lng: e.latlng.lng });
+    });
+
+    document.addEventListener('message', handleMessage);
+    window.addEventListener('message', handleMessage);
+    function handleMessage(e) {
+      try {
+        const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+        if (data && data.type === 'recenter') {
+          map.setView([data.lat, data.lng], data.zoom || 16);
+          marker.setLatLng([data.lat, data.lng]);
+        }
+      } catch (err) {}
+    }
+  </script>
+</body>
+</html>`;
+}
 
 export default function SubmitReportScreen() {
   const router = useRouter();
@@ -45,10 +109,12 @@ export default function SubmitReportScreen() {
   const [address, setAddress] = useState<string>('');
   const [detectedSpotName, setDetectedSpotName] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<
-    { display_name: string; lat: string; lon: string }[]
-  >([]);
+  const [searchResults, setSearchResults] = useState<PlaceSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  // false = normal search, true = AI-assisted search (✨)
+  const [aiSearchMode, setAiSearchMode] = useState(false);
+  const [aiHint, setAiHint] = useState<string | undefined>(undefined);
+  const searchRequestId = useRef(0);
   const [isLocating, setIsLocating] = useState(false);
   const [mapKey, setMapKey] = useState(0); // force webview reload on recenter jumps
   const [isMapExpanded, setIsMapExpanded] = useState<boolean>(false);
@@ -196,43 +262,46 @@ export default function SubmitReportScreen() {
 
   const runSearch = useCallback((query: string) => {
     if (searchDebounce.current) clearTimeout(searchDebounce.current);
+    const requestId = ++searchRequestId.current;
     if (!query.trim()) {
       setSearchResults([]);
+      setIsSearching(false);
       return;
     }
     searchDebounce.current = setTimeout(async () => {
       setIsSearching(true);
       try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-            query
-          )}&countrycodes=lk&limit=6`,
-          { headers: { 'Accept-Language': 'en' } }
-        );
-        const json = await res.json();
-        setSearchResults(json || []);
-      } catch (e) {
-        setSearchResults([]);
+        const outcome = aiSearchMode
+          ? await searchPlacesWithAi(query, { limit: 8 })
+          : { results: await searchPlaces(query, { limit: 8 }), hint: undefined };
+        if (searchRequestId.current !== requestId) return;
+        setSearchResults(outcome.results);
+        setAiHint(outcome.hint);
+      } catch {
+        if (searchRequestId.current === requestId) {
+          setSearchResults([]);
+          setAiHint(undefined);
+        }
       } finally {
-        setIsSearching(false);
+        if (searchRequestId.current === requestId) setIsSearching(false);
       }
-    }, 450);
-  }, []);
+    }, 400);
+  }, [aiSearchMode]);
 
   const onChangeSearch = (text: string) => {
     setSearchQuery(text);
     runSearch(text);
   };
 
-  const selectSearchResult = (result: { display_name: string; lat: string; lon: string }) => {
+  const selectSearchResult = (result: PlaceSearchResult) => {
     setHasUserInteracted(true);
-    const lat = parseFloat(result.lat);
-    const lng = parseFloat(result.lon);
+    const lat = result.lat;
+    const lng = result.lon;
     recenterMap(lat, lng);
     setAddress(result.display_name);
-    const spotName = result.display_name.split(',')[0] || 'Selected Place';
+    const spotName = result.name || result.display_name.split(',')[0] || 'Selected Place';
     setDetectedSpotName(spotName);
-    setSearchQuery(result.display_name);
+    setSearchQuery(spotName);
     setSearchResults([]);
     setSelectedVenue((prev) => ({
       name: spotName,
@@ -454,10 +523,14 @@ export default function SubmitReportScreen() {
           <View style={styles.section}>
             <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>SEARCH FOR A PLACE</Text>
             <View style={[styles.searchBar, { backgroundColor: colors.chipBg, borderColor: colors.chipBorder }]}>
-              <Ionicons name="search" size={18} color={colors.textMuted} />
+              <Ionicons
+                name={aiSearchMode ? 'sparkles' : 'search'}
+                size={18}
+                color={aiSearchMode ? colors.accent : colors.textMuted}
+              />
               <TextInput
                 style={[styles.searchInput, { color: colors.textPrimary }]}
-                placeholder="Search an address, venue, or landmark…"
+                placeholder={aiSearchMode ? 'Ask AI: “cafes near me”…' : 'Search anywhere — place, city, address…'}
                 placeholderTextColor={colors.textMuted}
                 value={searchQuery}
                 onChangeText={onChangeSearch}
@@ -471,6 +544,7 @@ export default function SubmitReportScreen() {
                   onPress={() => {
                     setSearchQuery('');
                     setSearchResults([]);
+                    setAiHint(undefined);
                   }}
                   accessibilityRole="button"
                   accessibilityLabel="Clear search"
@@ -479,13 +553,37 @@ export default function SubmitReportScreen() {
                   <Ionicons name="close-circle" size={18} color={colors.textMuted} />
                 </TouchableOpacity>
               )}
+              <TouchableOpacity
+                onPress={() => setAiSearchMode((prev) => !prev)}
+                accessibilityRole="button"
+                accessibilityLabel={aiSearchMode ? 'Turn off AI search' : 'Turn on AI search'}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={[
+                  styles.aiSearchBtn,
+                  { backgroundColor: aiSearchMode ? colors.accentBg : colors.chipBorder },
+                ]}
+              >
+                <Ionicons
+                  name="sparkles"
+                  size={14}
+                  color={aiSearchMode ? colors.accent : colors.textMuted}
+                />
+              </TouchableOpacity>
             </View>
+
+            {!!aiHint && searchResults.length > 0 && (
+              <Text
+                style={{ color: colors.textMuted, fontSize: 11, fontStyle: 'italic', marginTop: 6 }}
+              >
+                {aiHint}
+              </Text>
+            )}
 
             {searchResults.length > 0 && (
               <View style={[styles.searchResults, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
                 {searchResults.map((r, idx) => (
                   <TouchableOpacity
-                    key={idx}
+                    key={r.place_id || idx}
                     style={[
                       styles.searchResultRow,
                       idx !== searchResults.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.cardBorder },
@@ -723,6 +821,10 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderRadius: 16, paddingHorizontal: 18, height: 64,
   },
   searchInput: { flex: 1, fontSize: 18 },
+  aiSearchBtn: {
+    width: 34, height: 34, borderRadius: 17,
+    alignItems: 'center', justifyContent: 'center',
+  },
   searchResults: { marginTop: 10, borderWidth: 1, borderRadius: 14, overflow: 'hidden' },
   searchResultRow: { flexDirection: 'row', gap: 14, padding: 20, alignItems: 'center' },
   searchResultText: { flex: 1, fontSize: 16, lineHeight: 24 },

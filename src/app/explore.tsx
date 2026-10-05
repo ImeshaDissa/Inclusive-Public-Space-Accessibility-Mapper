@@ -16,6 +16,7 @@ import { useAppTheme } from '@/context/ThemeContext';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PlaceDetailsModal } from '@/components/PlaceDetailsModal';
 import { Place, StatusType } from '@/types/accessibility';
+import { matchesQuery } from '@/lib/placeSearch';
 
 type FilterCategory = 'all' | 'stepFree' | 'ramp' | 'elevator' | 'toilet' | 'parking' | 'tactilePaving';
 
@@ -43,10 +44,10 @@ export default function ExploreSearchScreen() {
 
   // Filter Places based on query and selected feature tag
   const filteredPlaces = places.filter((place) => {
-    const matchesSearch =
-      place.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      place.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      place.address.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = matchesQuery(
+      `${place.name} ${place.category} ${place.address}`,
+      searchQuery
+    );
 
     if (!matchesSearch) return false;
 
