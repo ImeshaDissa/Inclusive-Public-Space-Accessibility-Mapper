@@ -19,7 +19,7 @@ export const TOOLS = [
     function: {
       name: "searchAccessiblePlaces",
       description:
-        "Search accessible public places by location, radius, disability type, and what the user is looking for (e.g. park, library, toilet).",
+        "Search accessible public places by location, radius, disability type, and what the user is looking for (e.g. park, library, toilet). Use ONLY for places near a location — for a specific named place use findPlaceInDatabase instead.",
       parameters: {
         type: "object",
         properties: {
@@ -42,13 +42,20 @@ export const TOOLS = [
     function: {
       name: "findPlaceInDatabase",
       description:
-        "Check if a specific place already exists in the InclusiveMapper database. Always call this first when the user asks about a named place.",
+        "Search our database for a place by name OR by a category keyword (temple, school, hospital). Pass lat/lng to keep only results near the user's GPS. Always call this first — never answer with unrelated places.",
       parameters: {
         type: "object",
         properties: {
           query: {
             type: "string",
-            description: "The place name to look up, e.g. 'Galle Face Green'",
+            description:
+              "The place name ('Galle Face Green') or the category keyword the user asked for ('temple', 'school')",
+          },
+          lat: { type: "number", description: "User latitude — keeps only places near them" },
+          lng: { type: "number", description: "User longitude — keeps only places near them" },
+          radius: {
+            type: "number",
+            description: "Search radius in km around lat/lng (default 25)",
           },
         },
         required: ["query"],
@@ -176,6 +183,18 @@ function matchesKeyword(place: Record<string, unknown>, keyword: string): boolea
   return haystack.includes(` ${key} `);
 }
 
+/** Great-circle distance in metres between two GPS points. */
+function distanceMetres(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const R = 6371000;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
 // 2. Real Supabase Database Interactions + web lookups
 export async function executeTool(name: string, args: Record<string, unknown>) {
   if (name === "searchAccessiblePlaces") {
@@ -226,18 +245,93 @@ export async function executeTool(name: string, args: Record<string, unknown>) {
     if (!query) return { status: "not_found", places: [] };
 
     // PostgREST .or() treats , ( ) as syntax — strip them from user input.
-    const safe = query.replace(/[(),]/g, " ").replace(/\s+/g, " ").trim();
+    const safe = query.replace(/[(),%_'"`]/g, " ").replace(/\s+/g, " ").trim();
     if (!safe) return { status: "not_found", places: [] };
 
-    // Match on name or address, ignore case, tolerate partial names.
+    // Whole database, NO distance limit. Match on name, address or category.
+    const stopWords = new Set(["the", "of", "a", "an", "in", "at", "on", "to", "for", "near", "by", "and"]);
+    const tokens = safe
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((w) => w.length > 1 && !stopWords.has(w))
+      .map(normalizeWord)
+      .filter(Boolean);
+    const phrase = tokens.length > 0 ? tokens.join(" ") : normalizeWord(safe);
+    if (!phrase) return { status: "not_found", places: [] };
+
+    const conditions = (tokens.length > 0 ? tokens : [phrase])
+      .map((t) => `name.ilike.%${t}%,address.ilike.%${t}%,category.ilike.%${t}%`)
+      .join(",");
+
     const { data, error } = await supabaseAdmin
       .from("places")
       .select("*")
-      .or(`name.ilike.%${safe}%,address.ilike.%${safe}%`)
-      .limit(5);
+      .or(conditions)
+      .limit(50);
 
     if (error) throw new Error(`Database search error: ${error.message}`);
-    return { status: data && data.length > 0 ? "found" : "not_found", places: data ?? [] };
+    const rows: Record<string, unknown>[] = Array.isArray(data) ? data : [];
+
+    // Keep only places containing every word, so "temple of tooth" matches
+    // "Temple of the Tooth Relic" but not just any temple.
+    const haystack = (r: Record<string, unknown>) =>
+      normalizeText(`${r.name ?? ""} ${r.address ?? ""} ${r.category ?? ""}`);
+    const strict =
+      tokens.length > 1
+        ? rows.filter((r) => {
+            const hay = haystack(r);
+            return tokens.every((t) => hay.includes(` ${t} `));
+          })
+        : rows;
+
+    let matched: Record<string, unknown>[] = strict;
+
+    if (matched.length === 0) {
+      // Fall back to the exact phrase ("Galle Face Green").
+      const phraseMatch = await supabaseAdmin
+        .from("places")
+        .select("*")
+        .or(`name.ilike.%${safe}%,address.ilike.%${safe}%`)
+        .limit(5);
+      if (phraseMatch.error) throw new Error(`Database search error: ${phraseMatch.error.message}`);
+      matched = Array.isArray(phraseMatch.data) ? phraseMatch.data : [];
+    }
+
+    if (matched.length === 0) return { status: "not_found", places: [] };
+
+    // Optional GPS filter: keep only what is actually near the user, sorted by
+    // distance, so a keyword search never returns places from another city.
+    const lat = Number(args.lat);
+    const lng = Number(args.lng);
+    const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
+    if (!hasCoords) return { status: "found", places: matched.slice(0, 5) };
+
+    let radiusKm = Number(args.radius ?? 25);
+    if (!Number.isFinite(radiusKm) || radiusKm <= 0) radiusKm = 25;
+
+    const withDistance = matched
+      .filter((r) => typeof r.lat === "number" && typeof r.lng === "number")
+      .map((r) => ({
+        ...r,
+        distance: Math.round(distanceMetres(lat, lng, r.lat as number, r.lng as number)),
+      }))
+      .filter((r) => (r.distance as number) <= radiusKm * 1000)
+      .sort((a, b) => (a.distance as number) - (b.distance as number));
+
+    if (withDistance.length > 0) {
+      return { status: "found", places: withDistance.slice(0, 5), searchedRadiusKm: radiusKm };
+    }
+
+    return {
+      status: "not_found",
+      places: [],
+      searchedRadiusKm: radiusKm,
+      note:
+        `${matched.length} place(s) match "${query}" in our database, but none within ` +
+        `${radiusKm} km of the user. Never show far-away places as if they were nearby — ` +
+        `say they exist further away (and how far), offer to search wider, or use webSearch ` +
+        `to find some closer.`,
+    };
   }
 
   if (name === "webSearch") {
@@ -329,6 +423,31 @@ function cleanDuckDuckGoUrl(href: string): string {
 /** Sponsored results use duckduckgo.com/y.js tracking links — never show them. */
 function isAdUrl(url: string): boolean {
   return /duckduckgo\.com\/y\.js|ad_provider=|ad_domain=|bing\.com\/aclick/i.test(url);
+}
+
+/**
+ * The model sometimes copies an ad/tracking link into its answer. Drop those
+ * links and any line that was only a label for a link we removed, so the chat
+ * never shows a wall of percent-encoded junk.
+ */
+function sanitizeAssistantText(text: string): string {
+  if (!text) return text;
+
+  const withoutAds = text.replace(/https?:\/\/[^\s<>"']+/gi, (url) =>
+    isAdUrl(url) ? "" : url,
+  );
+
+  const lines = withoutAds.split("\n").map((line) => line.trimEnd());
+  const kept = lines.filter(
+    (line) =>
+      !/^[-*•]\s*(?:more info|website|web site|site|link|official (?:website|site)|phone|tel|contact(?: details)?)\s*:?\s*$/i.test(
+        line.trim(),
+      ),
+  );
+
+  const result = kept.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  // Never reply with nothing — but never fall back to the ad link either.
+  return result || "I could not find a usable link for that. Please try asking again.";
 }
 
 /** Free, keyless web search via the DuckDuckGo HTML endpoint. */
@@ -572,6 +691,8 @@ async function directNearbyAnswer(message: string, location?: ChatLocation) {
       text: [
         notFound,
         "",
+        "You can also ask me about a specific place by name — for example 'Tell me about Temple of the Tooth' — and I will give you its accessibility details and contact information.",
+        "",
         "If you visit one, please help our community by updating the map and adding its accessibility details to our app!",
       ].join("\n"),
       actionResponse: [],
@@ -607,7 +728,7 @@ async function directNearbyAnswer(message: string, location?: ChatLocation) {
 }
 
 const LEAD_IN_PHRASES =
-  /^(i want to know about|i want to know|i would like to know about|could you tell me about|tell me about|please tell me about|what is|what's|whats|info about|information about|describe|do you know about|does|is there|is|are|was|were|can|could|should|will|do|can you tell me about|about)\s+/i;
+  /^(i want (?:to )?know about|i want (?:to )?know|i need to know about|i would like to know about|could you tell me about|tell me about|please tell me about|what is|what's|whats|info about|information about|describe|do you know about|does|is there|is|are|was|were|can|could|should|will|do|can you tell me about|about)\s+/i;
 
 /** "Tell me about X has accessibility" -> "X", so the database can be searched by name. */
 function stripLeadIn(message: string): string {
@@ -712,6 +833,11 @@ async function directPlaceAnswer(message: string) {
     contact.length === 0
       ? "I could not find a phone number or website in this quick lookup — please search online for their official contact details to confirm accessibility."
       : "",
+    "",
+    "How to get full details before you go:",
+    "- Call the number above and ask about step-free entry, ramps and accessible toilets.",
+    "- Check the official website or Facebook page for opening hours and entrance photos.",
+    "- The local tourism office or the place's management can also confirm wheelchair access.",
   ].filter(Boolean).join("\n");
 
   return {
@@ -725,6 +851,165 @@ async function directPlaceAnswer(message: string) {
     actionResponse: [],
     degraded: true,
   };
+}
+
+// ── Pre-lookup for questions about a specific place ───────────────────────
+
+/** Nearby questions are handled by searchAccessiblePlaces — not by the pre-lookup. */
+function wantsNearbySearch(message: string): boolean {
+  return /\b(near\s+me|nearby|around\s+me|close\s+to\s+me|in\s+my\s+area|in\s+my\s+vicinity|closest|surrounding|surroundings|within\s+\d+\s*km|in\s+the\s+(?:area|city|vicinity))\b/i
+    .test(message);
+}
+
+interface PreLookup {
+  /** Extra instructions and data appended to the system prompt. */
+  context: string;
+  /** Saved place(s) to show as a card in the chat, when the place exists. */
+  action: {
+    tool: string;
+    args: Record<string, unknown>;
+    result: unknown;
+  } | null;
+}
+
+/** "what accessibility features does galle face have" -> "galle face" */
+const LEADING_FILLER =
+  /^(?:(?:what|which|how|where|why|when|who|does|did|do|is|are|was|were|can|could|should|would|will|the|a|an|this|that|there|any|some|about|accessibility|accessible|features?|details?|information|info|place|places|near|nearby)\s+)+/i;
+const TRAILING_FILLER =
+  /\s+(?:(?:has|have|is|are|was|were|does|do|can|could|with|for|near|nearby|in|on|at|accessibility|accessible|features?|details?|information|info|place|places|there|here|please)\s*)+$/i;
+
+function refinePlaceName(raw: string): string {
+  let text = raw.trim();
+  for (let i = 0; i < 4; i++) {
+    const next = text.replace(LEADING_FILLER, "").replace(TRAILING_FILLER, "").trim();
+    if (next === text) break;
+    text = next;
+  }
+  return text;
+}
+
+/**
+ * "I want to know about temple of tooth" must be answered from the WHOLE
+ * database (or the web) — never from a 25 km radius search. This runs before
+ * the model so the answer does not depend on which tool the model picks.
+ * Never throws: any failure just means no pre-lookup context.
+ */
+async function namedPlacePreLookup(message: string): Promise<PreLookup | null> {
+  const text = String(message ?? "").trim();
+  if (text.length < 4 || wantsNearbySearch(text)) return null;
+
+  const name = refinePlaceName(stripLeadIn(text));
+  if (name.length < 3 || name.split(/\s+/).length > 8) return null;
+  // A bare category ("temple", "beach") means "find me one" — leave it alone.
+  if (PLACE_KEYWORDS.includes(name.toLowerCase())) return null;
+  // Still a sentence, not a place name — let the model handle it.
+  if (
+    /^(what|why|how|when|who|which|where|does|did|do|can|could|should|would|will|is|are)\b/i
+      .test(name) ||
+    /\b(are|was|were|does|did|can|could|should|would|will|many|much|why|when|where|who|there|here)\b/i
+      .test(name)
+  ) {
+    return null;
+  }
+
+  // "who can help me" / "is this place wheelchair accessible" refine down to
+  // words that are not a place name — do not spend a web search on them.
+  const nameWords = name.toLowerCase().split(/\s+/).filter((w) => w.length >= 3);
+  const GENERIC_NAME_WORDS = new Set([
+    "help", "thanks", "thank", "sorry", "hello", "welcome", "you", "your", "mine",
+    "this", "that", "these", "those", "something", "anything", "everything",
+    "place", "places", "wheelchair", "accessible", "accessibility", "open",
+    "closed", "today", "tomorrow", "now", "wheel", "chair",
+  ]);
+  if (nameWords.length === 0 || nameWords.every((w) => GENERIC_NAME_WORDS.has(w))) {
+    return null;
+  }
+
+  try {
+    const found = (await executeTool("findPlaceInDatabase", { query: name })) as {
+      status?: string;
+      places?: Record<string, unknown>[];
+    };
+    const places = Array.isArray(found.places) ? found.places : [];
+
+    if (places.length > 0) {
+      const rows = places.slice(0, 5).map((p) => ({
+        name: p.name,
+        category: p.category ?? null,
+        address: p.address ?? null,
+        status: p.status ?? null,
+        features: p.features ?? {},
+      }));
+      return {
+        context: [
+          `PLACE LOOKUP (already done for you): these places match "${name}" and ARE saved in our database. They were searched across the WHOLE database with no distance limit.`,
+          "If the user asked about one of them, answer from these rows: give the name, category, address and every accessibility feature, and say the details come from our community map. If they asked a general question, list the matching saved places.",
+          "Do NOT run searchAccessiblePlaces or a nearby/radius search for this, and do NOT say it is missing or too far away.",
+          JSON.stringify(rows, null, 2),
+        ].join("\n"),
+        action: {
+          tool: "findPlaceInDatabase",
+          args: { query: name },
+          result: found,
+        },
+      };
+    }
+
+    const web = await webSearchPlace(name);
+    const summary = {
+      status: "not_in_database",
+      searchedFor: name,
+      webResults: web.webResults.slice(0, 5).map((r) => ({
+        title: r.title,
+        url: r.url,
+        snippet: r.snippet,
+      })),
+      openStreetMap: web.places.slice(0, 3).map((p) => ({
+        name: p.name,
+        type: p.type,
+        address: p.address,
+        phone: p.tags.phone || p.tags["contact:phone"] || p.tags.mobile || null,
+        website: p.tags.website || p.tags.url || p.tags["contact:website"] || null,
+        opening_hours: p.tags.opening_hours || null,
+        wheelchair: p.tags.wheelchair || null,
+        step_free_access: p.tags.step_free_access || null,
+        toilets_wheelchair: p.tags["toilets:wheelchair"] || null,
+      })),
+      note: web.note || "",
+    };
+
+    return {
+      context: [
+        `PLACE LOOKUP (already done for you): "${name}" is NOT saved in our database. These web and OpenStreetMap results were fetched for you:`,
+        "Use them to answer with: what the place is, any known accessibility information, and how the user can get official details (phone number, official website, opening hours, and which office to contact).",
+        "Do NOT run searchAccessiblePlaces or say 'nothing saved within 25 km' — this question is about a specific place, not places near the user.",
+        "Only call webSearch yourself if these results are empty or clearly wrong.",
+        JSON.stringify(summary, null, 2),
+      ].join("\n"),
+      action: null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+type ChatAction = { tool: string; args: Record<string, unknown>; result: unknown };
+
+/**
+ * Put the pre-lookup result first and drop the model's duplicate/conflicting
+ * calls, so the chat never shows the same place card twice or a "nothing
+ * saved within 25 km" card next to a place we just found.
+ */
+function mergeActions(pre: ChatAction | null, executed: ChatAction[]): ChatAction[] {
+  const all = pre ? [pre, ...executed] : executed;
+  if (!pre) return all;
+
+  return all.filter((action, index) => {
+    if (index === 0) return true;
+    if (pre.tool === "findPlaceInDatabase" && action.tool === "findPlaceInDatabase") return false;
+    if (pre.tool === "findPlaceInDatabase" && action.tool === "searchAccessiblePlaces") return false;
+    return true;
+  });
 }
 
 // 3. OpenRouter API Caller
@@ -869,49 +1154,65 @@ function buildSystemPrompt(location?: ChatLocation) {
       ? [
           "User's current GPS location:",
           `- latitude: ${location.lat}, longitude: ${location.lng}`,
-          '- When the user says "near me", "nearby" or "around here", use these coordinates as lat and lng in searchAccessiblePlaces.',
+          '- When the user says "near me", "nearby" or "around here", pass these as lat and lng to findPlaceInDatabase or searchAccessiblePlaces.',
           "- Never invent coordinates or distances.",
         ].join("\n")
       : [
           "User's current GPS location: not available.",
           "- If the user asks for places near them, ask them to share their location or to type a city/area name first.",
+          "- Without GPS, call findPlaceInDatabase with only the query (no lat/lng), and use the city/area the user gave in webSearch.",
         ].join("\n");
 
   return [
     "You are the Accessibility Assistant for InclusiveMapper, an app that maps accessible public spaces.",
+    "Your goal is to give accessibility information, but you MUST strictly follow the user's specific request.",
     "",
     "Your primary focus is accessibility:",
     "- Always give accessibility details first: wheelchair ramps, step-free entrances, elevators, accessible restrooms, tactile paving, accessible parking, automatic doors.",
-    "- Answer questions about accessibility in a clear, practical way for people who need accessible spaces.",
+    "- Answer in a clear, practical way for people who need accessible spaces.",
     "",
-    "Language and tone:",
-    "- Match the language of the user's message. If they write in Sinhala, reply in Sinhala. If they write in Singlish (romanized Sinhala), reply in Singlish. Otherwise reply in English.",
-    "- Be polite, warm and encouraging, like a helpful person, not a robot.",
-    "- Keep answers short: a few sentences, short words, no jargon and no long lists unless the user asks.",
+    "RULE 1 — specific category vs general request:",
+    '- If the user asks for a SPECIFIC type of place ("temple", "school", "hospital", "supermarket", "park", "library") near their location, filter the search strictly by that keyword. DO NOT return random or unrelated saved places.',
+    '- Only give a general list of nearby saved places when the user explicitly asks for "saved places", "any accessible places near me", or something general with no specific category — then omit the keyword so everything nearby can be listed.',
+    "",
+    "RULE 2 — strict search strategy for a category/keyword:",
+    "  Step 1: call findPlaceInDatabase with query = that keyword and lat/lng from the GPS block below (radius 25). It searches our whole database for the keyword and keeps only places near the user.",
+    "  Step 2: if it returns matching places, give them with their accessibility details (name, category, address, features, distance).",
+    "  Step 3: if it returns NO places, DO NOT show unrelated saved places. IMMEDIATELY call webSearch for that category near the user's location — e.g. \"temples near Kandy Sri Lanka\" when a city is known, otherwise \"temples near <lat>, <lng>\".",
+    "- searchAccessiblePlaces is an alternative for Step 1: it also filters by keyword and radius. Either tool is fine, but the keyword must always be passed.",
+    "- If Step 1 says matching places exist but are further than the radius, say how far away they are and offer to search wider or use the web. Never present far-away places as if they were nearby.",
+    "",
+    "RULE 3 — when you had to use webSearch because the place or category is not in our database, respond with these exact steps in order:",
+    '  1) Acknowledge — say exactly: "This place is not currently saved in our database. However, as a helpful gesture, I have searched for some information for you."',
+    "  2) Provide info — the description and any known accessibility details from the web search.",
+    "  3) Provide contact — a phone number or official website link so the user can verify accessibility features. Take them from the webSearch results or place tags (phone, contact:phone, website, url). If you found none, say so plainly and tell the user how to get them (call the local office or tourism board, check the official website/Facebook page).",
+    '  4) Call to action — say exactly: "If you visit this place, please help our community by updating the map and adding its accessibility details to our app!"',
+    "  Translate those two quoted sentences naturally when the user is writing in another language (Sinhala, Singlish, etc.).",
+    "",
+    "About a NAMED place (\"temple of tooth\", \"pothuwil beach\") — this is not a category search:",
+    "- The place may be anywhere: call findPlaceInDatabase with just the name and NO lat/lng, so the whole database is searched with no distance limit.",
+    "- I may already have run that lookup and pasted the result into this prompt. If so, answer from it directly and do not call the same tool again.",
+    '- If it IS saved: give the full saved details (name, category, address, status, every accessibility feature) and say they come from our community map.',
+    '- If it is NOT saved: follow RULE 3 exactly.',
     "",
     gps,
     "",
-    "Finding nearby places (GPS):",
-    "- When the user asks for accessible places near them, call searchAccessiblePlaces with their GPS coordinates above.",
-    "- Pass 'query' with the kind of place they asked for (for example 'park', 'library', 'toilet') so only matching places come back. Omit 'query' only when they want anything nearby.",
-    "- List ONLY places that match what the user asked for. If the tool returns none, say plainly that no matching place is saved nearby (and offer to search wider or add one). Never show unrelated places as the answer.",
-    "- If no GPS is available, use the city or area the user gave. Ask one short question if you do not know where they mean.",
-    "",
-    "About a specific place (always check our database FIRST):",
-    "- When the user asks about a named place, FIRST call findPlaceInDatabase with that name.",
-    "- If it IS in the database: give the saved accessibility details and general information (category, address, status) directly from the tool result. Do not use webSearch in that case.",
-    "- If it is NOT in the database (findPlaceInDatabase returns no places), you MUST follow all four steps below, in order:",
-    "  1) Say exactly: \"This place is not currently saved in our database. However, as a helpful gesture, I have searched for some information for you.\"",
-    "  2) Call webSearch with the place name and city, then give a general description of the place and any known accessibility information from the results.",
-    "  3) Always give a phone number or official website so the user can contact the place directly to confirm accessibility features. Take it from the webSearch results or place tags (phone, contact:phone, website, url). If you truly cannot find any, say so clearly and tell the user how they can find it.",
-    "  4) End with exactly: \"If you visit this place, please help our community by updating the map and adding its accessibility details to our app!\"",
-    "  Translate those two quoted sentences naturally when the user is writing in another language (Sinhala, Singlish, etc.).",
+    "Links and contact details (the app makes these tappable):",
+    "- Write a website on its own line as 'Website: https://example.com' — one clean link per line.",
+    "- Never use ad, sponsored or tracking links (duckduckgo.com/y.js, bing.com/aclick, links with ad_provider or click_metadata). Use the official site only.",
+    "- Write a phone number on its own line as 'Phone: 011 234 5678' so the app can offer a call button.",
+    "- Do not paste long link addresses with query strings into prose.",
     "",
     "When you list places from a search, ALWAYS include for each place:",
     "- its name,",
     "- which accessibility features it has (ramp, step-free entrance, accessible toilet, elevator, parking, tactile paving, automatic door),",
     "- its distance from the searched point, in metres under 1000 and kilometres otherwise (for example '350 m' or '1.4 km').",
     "Read those values from the tool result: 'features' is a boolean map and 'distance' is in metres. Never invent a distance.",
+    "",
+    "Language and tone:",
+    "- Match the language of the user's message. If they write in Sinhala, reply in Sinhala. If they write in Singlish (romanized Sinhala), reply in Singlish. Otherwise reply in English.",
+    "- Be polite, warm and encouraging, like a helpful person, not a robot.",
+    "- Keep answers short: a few sentences, short words, no jargon and no long lists unless the user asks.",
     "",
     "When the request is unclear:",
     "- Ask one short clarifying question instead of guessing.",
@@ -997,7 +1298,21 @@ Deno.serve(async (req: Request) => {
           .slice(-12)
       : [];
 
-    const messages: unknown[] = [{ role: "system", content: buildSystemPrompt(location) }];
+    // A question about a named place is looked up across the whole database
+    // (then the web) before the model runs, so the answer never depends on
+    // which tool the model happens to pick — and never on a distance radius.
+    const questionText =
+      String(userMessage ?? "").trim() ||
+      [...history].reverse().find((m) => m.role === "user")?.content ||
+      "";
+    const preLookup = await namedPlacePreLookup(questionText);
+
+    const messages: unknown[] = [
+      {
+        role: "system",
+        content: buildSystemPrompt(location) + (preLookup ? `\n\n${preLookup.context}` : ""),
+      },
+    ];
     messages.push(...history);
     if (userMessage) messages.push({ role: "user", content: String(userMessage) });
 
@@ -1051,12 +1366,16 @@ Deno.serve(async (req: Request) => {
       messages.push(assistantMsg);
     }
 
+    const finalActions = mergeActions(preLookup?.action ?? null, executedActions);
+
     return new Response(
       JSON.stringify({
         // If the tool budget ran out with no prose, still give the user text.
-        text: assistantMsg.content ||
-          "Sorry, I could not finish that answer. Please ask me again.",
-        actionResponse: executedActions.length > 0 ? executedActions : null,
+        text: sanitizeAssistantText(
+          assistantMsg.content ||
+            "Sorry, I could not finish that answer. Please ask me again.",
+        ),
+        actionResponse: finalActions.length > 0 ? finalActions : null,
       }),
       { headers: CORS_HEADERS }
     );
@@ -1068,7 +1387,10 @@ Deno.serve(async (req: Request) => {
         const text0 = String(userMessage ?? "");
         const direct = await directNearbyAnswer(text0, location) ?? await directPlaceAnswer(text0);
         if (direct) {
-          return new Response(JSON.stringify(direct), { headers: CORS_HEADERS });
+          return new Response(
+            JSON.stringify({ ...direct, text: sanitizeAssistantText(String(direct.text ?? "")) }),
+            { headers: CORS_HEADERS },
+          );
         }
       } catch {
         // fall through to the friendly text reply

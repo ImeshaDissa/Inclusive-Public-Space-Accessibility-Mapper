@@ -1,10 +1,11 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   FlatList,
+  ScrollView,
   StyleSheet,
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -15,6 +16,7 @@ import * as Location from 'expo-location';
 import { supabase } from '../lib/supabase';
 import { useAppTheme } from '../context/ThemeContext';
 import { formatDistanceLabel } from '../lib/geoUtils';
+import { ChatMessageText } from './ChatMessageText';
 
 /** One place row shown under an assistant answer (features + distance). */
 interface ChatPlace {
@@ -90,6 +92,15 @@ const toChatPlaces = (raw: any, index: number): ChatPlace => {
   };
 };
 
+/** One-tap questions shown above the input so nobody has to think of wording. */
+const SUGGESTIONS = [
+  'Accessible places near me',
+  'Places with a ramp near me',
+  'Is this place wheelchair accessible?',
+  'How do I add a place?',
+  'Which places have an accessible toilet?',
+];
+
 export interface AccessibilityAgentChatProps {
   onPlaceAdded?: (placeData: any) => void;
   onPlacesFound?: (placesData: any[]) => void;
@@ -106,6 +117,16 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
   // Shown only while the chat is empty. Hidden for good after the first question.
   const [showIntro, setShowIntro] = useState(true);
   const { colors } = useAppTheme();
+
+  const listRef = useRef<FlatList<Message>>(null);
+
+  // Keep the newest bubble in view when a reply (or the typing bubble) lands.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      listRef.current?.scrollToEnd({ animated: true });
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [messages.length, loading]);
 
   // GPS position, sent with every message so the assistant can suggest nearby
   // accessible places without having to ask the user for coordinates.
@@ -149,8 +170,9 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
     return locationRequest.current;
   };
 
-  const sendMessage = async () => {
-    const text = inputText.trim();
+  /** Sends the typed text, or `override` when a suggestion chip was tapped. */
+  const sendMessage = async (override?: string) => {
+    const text = (override ?? inputText).trim();
     if (!text || loading) return;
 
     const userMsg: Message = {
@@ -280,9 +302,11 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
             isUser ? styles.userBubble : styles.botBubble,
           ]}
         >
-          <Text style={[styles.messageText, { color: isUser ? '#FFF' : colors.textPrimary }]}>
-            {item.text}
-          </Text>
+          <ChatMessageText
+            text={item.text}
+            style={[styles.messageText, { color: isUser ? '#FFF' : colors.textPrimary }]}
+            linkColor={isUser ? '#FFF' : colors.accent}
+          />
         </View>
 
         {!isUser && item.places && item.places.length > 0 && (
@@ -367,12 +391,59 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
       keyboardVerticalOffset={90}
     >
       <FlatList
+        ref={listRef}
         data={messages}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         ListEmptyComponent={showIntro ? <IntroBubble colors={colors} /> : null}
+        ListFooterComponent={
+          loading ? (
+            <View
+              style={[
+                styles.bubble,
+                styles.botBubble,
+                bubbleStyle(false),
+                styles.typingBubble,
+              ]}
+            >
+              <ActivityIndicator size="small" color={colors.accent} />
+              <Text style={[styles.typingText, { color: colors.textMuted }]}>
+                Assistant is typing…
+              </Text>
+            </View>
+          ) : null
+        }
       />
+
+      {!loading && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.suggestionsRow}
+        >
+          {SUGGESTIONS.map((suggestion) => (
+            <TouchableOpacity
+              key={suggestion}
+              accessibilityRole="button"
+              accessibilityLabel={`Ask: ${suggestion}`}
+              style={[
+                styles.suggestionChip,
+                { backgroundColor: colors.accentBg, borderColor: colors.accent },
+              ]}
+              onPress={() => sendMessage(suggestion)}
+            >
+              <Ionicons name="sparkles-outline" size={12} color={colors.accent} />
+              <Text style={[styles.suggestionText, { color: colors.accent }]}>
+                {suggestion}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
 
       <View
         style={[
@@ -394,6 +465,9 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
           placeholder="Ask accessibility assistant..."
           placeholderTextColor={colors.textMuted}
           editable={!loading}
+          returnKeyType="send"
+          accessibilityLabel="Message the accessibility assistant"
+          onSubmitEditing={() => sendMessage()}
         />
         <TouchableOpacity
           style={[
@@ -401,7 +475,9 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
             { backgroundColor: colors.accent },
             loading && styles.disabledButton,
           ]}
-          onPress={sendMessage}
+          accessibilityRole="button"
+          accessibilityLabel="Send message"
+          onPress={() => sendMessage()}
           disabled={loading}
         >
           {loading ? (
@@ -443,7 +519,7 @@ const IntroBubble: React.FC<{ colors: Record<string, string> }> = ({ colors }) =
       </Text>
     ))}
     <Text style={[styles.messageText, { color: colors.textMuted }, styles.introFooter]}>
-      Type your question below and I will answer.
+      {'Tap a suggestion below, or type your question. Any website, phone number or email I share can be tapped to open it.'}
     </Text>
   </View>
 );
@@ -477,6 +553,34 @@ const styles = StyleSheet.create({
   },
   introFooter: {
     marginTop: 10,
+  },
+  typingBubble: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+  },
+  typingText: {
+    fontSize: 13,
+  },
+  suggestionsRow: {
+    paddingHorizontal: 10,
+    paddingTop: 6,
+    paddingBottom: 2,
+    gap: 6,
+  },
+  suggestionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  suggestionText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   placesBlock: {
     marginTop: 4,
