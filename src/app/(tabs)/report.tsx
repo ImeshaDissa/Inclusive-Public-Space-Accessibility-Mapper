@@ -11,6 +11,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useApp } from '@/context/AppContext';
 import { useAppTheme } from '@/context/ThemeContext';
@@ -39,9 +40,7 @@ export default function SubmitReportScreen() {
   });
 
   const [note, setNote] = useState<string>('');
-  const [photos, setPhotos] = useState<string[]>([
-    'https://images.unsplash.com/photo-1517649763962-0c623266010b?auto=format&fit=crop&w=800&q=80',
-  ]);
+  const [photos, setPhotos] = useState<string[]>([]);
   const [priority, setPriority] = useState<'High' | 'Medium' | 'Low'>('High');
   const [showSuccessToast, setShowSuccessToast] = useState<boolean>(false);
 
@@ -49,14 +48,57 @@ export default function SubmitReportScreen() {
     setFeatures((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const handleAddSamplePhoto = () => {
-    const samplePhotos = [
-      'https://images.unsplash.com/photo-1585320806297-9794b3e4eeae?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=800&q=80',
-      'https://images.unsplash.com/photo-1521587760476-6c12a4b040da?auto=format&fit=crop&w=800&q=80',
-    ];
-    const nextPhoto = samplePhotos[photos.length % samplePhotos.length];
-    setPhotos((prev) => [...prev, nextPhoto]);
+  const handleAttachPhoto = () => {
+    Alert.alert(
+      'Attach Photo Evidence',
+      'Choose photo source:',
+      [
+        {
+          text: 'Take Photo',
+          onPress: async () => {
+            try {
+              const cameraPerm = await ImagePicker.requestCameraPermissionsAsync();
+              if (!cameraPerm.granted) {
+                Alert.alert('Permission Required', 'Camera permission is required to take photos.');
+                return;
+              }
+              const result = await ImagePicker.launchCameraAsync({
+                allowsEditing: true,
+                quality: 0.8,
+              });
+              if (!result.canceled && result.assets && result.assets.length > 0) {
+                setPhotos((prev) => [...prev, result.assets[0].uri]);
+              }
+            } catch (err) {
+              console.error('Error taking photo:', err);
+            }
+          },
+        },
+        {
+          text: 'Choose from Library',
+          onPress: async () => {
+            try {
+              const libraryPerm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+              if (!libraryPerm.granted) {
+                Alert.alert('Permission Required', 'Photo library permission is required.');
+                return;
+              }
+              const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ['images'],
+                allowsEditing: true,
+                quality: 0.8,
+              });
+              if (!result.canceled && result.assets && result.assets.length > 0) {
+                setPhotos((prev) => [...prev, result.assets[0].uri]);
+              }
+            } catch (err) {
+              console.error('Error picking photo:', err);
+            }
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
   };
 
   const removePhoto = (index: number) => {
@@ -86,6 +128,7 @@ export default function SubmitReportScreen() {
 
     setTimeout(() => {
       setNote('');
+      setPhotos([]);
       setShowSuccessToast(false);
       router.push('/verify' as any);
     }, 1500);
@@ -276,7 +319,7 @@ export default function SubmitReportScreen() {
               </View>
             ))}
 
-            <TouchableOpacity style={[styles.addPhotoBtn, { backgroundColor: colors.chipBg, borderColor: colors.chipBorder }]} onPress={handleAddSamplePhoto}>
+            <TouchableOpacity style={[styles.addPhotoBtn, { backgroundColor: colors.chipBg, borderColor: colors.chipBorder }]} onPress={handleAttachPhoto}>
               <Ionicons name="camera-outline" size={24} color={colors.accent} />
               <Text style={[styles.addPhotoText, { color: colors.accentLight }]}>+ Attach Photo</Text>
             </TouchableOpacity>

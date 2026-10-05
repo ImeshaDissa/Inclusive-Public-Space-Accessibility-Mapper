@@ -430,6 +430,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
     } else {
       targetPlaceId = existingPlace.id;
+      if (photos.length > 0) {
+        setPlaces((prev) =>
+          prev.map((p) => {
+            if (p.id === existingPlace.id) {
+              const mergedPhotos = Array.from(new Set([...photos, ...p.photos]));
+              return { ...p, photos: mergedPhotos };
+            }
+            return p;
+          })
+        );
+      }
     }
 
     const newReport: Report = {
@@ -441,7 +452,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       timestamp: 'Just now',
       note: note || 'Community accessibility audit submitted.',
       featuresReported,
-      photos: photos.length > 0 ? photos : ['https://images.unsplash.com/photo-1517649763962-0c623266010b?auto=format&fit=crop&w=800&q=80'],
+      photos,
       priority,
       confirmCount: 1,
       disputeCount: 0,
