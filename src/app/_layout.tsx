@@ -1,21 +1,45 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
-import { QueryClientProvider } from '@tanstack/react-query';
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
-import { queryClient } from '@/lib/queryClient';
+// Side-effect import: suppress known Expo Go push warnings before anything else loads.
+import '@/lib/expoGoWarnings';
+import { Stack } from 'expo-router';
+import { DarkTheme, DefaultTheme, ThemeProvider as NavThemeProvider } from '@react-navigation/native';
+import { StatusBar, View, StyleSheet } from 'react-native';
+import { AppProvider } from '@/context/AppContext';
+import { ThemeProvider, useAppTheme } from '@/context/ThemeContext';
+import { ToastProvider } from '@/context/ToastContext';
+import { NotificationBanner } from '@/components/NotificationBanner';
 
-SplashScreen.preventAutoHideAsync();
+function RootLayoutInner() {
+  const { isDark, colors } = useAppTheme();
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
   return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <AnimatedSplashOverlay />
-        <AppTabs />
+    <NavThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#090D16' : '#F8FAFC'} />
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="place/[id]" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="report-issue" options={{ presentation: 'modal', title: 'Report Issue' }} />
+        </Stack>
+        <NotificationBanner />
+      </View>
+    </NavThemeProvider>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+});
+
+export default function RootLayout() {
+  return (
+    <AppProvider>
+      <ThemeProvider>
+        <ToastProvider>
+          <RootLayoutInner />
+        </ToastProvider>
       </ThemeProvider>
-    </QueryClientProvider>
+    </AppProvider>
   );
 }
