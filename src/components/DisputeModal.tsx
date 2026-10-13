@@ -6,6 +6,8 @@ import {
   StyleSheet,
   TouchableOpacity,
   TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '@/context/ThemeContext';
@@ -42,7 +44,10 @@ export const DisputeModal: React.FC<DisputeModalProps> = ({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={[styles.backdrop, { backgroundColor: colors.overlay || 'rgba(0, 0, 0, 0.65)' }]}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={[styles.backdrop, { backgroundColor: colors.overlay || 'rgba(0, 0, 0, 0.65)' }]}
+      >
         <TouchableOpacity style={styles.backdropDismiss} activeOpacity={1} onPress={onClose} />
         
         {/* Bottom Sheet Container */}
@@ -129,7 +134,7 @@ export const DisputeModal: React.FC<DisputeModalProps> = ({
             <Text style={[styles.submitBtnText, { color: colors.modalSubmitText || '#FFFFFF' }]}>Submit Dispute</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };

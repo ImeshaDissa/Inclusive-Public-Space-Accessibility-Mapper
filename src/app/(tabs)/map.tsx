@@ -23,6 +23,7 @@ import { PlaceDetailsModal } from '@/components/PlaceDetailsModal';
 import { Place, StatusType } from '@/types/accessibility';
 import { PlaceSearchResult, matchesQuery, searchPlaces } from '@/lib/placeSearch';
 import { searchPlacesWithAi } from '@/lib/aiSearch';
+import { VoiceTypingButton } from '@/components/VoiceTypingButton';
 
 type FilterType = 'all' | 'verified' | 'ramp' | 'stepFree' | 'toilet';
 
@@ -264,6 +265,10 @@ export default function MapScreen() {
               <Ionicons name="close-circle" size={16} color={colors.textMuted} />
             </TouchableOpacity>
           )}
+          <VoiceTypingButton
+            onResult={(text) => setSearchQuery((prev) => (prev ? `${prev} ${text}` : text))}
+            accessibilityLabel="Dictate search — speak to type"
+          />
           <TouchableOpacity
             onPress={() => setAiSearchMode((prev) => !prev)}
             accessibilityRole="button"

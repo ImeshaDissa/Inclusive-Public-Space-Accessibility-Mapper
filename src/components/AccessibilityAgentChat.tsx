@@ -15,6 +15,7 @@ import {
   AccessibilityInfo,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { VoiceTypingButton } from '@/components/VoiceTypingButton';
 import * as Location from 'expo-location';
 import { supabase } from '../lib/supabase';
 import { useAppTheme } from '../context/ThemeContext';
@@ -1000,6 +1001,11 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
                 <Ionicons name="close-circle" size={17} color={isDark ? '#AC9C8D' : '#70625D'} />
               </TouchableOpacity>
             )}
+
+            <VoiceTypingButton
+              onResult={(text) => setInputText((prev) => (prev ? `${prev} ${text}` : text))}
+              accessibilityLabel="Dictate message — speak to type"
+            />
           </View>
 
           <Animated.View style={{ transform: [{ scale: sendScale }] }}>

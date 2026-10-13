@@ -18,6 +18,7 @@ import {
   ActivityIndicator,
   Keyboard,
   AccessibilityInfo,
+  KeyboardAvoidingView,
 } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
@@ -1261,6 +1262,11 @@ export default function SubmitReportScreen() {
   if (!isAuthenticated) return <Redirect href="/login" />;
 
   return (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+      style={{ flex: 1 }}
+    >
     <SafeAreaView
       style={[
         styles.container,
@@ -2176,6 +2182,7 @@ export default function SubmitReportScreen() {
         )}
       </View>
     </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 }
 
