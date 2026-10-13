@@ -11,6 +11,8 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Place, StatusType } from '@/types/accessibility';
+import { openDirections } from '@/lib/directions';
+import { useToast } from '@/context/ToastContext';
 
 interface PlaceDetailsModalProps {
   place: Place | null;
@@ -27,7 +29,22 @@ export const PlaceDetailsModal: React.FC<PlaceDetailsModalProps> = ({
   onToggleSave,
   onReportUpdate,
 }) => {
+  const { showToast } = useToast();
+
   if (!place) return null;
+
+  /** Hand the place off to the phone's maps app for turn-by-turn directions. */
+  const handleDirections = async () => {
+    const opened = await openDirections({
+      name: place.name,
+      address: place.address,
+      lat: place.lat,
+      lng: place.lng,
+    });
+    if (!opened) {
+      showToast('Could not open a maps app on this device.', 'warning');
+    }
+  };
 
   const getStatusConfig = (status: StatusType) => {
     switch (status) {
@@ -175,6 +192,18 @@ export const PlaceDetailsModal: React.FC<PlaceDetailsModalProps> = ({
                 </ScrollView>
               </View>
             )}
+
+            {/* Primary action: get the user there. */}
+            <TouchableOpacity
+              style={styles.directionsBtn}
+              onPress={handleDirections}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={`Get directions to ${place.name}`}
+            >
+              <Ionicons name="navigate-outline" size={20} color="#FF5A36" />
+              <Text style={styles.directionsText}>Get Directions</Text>
+            </TouchableOpacity>
 
             {/* Action Bar */}
             {onReportUpdate && (
@@ -370,6 +399,23 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginRight: 10,
   },
+  directionsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(255, 90, 54, 0.12)',
+    borderWidth: 1.5,
+    borderColor: '#FF5A36',
+    paddingVertical: 13,
+    borderRadius: 14,
+    marginTop: 24,
+  },
+  directionsText: {
+    color: '#FF5A36',
+    fontSize: 14,
+    fontWeight: '700',
+  },
   reportUpdateBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -378,7 +424,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FF5A36',
     paddingVertical: 14,
     borderRadius: 14,
-    marginTop: 24,
+    marginTop: 12,
   },
   reportUpdateText: {
     color: '#FFF',
