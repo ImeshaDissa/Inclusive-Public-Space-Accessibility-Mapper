@@ -7,7 +7,7 @@ import { useApp } from '@/context/AppContext';
 import { useAppTheme } from '@/context/ThemeContext';
 import { useToast } from '@/context/ToastContext';
 import { requestAccountExport, sendSavedPlaceAlert, sendTestEmail } from '@/features/notifications/actions';
-import * as Haptics from 'expo-haptics';
+import { hapticSuccess, hapticIcon } from '@/lib/haptics';
 import { Place, StatusType } from '@/types/accessibility';
 import { Ionicons } from '@expo/vector-icons';
 import { Redirect, useRouter } from 'expo-router';
@@ -66,7 +66,10 @@ export function ProfileMenuItem({
         pressed && styles.menuItemPressed,
       ]}
       onPress={onPress}
-      onPressIn={() => setPressed(true)}
+      onPressIn={() => {
+        setPressed(true);
+        hapticIcon();
+      }}
       onPressOut={() => setPressed(false)}
       activeOpacity={0.72}
       accessible
@@ -200,7 +203,7 @@ export default function ProfileScreen() {
     const emailAttempted = result.emailOk !== undefined;
     if (result.ok && (!emailAttempted || result.emailOk)) {
       showToast('Emergency alert sent to your devices and email.', 'success');
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
+    hapticSuccess();
     } else if (result.ok && emailAttempted) {
       showToast(`Alert on device, but email failed: ${result.detail ?? 'unknown error'}`, 'error');
     } else if (result.detail) {
@@ -609,6 +612,28 @@ export default function ProfileScreen() {
                   />
                 </View>
               ))}
+            </View>
+
+            <View style={[styles.preferenceCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+              <Text style={[styles.prefCardHeader, { color: colors.textMuted }]}>FEEDBACK</Text>
+              <View style={[styles.prefRow, { borderBottomWidth: 0 }]}>
+                <View style={styles.prefLeft}>
+                  <Ionicons name="phone-portrait-outline" size={20} color={colors.accent} />
+                  <Text style={[styles.prefText, { color: colors.textPrimary }]}>Haptic Feedback</Text>
+                </View>
+                <Switch
+                  value={userProfile.preferences.hapticsEnabled ?? true}
+                  onValueChange={(val) => {
+                    updateUserProfile({
+                      preferences: { ...userProfile.preferences, hapticsEnabled: val },
+                    });
+                    if (val) hapticIcon();
+                  }}
+                  trackColor={{ false: colors.toggleTrack, true: colors.success }}
+                  thumbColor={colors.toggleThumb}
+                  accessibilityLabel="Haptic feedback — vibration on button and input touches"
+                />
+              </View>
             </View>
           </ScrollView>
         </SafeAreaView>

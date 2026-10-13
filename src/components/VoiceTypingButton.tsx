@@ -3,6 +3,7 @@ import { Platform, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '@/context/ThemeContext';
 import { useToast } from '@/context/ToastContext';
+import { hapticMedium } from '@/lib/haptics';
 
 interface VoiceTypingButtonProps {
   /** Called with the recognized words; callers append to the existing text. */
@@ -38,6 +39,7 @@ export const VoiceTypingButton: React.FC<VoiceTypingButtonProps> = ({
   }, []);
 
   const handlePress = () => {
+    hapticMedium();
     if (Platform.OS !== 'web') {
       showToast(
         'Voice typing runs in the web version. On this phone, tap the microphone key on your keyboard instead.',

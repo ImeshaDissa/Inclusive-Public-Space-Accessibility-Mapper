@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Haptics from 'expo-haptics';
+import { hapticIcon, setHapticsEnabled } from '@/lib/haptics';
 import { Place, Report, AppNotification, UserProfile, StatusType, NotificationCategory } from '@/types/accessibility';
 import { MOCK_PLACES, MOCK_REPORTS, INITIAL_USER_PROFILE, INITIAL_NOTIFICATIONS } from '@/constants/mockData';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
@@ -161,6 +161,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [notifications, setNotifications] = useState<AppNotification[]>(INITIAL_NOTIFICATIONS);
   const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_USER_PROFILE);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
+
+  // Profile → Accessibility Preferences master switch for all haptic feedback.
+  useEffect(() => {
+    setHapticsEnabled(userProfile.preferences.hapticsEnabled ?? true);
+  }, [userProfile.preferences.hapticsEnabled]);
   // AI assistant results live here so the Map tab can show them even though
   // the chat itself now runs on its own tab.
   const [aiMarkers, setAiMarkers] = useState<Place[]>([]);
@@ -381,7 +386,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const toggleSavePlace = (placeId: string) => {
     // Light tick so save/unsave is felt (and works without sight).
-    Haptics.selectionAsync().catch(() => undefined);
+    hapticIcon();
     setPlaces((prevPlaces) => {
       const next = prevPlaces.map((p) => {
         if (p.id === placeId) {

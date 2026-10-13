@@ -22,7 +22,7 @@ import {
 } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
+import { hapticSuccess } from '@/lib/haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { Redirect, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
@@ -1216,7 +1216,7 @@ export default function SubmitReportScreen() {
           );
         }
 
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
+        hapticSuccess();
 
         setShowSuccessToast(
           true

@@ -82,5 +82,7 @@ export interface UserProfile {
      * existing `profiles.preferences` jsonb so no migration is needed.
      */
     trustedContacts?: string[];
+    /** Master switch for touch feedback; default true. */
+    hapticsEnabled?: boolean;
   };
 }

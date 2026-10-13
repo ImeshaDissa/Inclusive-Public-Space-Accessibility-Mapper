@@ -23,6 +23,7 @@ import { useAppTheme } from '../context/ThemeContext';
 import { formatDistanceLabel } from '../lib/geoUtils';
 import { openDirections } from '../lib/directions';
 import { useToast } from '../context/ToastContext';
+import { hapticIcon, hapticInput, hapticSuccess } from '@/lib/haptics';
 import { ChatMessageText } from './ChatMessageText';
 
 /** One place row shown under an assistant answer (features + distance). */
@@ -845,6 +846,7 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
           <TouchableOpacity
             style={styles.headerActionBtn}
             onPress={() => setShowPromptLibrary((prev) => !prev)}
+            onPressIn={hapticIcon}
             activeOpacity={0.75}
             accessibilityRole="button"
             accessibilityLabel="Toggle example prompts"
@@ -860,6 +862,7 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
             <TouchableOpacity
               style={styles.headerActionBtn}
               onPress={handleClearChat}
+              onPressIn={hapticIcon}
               activeOpacity={0.75}
               accessibilityRole="button"
               accessibilityLabel="Reset conversation"
@@ -908,7 +911,7 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
                   Example Questions
                 </Text>
               </View>
-              <TouchableOpacity onPress={() => setShowPromptLibrary(false)}>
+              <TouchableOpacity onPress={() => setShowPromptLibrary(false)} onPressIn={hapticIcon}>
                 <Ionicons name="close" size={20} color={isDark ? '#AC9C8D' : '#70625D'} />
               </TouchableOpacity>
             </View>
@@ -925,6 +928,7 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
                     { backgroundColor: isDark ? '#050505' : '#FBF9F7', borderColor: isDark ? '#332328' : '#DDD9CE' },
                   ]}
                   onPress={() => sendMessage(p.query)}
+                  onPressIn={hapticIcon}
                   activeOpacity={0.8}
                 >
                   <View style={[styles.drawerCardIcon, { backgroundColor: p.color + '22' }]}>
@@ -962,6 +966,7 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
                     },
                   ]}
                   onPress={() => sendMessage(chip.query)}
+                  onPressIn={hapticIcon}
                   activeOpacity={0.75}
                 >
                   <Text style={[styles.chipText, { color: isDark ? '#EFECE9' : '#610C27' }]}>
@@ -978,6 +983,7 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
           <TouchableOpacity
             style={styles.inputLeftBtn}
             onPress={() => setShowPromptLibrary((prev) => !prev)}
+            onPressIn={hapticIcon}
             activeOpacity={0.75}
             accessibilityLabel="Prompt examples"
           >
@@ -1001,6 +1007,7 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
               ]}
               value={inputText}
               onChangeText={setInputText}
+              onPressIn={hapticInput}
               placeholder="Ask accessibility assistant…"
               placeholderTextColor={isDark ? '#AC9C8D' : '#70625D'}
               editable={!loading}
@@ -1013,6 +1020,7 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
             {inputText.length > 0 && (
               <TouchableOpacity
                 onPress={() => setInputText('')}
+                onPressIn={hapticIcon}
                 style={styles.clearTextBtn}
                 accessibilityLabel="Clear input"
               >
@@ -1034,6 +1042,7 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
                 (!inputText.trim() || loading) && styles.sendCircleDisabled,
               ]}
               onPress={() => sendMessage()}
+              onPressIn={hapticSuccess}
               disabled={!inputText.trim() || loading}
               activeOpacity={0.85}
               accessibilityRole="button"
