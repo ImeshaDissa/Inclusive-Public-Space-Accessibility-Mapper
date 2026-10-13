@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { hapticIcon, setHapticsEnabled } from '@/lib/haptics';
 import { Place, Report, AppNotification, UserProfile, StatusType, NotificationCategory } from '@/types/accessibility';
 import { MOCK_PLACES, MOCK_REPORTS, INITIAL_USER_PROFILE, INITIAL_NOTIFICATIONS } from '@/constants/mockData';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
@@ -56,6 +57,7 @@ const STORAGE_KEYS = {
   places: '@inclusive-mapper/places',
   reports: '@inclusive-mapper/reports',
   notifications: '@inclusive-mapper/notifications',
+  guestSaved: '@inclusive-mapper/guest-saved',
 };
 
 const DEFAULT_AVATAR = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80';
@@ -159,6 +161,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [notifications, setNotifications] = useState<AppNotification[]>(INITIAL_NOTIFICATIONS);
   const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_USER_PROFILE);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
+
+  // Profile → Accessibility Preferences master switch for all haptic feedback.
+  useEffect(() => {
+    setHapticsEnabled(userProfile.preferences.hapticsEnabled ?? true);
+  }, [userProfile.preferences.hapticsEnabled]);
   // AI assistant results live here so the Map tab can show them even though
   // the chat itself now runs on its own tab.
   const [aiMarkers, setAiMarkers] = useState<Place[]>([]);
@@ -175,6 +182,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (!email || welcomeSentFor.current === uid) return;
     welcomeSentFor.current = uid;
     sendWelcomeEmailOnce(uid, email).catch(() => undefined);
+  };
+
+  // Guests have no account, so their bookmark toggles live on this device.
+  // Only adds saves (never clears) so a signed-in user's own list is untouched.
+  const applyGuestSaved = async (list: Place[]): Promise<Place[]> => {
+    try {
+      const raw = await AsyncStorage.getItem(STORAGE_KEYS.guestSaved);
+      if (!raw) return list;
+      const ids = new Set<string>(JSON.parse(raw));
+      if (ids.size === 0) return list;
+      return list.map((p) => (ids.has(p.id) ? { ...p, saved: true } : p));
+    } catch {
+      return list;
+    }
   };
 
   // Initialize Data & Load Supabase or Storage state
@@ -210,7 +231,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           ]);
 
           if (isActive) {
-            if (fetchedPlaces.length > 0) setPlaces(fetchedPlaces);
+            const placeList = data.session?.user
+              ? fetchedPlaces
+              : await applyGuestSaved(fetchedPlaces);
+            if (placeList.length > 0) setPlaces(placeList);
             if (fetchedReports.length > 0) setReports(fetchedReports);
           }
         } else {
@@ -361,8 +385,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [notifications, authReady]);
 
   const toggleSavePlace = (placeId: string) => {
-    setPlaces((prevPlaces) =>
-      prevPlaces.map((p) => {
+    // Light tick so save/unsave is felt (and works without sight).
+    hapticIcon();
+    setPlaces((prevPlaces) => {
+      const next = prevPlaces.map((p) => {
         if (p.id === placeId) {
           const newSaved = !p.saved;
           if (isSupabaseConfigured && userId) {
@@ -371,8 +397,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           return { ...p, saved: newSaved };
         }
         return p;
-      })
-    );
+      });
+      if (isSupabaseConfigured && !userId) {
+        const ids = next.filter((p) => p.saved).map((p) => p.id);
+        AsyncStorage.setItem(STORAGE_KEYS.guestSaved, JSON.stringify(ids)).catch(() => undefined);
+      }
+      return next;
+    });
   };
 
   const addNotificationIfSaved = (
@@ -647,7 +678,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         userId ? fetchNotificationsFromSupabase(userId) : Promise.resolve([] as AppNotification[]),
       ]);
       // Same rule as the initial load: never blank out state with an empty read.
-      if (fetchedPlaces.length > 0) setPlaces(fetchedPlaces);
+      const placeList = userId ? fetchedPlaces : await applyGuestSaved(fetchedPlaces);
+      if (placeList.length > 0) setPlaces(placeList);
       if (fetchedReports.length > 0) setReports(fetchedReports);
       if (userId) setNotifications(fetchedNotifs);
     } catch (err) {

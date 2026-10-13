@@ -7,12 +7,12 @@ import {
   TouchableOpacity,
   ScrollView,
   Image,
-  Dimensions,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Place, StatusType } from '@/types/accessibility';
 import { openDirections } from '@/lib/directions';
 import { useToast } from '@/context/ToastContext';
+import { useAppTheme } from '@/context/ThemeContext';
 
 interface PlaceDetailsModalProps {
   place: Place | null;
@@ -30,6 +30,7 @@ export const PlaceDetailsModal: React.FC<PlaceDetailsModalProps> = ({
   onReportUpdate,
 }) => {
   const { showToast } = useToast();
+  const { colors, isDark } = useAppTheme();
 
   if (!place) return null;
 
@@ -51,23 +52,26 @@ export const PlaceDetailsModal: React.FC<PlaceDetailsModalProps> = ({
       case 'verified':
         return {
           label: 'VERIFIED ACCESSIBLE',
-          color: '#10B981',
-          bg: '#064E3B',
+          color: isDark ? '#10B981' : '#059669',
+          bg: isDark ? '#064E3B' : '#ECFDF5',
+          border: isDark ? '#065F46' : '#A7F3D0',
           icon: 'checkmark-circle' as const,
         };
       case 'disputed':
         return {
           label: 'ACCESS DISPUTED',
-          color: '#EF4444',
-          bg: '#7F1D1D',
+          color: isDark ? '#EF4444' : '#DC2626',
+          bg: isDark ? '#7F1D1D' : '#FEF2F2',
+          border: isDark ? '#991B1B' : '#FECACA',
           icon: 'alert-circle' as const,
         };
       case 'pending':
       default:
         return {
           label: 'VERIFICATION PENDING',
-          color: '#F59E0B',
-          bg: '#78350F',
+          color: isDark ? '#F59E0B' : '#D97706',
+          bg: isDark ? '#78350F' : '#FFFBEB',
+          border: isDark ? '#92400E' : '#FDE68A',
           icon: 'time' as const,
         };
     }
@@ -88,23 +92,40 @@ export const PlaceDetailsModal: React.FC<PlaceDetailsModalProps> = ({
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.overlayContainer}>
-        <View style={styles.modalCard}>
+        <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
           {/* Header Bar */}
-          <View style={styles.modalHeader}>
-            <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
-              <Ionicons name="close" size={20} color="#94A3B8" />
+          <View style={[styles.modalHeader, { borderBottomColor: colors.cardBorder }]}>
+            <TouchableOpacity
+              style={[styles.closeBtn, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9' }]}
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel="Close modal"
+            >
+              <Ionicons name="close" size={20} color={colors.textPrimary} />
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.saveBtn, place.saved && styles.savedBtnActive]}
+              style={[
+                styles.saveBtn,
+                { backgroundColor: place.saved ? colors.accentBg : (isDark ? '#1E293B' : '#F1F5F9') },
+                { borderColor: place.saved ? colors.accent : colors.cardBorder },
+              ]}
               onPress={() => onToggleSave(place.id)}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={place.saved ? 'Unsave place' : 'Save place'}
             >
               <Ionicons
                 name={place.saved ? 'bookmark' : 'bookmark-outline'}
                 size={18}
-                color={place.saved ? '#FF5A36' : '#FFF'}
+                color={place.saved ? colors.accent : colors.textPrimary}
               />
-              <Text style={[styles.saveBtnText, place.saved && styles.savedTextActive]}>
+              <Text
+                style={[
+                  styles.saveBtnText,
+                  { color: place.saved ? colors.accent : colors.textPrimary },
+                ]}
+              >
                 {place.saved ? 'Saved' : 'Save Place'}
               </Text>
             </TouchableOpacity>
@@ -115,65 +136,104 @@ export const PlaceDetailsModal: React.FC<PlaceDetailsModalProps> = ({
             {place.photos && place.photos.length > 0 ? (
               <Image source={{ uri: place.photos[0] }} style={styles.bannerImage} />
             ) : (
-              <View style={[styles.bannerImage, styles.placeholderBanner]}>
-                <Ionicons name="image-outline" size={40} color="#475569" />
+              <View
+                style={[
+                  styles.bannerImage,
+                  styles.placeholderBanner,
+                  { backgroundColor: isDark ? '#1E293B' : '#F1F5F9' },
+                ]}
+              >
+                <Ionicons name="image-outline" size={40} color={colors.textMuted} />
               </View>
             )}
 
             {/* Place Header Info */}
             <View style={styles.infoSection}>
-              <Text style={styles.categoryText}>{place.category.toUpperCase()}</Text>
-              <Text style={styles.titleText}>{place.name}</Text>
+              <Text style={[styles.categoryText, { color: colors.accent }]}>
+                {place.category.toUpperCase()}
+              </Text>
+
+              <Text style={[styles.titleText, { color: colors.textPrimary }]}>
+                {place.name}
+              </Text>
+
               <View style={styles.addressRow}>
-                <Ionicons name="location-outline" size={14} color="#94A3B8" />
-                <Text style={styles.addressText}>{place.address}</Text>
+                <Ionicons name="location-outline" size={15} color={colors.accent} />
+                <Text style={[styles.addressText, { color: colors.textSecondary }]}>
+                  {place.address}
+                </Text>
               </View>
 
               {/* Status Badge */}
-              <View style={[styles.statusBadgeRow, { backgroundColor: statusConfig.bg }]}>
+              <View
+                style={[
+                  styles.statusBadgeRow,
+                  { backgroundColor: statusConfig.bg, borderColor: statusConfig.border },
+                ]}
+              >
                 <Ionicons name={statusConfig.icon} size={18} color={statusConfig.color} />
                 <Text style={[styles.statusBadgeText, { color: statusConfig.color }]}>
                   {statusConfig.label}
                 </Text>
-                <Text style={styles.netCountText}>
+                <Text style={[styles.netCountText, { color: statusConfig.color }]}>
                   ({place.confirmCount} Confirms · {place.disputeCount} Disputes)
                 </Text>
               </View>
 
               {place.description && (
-                <Text style={styles.descriptionText}>{place.description}</Text>
+                <Text style={[styles.descriptionText, { color: colors.textSecondary }]}>
+                  {place.description}
+                </Text>
               )}
             </View>
 
             {/* Accessibility Checklist Grid */}
             <View style={styles.sectionContainer}>
-              <Text style={styles.sectionTitle}>ACCESSIBILITY CHECKLIST</Text>
+              <View style={styles.sectionHeaderRow}>
+                <Ionicons name="shield-checkmark" size={15} color={colors.accent} />
+                <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>
+                  ACCESSIBILITY CHECKLIST
+                </Text>
+              </View>
+
               <View style={styles.gridContainer}>
                 {featureItems.map((item) => (
                   <View
                     key={item.key}
                     style={[
                       styles.gridCard,
-                      item.active ? styles.gridCardActive : styles.gridCardInactive,
+                      {
+                        backgroundColor: item.active
+                          ? (isDark ? '#064E3B' : '#ECFDF5')
+                          : (isDark ? '#1E293B' : '#F1F5F9'),
+                        borderColor: item.active
+                          ? (isDark ? '#065F46' : '#A7F3D0')
+                          : (isDark ? '#334155' : '#E2E8F0'),
+                      },
                     ]}
                   >
                     <MaterialCommunityIcons
                       name={item.icon as any}
                       size={20}
-                      color={item.active ? '#10B981' : '#64748B'}
+                      color={item.active ? (isDark ? '#34D399' : '#059669') : colors.textMuted}
                     />
                     <Text
                       style={[
                         styles.gridCardText,
-                        item.active ? styles.gridTextActive : styles.gridTextInactive,
+                        {
+                          color: item.active
+                            ? (isDark ? '#A7F3D0' : '#065F46')
+                            : colors.textMuted,
+                          fontWeight: item.active ? '700' : '500',
+                        },
                       ]}
                     >
                       {item.label}
                     </Text>
                     <Ionicons
                       name={item.active ? 'checkmark-circle' : 'close-circle'}
-                      size={14}
-                      color={item.active ? '#10B981' : '#64748B'}
+                      size={15}
+                      color={item.active ? (isDark ? '#34D399' : '#059669') : colors.textMuted}
                       style={styles.checkIcon}
                     />
                   </View>
@@ -184,7 +244,12 @@ export const PlaceDetailsModal: React.FC<PlaceDetailsModalProps> = ({
             {/* Sample Photos Gallery */}
             {place.photos && place.photos.length > 0 && (
               <View style={styles.sectionContainer}>
-                <Text style={styles.sectionTitle}>COMMUNITY PHOTOS ({place.photos.length})</Text>
+                <View style={styles.sectionHeaderRow}>
+                  <Ionicons name="images-outline" size={15} color={colors.accent} />
+                  <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>
+                    COMMUNITY PHOTOS ({place.photos.length})
+                  </Text>
+                </View>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photoRow}>
                   {place.photos.map((url, idx) => (
                     <Image key={idx} source={{ uri: url }} style={styles.galleryImage} />
@@ -193,28 +258,35 @@ export const PlaceDetailsModal: React.FC<PlaceDetailsModalProps> = ({
               </View>
             )}
 
-            {/* Primary action: get the user there. */}
+            {/* Turn-by-Turn Directions Action Button */}
             <TouchableOpacity
-              style={styles.directionsBtn}
+              style={[
+                styles.directionsBtn,
+                { backgroundColor: isDark ? 'rgba(0, 168, 132, 0.16)' : '#ECFDF5', borderColor: '#10B981' },
+              ]}
               onPress={handleDirections}
               activeOpacity={0.85}
               accessibilityRole="button"
               accessibilityLabel={`Get directions to ${place.name}`}
             >
-              <Ionicons name="navigate-outline" size={20} color="#FF5A36" />
-              <Text style={styles.directionsText}>Get Directions</Text>
+              <Ionicons name="navigate" size={18} color="#059669" />
+              <Text style={styles.directionsText}>Get Turn-by-Turn Directions</Text>
+              <Ionicons name="open-outline" size={15} color="#059669" style={{ marginLeft: 'auto' }} />
             </TouchableOpacity>
 
-            {/* Action Bar */}
+            {/* Report Update Action */}
             {onReportUpdate && (
               <TouchableOpacity
-                style={styles.reportUpdateBtn}
+                style={[styles.reportUpdateBtn, { backgroundColor: colors.accent }]}
                 onPress={() => {
                   onClose();
                   onReportUpdate(place);
                 }}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Report accessibility update"
               >
-                <Ionicons name="add-circle-outline" size={20} color="#FFF" />
+                <Ionicons name="add-circle-outline" size={19} color="#FFF" />
                 <Text style={styles.reportUpdateText}>Report Status Update for this Location</Text>
               </TouchableOpacity>
             )}
@@ -228,17 +300,20 @@ export const PlaceDetailsModal: React.FC<PlaceDetailsModalProps> = ({
 const styles = StyleSheet.create({
   overlayContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'flex-end',
   },
   modalCard: {
-    backgroundColor: '#0F172A',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: '88%',
     paddingBottom: 24,
     borderWidth: 1,
-    borderColor: '#334155',
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: -3 },
+    elevation: 8,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -247,35 +322,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
   },
   closeBtn: {
-    padding: 6,
+    padding: 7,
     borderRadius: 20,
-    backgroundColor: '#1E293B',
   },
   saveBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#1E293B',
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  savedBtnActive: {
-    backgroundColor: 'rgba(255, 90, 54, 0.14)',
-    borderColor: '#FF5A36',
   },
   saveBtnText: {
-    color: '#FFF',
     fontSize: 13,
-    fontWeight: '600',
-  },
-  savedTextActive: {
-    color: '#FF7A5C',
+    fontWeight: '700',
   },
   scrollContent: {
     paddingHorizontal: 20,
@@ -288,7 +351,6 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   placeholderBanner: {
-    backgroundColor: '#1E293B',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -296,48 +358,47 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   categoryText: {
-    color: '#FF5A36',
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1,
   },
   titleText: {
-    color: '#F8FAFC',
-    fontSize: 22,
+    fontSize: 21,
     fontWeight: '800',
     marginTop: 4,
+    lineHeight: 27,
   },
   addressRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
+    gap: 5,
+    marginTop: 5,
   },
   addressText: {
-    color: '#94A3B8',
     fontSize: 13,
+    flex: 1,
   },
   statusBadgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 7,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 12,
+    borderWidth: 1,
     marginTop: 14,
   },
   statusBadgeText: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '800',
     letterSpacing: 0.5,
   },
   netCountText: {
-    color: '#CBD5E1',
     fontSize: 11,
     marginLeft: 'auto',
+    fontWeight: '600',
   },
   descriptionText: {
-    color: '#CBD5E1',
     fontSize: 13,
     lineHeight: 18,
     marginTop: 12,
@@ -345,90 +406,75 @@ const styles = StyleSheet.create({
   sectionContainer: {
     marginTop: 20,
   },
-  sectionTitle: {
-    color: '#94A3B8',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1,
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     marginBottom: 10,
   },
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
   gridContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 8,
   },
   gridCard: {
-    width: '48%',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
+    gap: 10,
+    paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 12,
-    gap: 8,
     borderWidth: 1,
   },
-  gridCardActive: {
-    backgroundColor: 'rgba(16, 185, 129, 0.08)',
-    borderColor: 'rgba(16, 185, 129, 0.3)',
-  },
-  gridCardInactive: {
-    backgroundColor: '#1E293B',
-    borderColor: 'rgba(255,255,255,0.05)',
-  },
   gridCardText: {
-    fontSize: 11,
-    fontWeight: '600',
+    fontSize: 13,
     flex: 1,
-  },
-  gridTextActive: {
-    color: '#F8FAFC',
-  },
-  gridTextInactive: {
-    color: '#64748B',
   },
   checkIcon: {
     marginLeft: 'auto',
   },
   photoRow: {
     flexDirection: 'row',
-    gap: 12,
+    marginTop: 4,
   },
   galleryImage: {
-    width: 140,
-    height: 100,
-    borderRadius: 12,
-    marginRight: 10,
+    width: 100,
+    height: 75,
+    borderRadius: 10,
+    marginRight: 8,
   },
   directionsBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: 8,
-    backgroundColor: 'rgba(255, 90, 54, 0.12)',
-    borderWidth: 1.5,
-    borderColor: '#FF5A36',
     paddingVertical: 13,
+    paddingHorizontal: 16,
     borderRadius: 14,
-    marginTop: 24,
+    borderWidth: 1,
+    marginTop: 20,
   },
   directionsText: {
-    color: '#FF5A36',
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '700',
+    color: '#059669',
   },
   reportUpdateBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#FF5A36',
-    paddingVertical: 14,
+    paddingVertical: 13,
     borderRadius: 14,
-    marginTop: 12,
+    marginTop: 10,
   },
   reportUpdateText: {
     color: '#FFF',
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 13.5,
+    fontWeight: '800',
   },
 });
+
+export default PlaceDetailsModal;

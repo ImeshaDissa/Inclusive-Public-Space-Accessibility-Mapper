@@ -186,7 +186,7 @@ export function AuthCheckbox({
       activeOpacity={0.7}
       accessibilityRole="checkbox"
       accessibilityState={{ checked }}
-      hitSlop={8}
+      hitSlop={12}
     >
       {checked && <Ionicons name="checkmark" size={16} color="#FFFFFF" />}
     </TouchableOpacity>
