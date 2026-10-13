@@ -30,7 +30,7 @@ export const DisputeModal: React.FC<DisputeModalProps> = ({
   onClose,
   onSubmitDispute,
 }) => {
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const [selectedReason, setSelectedReason] = useState<string>(PRESET_REASONS[0].label);
   const [note, setNote] = useState<string>('');
 
@@ -77,8 +77,8 @@ export const DisputeModal: React.FC<DisputeModalProps> = ({
                   style={[
                     styles.chip,
                     {
-                      backgroundColor: isSelected ? (isDark ? colors.accent : '#1B2A4A') : colors.chipBg,
-                      borderColor: isSelected ? (isDark ? colors.accent : '#1B2A4A') : colors.chipBorder,
+                      backgroundColor: isSelected ? colors.accent : colors.chipBg,
+                      borderColor: isSelected ? colors.accent : colors.chipBorder,
                     },
                   ]}
                   onPress={() => setSelectedReason(item.label)}

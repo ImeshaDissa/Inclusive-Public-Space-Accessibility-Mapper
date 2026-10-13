@@ -54,7 +54,7 @@ export default function MapScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { places, selectedPlaceId, setSelectedPlaceId, toggleSavePlace, aiMarkers } = useApp();
-  const { colors } = useAppTheme();
+  const { colors, isDark, toggleTheme } = useAppTheme();
   const { showToast } = useToast();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -202,19 +202,32 @@ export default function MapScreen() {
           </View>
         </View>
 
-        <TouchableOpacity
-          style={[styles.viewToggleBtn, { backgroundColor: colors.accentBg, borderColor: colors.ruleBannerBorder }]}
-          onPress={() => setViewMode((prev) => (prev === 'map' ? 'list' : 'map'))}
-        >
-          <Ionicons
-            name={viewMode === 'map' ? 'list' : 'map-outline'}
-            size={18}
-            color={colors.accent}
-          />
-          <Text style={[styles.viewToggleText, { color: colors.accent }]}>
-            {viewMode === 'map' ? 'List View' : 'Map View'}
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.headerRightActions}>
+          <TouchableOpacity
+            style={[styles.themeToggleBtn, { backgroundColor: colors.chipBg, borderColor: colors.chipBorder }]}
+            onPress={toggleTheme}
+            accessibilityRole="button"
+            accessibilityLabel={`Switch to ${isDark ? 'light' : 'dark'} mode`}
+          >
+            <Ionicons name={isDark ? 'sunny' : 'moon'} size={17} color={colors.accent} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.viewToggleBtn, { backgroundColor: colors.accentBg, borderColor: colors.ruleBannerBorder }]}
+            onPress={() => setViewMode((prev) => (prev === 'map' ? 'list' : 'map'))}
+            accessibilityRole="button"
+            accessibilityLabel={viewMode === 'map' ? 'Switch to list view' : 'Switch to map view'}
+          >
+            <Ionicons
+              name={viewMode === 'map' ? 'list' : 'map-outline'}
+              size={17}
+              color={colors.accent}
+            />
+            <Text style={[styles.viewToggleText, { color: colors.accent }]}>
+              {viewMode === 'map' ? 'List' : 'Map'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={[styles.searchSection, { backgroundColor: colors.headerBg }]}>
@@ -524,6 +537,19 @@ const styles = StyleSheet.create({
   appSubtitle: {
     fontSize: 10,
     fontWeight: '600',
+  },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  themeToggleBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   viewToggleBtn: {
     flexDirection: 'row',

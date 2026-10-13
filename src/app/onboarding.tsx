@@ -208,7 +208,7 @@ const SLIDES: OnboardingSlide[] = [
 export default function OnboardingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { isDark } = useAppTheme();
+  const { isDark, colors } = useAppTheme();
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
@@ -315,8 +315,8 @@ export default function OnboardingScreen() {
           <LinearGradient
             colors={[
               'rgba(255, 255, 255, 0)',
-              isDark ? 'rgba(9, 13, 22, 0.75)' : 'rgba(255, 255, 255, 0.75)',
-              isDark ? '#090D16' : '#FFFFFF',
+              isDark ? 'rgba(11, 15, 25, 0.75)' : 'rgba(248, 250, 252, 0.75)',
+              colors.background,
             ]}
             style={styles.gradientFade}
             pointerEvents="none"
@@ -328,17 +328,17 @@ export default function OnboardingScreen() {
           style={[
             styles.bottomContent,
             {
-              backgroundColor: isDark ? '#090D16' : '#FFFFFF',
+              backgroundColor: colors.card,
               opacity,
               transform: [{ translateY }],
             },
           ]}
         >
           <View style={styles.textContainer}>
-            <Text style={[styles.headline, { color: isDark ? '#F8FAFC' : '#0F172A' }]}>
+            <Text style={[styles.headline, { color: colors.textPrimary }]}>
               {item.title}
             </Text>
-            <Text style={[styles.subtitle, { color: isDark ? '#94A3B8' : '#64748B' }]}>
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
               {item.description}
             </Text>
           </View>
@@ -350,7 +350,7 @@ export default function OnboardingScreen() {
   const isLastSlide = currentIndex === SLIDES.length - 1;
 
   return (
-    <View style={[styles.container, { backgroundColor: isDark ? '#090D16' : '#FFFFFF' }]}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Brand Header */}
       <View style={[styles.header, { paddingTop: Math.max(insets.top + 8, 16) }]}>
         <View style={styles.brandRow}>
@@ -364,7 +364,7 @@ export default function OnboardingScreen() {
               <Ionicons name="compass" size={16} color="#FF5A36" />
             </View>
           </LinearGradient>
-          <Text style={[styles.brandTitle, { color: isDark ? '#F8FAFC' : '#0F172A' }]}>
+          <Text style={[styles.brandTitle, { color: colors.textPrimary }]}>
             Inclusive<Text style={styles.brandTitleAccent}>Mapper</Text>
           </Text>
         </View>

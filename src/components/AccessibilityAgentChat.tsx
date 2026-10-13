@@ -125,7 +125,7 @@ const EXAMPLE_PROMPTS: ExamplePrompt[] = [
     title: 'Accessible Places Near Me',
     query: 'Find wheelchair accessible places near my current location',
     tag: 'GPS Near You',
-    color: '#00A884',
+    color: '#610C27',
   },
   {
     id: 'p2',
@@ -134,7 +134,7 @@ const EXAMPLE_PROMPTS: ExamplePrompt[] = [
     title: 'Places With Wheelchair Ramp',
     query: 'Which places near me have a ramp and step-free entrance?',
     tag: 'Ramp Access',
-    color: '#25D366',
+    color: '#8A2846',
   },
   {
     id: 'p3',
@@ -143,7 +143,7 @@ const EXAMPLE_PROMPTS: ExamplePrompt[] = [
     title: 'Accessible Toilet Nearby',
     query: 'Where is the nearest place with an accessible toilet?',
     tag: 'Restrooms',
-    color: '#0284C7',
+    color: '#703B52',
   },
   {
     id: 'p4',
@@ -152,7 +152,7 @@ const EXAMPLE_PROMPTS: ExamplePrompt[] = [
     title: 'Places With Elevator or Lift',
     query: 'Show me venues or stations with an elevator or lift access',
     tag: 'Elevators',
-    color: '#8B5CF6',
+    color: '#7B2D46',
   },
   {
     id: 'p5',
@@ -161,7 +161,7 @@ const EXAMPLE_PROMPTS: ExamplePrompt[] = [
     title: 'Add a New Accessible Place',
     query: 'How do I add a new accessible place to the map?',
     tag: 'Contribute',
-    color: '#FF5A36',
+    color: '#9E4733',
   },
   {
     id: 'p6',
@@ -170,7 +170,7 @@ const EXAMPLE_PROMPTS: ExamplePrompt[] = [
     title: 'Report Broken Ramp or Issue',
     query: 'How do I report an accessibility barrier or broken elevator?',
     tag: 'Report Issue',
-    color: '#EF4444',
+    color: '#A03038',
   },
 ];
 
@@ -274,12 +274,12 @@ const WhatsAppTypingIndicator: React.FC<{ isDark: boolean }> = ({ isDark }) => {
     };
   }, [dot1, dot2, dot3]);
 
-  const dotColor = isDark ? '#25D366' : '#00A884';
+  const dotColor = isDark ? '#E3C1B4' : '#610C27';
 
   return (
     <View style={styles.typingRow}>
-      <View style={[styles.avatarMini, { backgroundColor: isDark ? '#1F2C34' : '#E2E8F0' }]}>
-        <Ionicons name="sparkles" size={12} color="#00A884" />
+      <View style={[styles.avatarMini, { backgroundColor: isDark ? '#2D1B22' : '#F4EBE8' }]}>
+        <Ionicons name="sparkles" size={12} color={isDark ? '#E3C1B4' : '#610C27'} />
       </View>
       <View style={[styles.typingBubble, isDark ? styles.typingBubbleDark : styles.typingBubbleLight]}>
         <View style={styles.typingDotsWrap}>
@@ -287,7 +287,7 @@ const WhatsAppTypingIndicator: React.FC<{ isDark: boolean }> = ({ isDark }) => {
           <Animated.View style={[styles.typingDot, { backgroundColor: dotColor, transform: [{ translateY: dot2 }] }]} />
           <Animated.View style={[styles.typingDot, { backgroundColor: dotColor, transform: [{ translateY: dot3 }] }]} />
         </View>
-        <Text style={[styles.typingLabel, { color: isDark ? '#8696A0' : '#667781' }]}>
+        <Text style={[styles.typingLabel, { color: isDark ? '#AC9C8D' : '#70625D' }]}>
           typing…
         </Text>
       </View>
@@ -613,20 +613,22 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
     }
   };
 
-  // WhatsApp Color Palette
-  const chatBg = isDark ? '#0B141A' : '#EFEAE2';
-  const headerBg = isDark ? '#1F2C34' : '#008069';
+  // Davis Humphries Design Palette
+  const chatBg = isDark ? '#050505' : '#EFECE9';
+  const headerBg = isDark ? '#1A1215' : '#610C27';
   const headerText = '#FFFFFF';
-  const headerMuted = isDark ? '#8696A0' : '#E1F2EE';
-  const userBubbleBg = isDark ? '#005C4B' : '#D9FDD3';
-  const userText = isDark ? '#E9EDEF' : '#111B21';
-  const botBubbleBg = isDark ? '#202C33' : '#FFFFFF';
-  const botText = isDark ? '#E9EDEF' : '#111B21';
-  const timeMuted = isDark ? '#8696A0' : '#667781';
-  const inputBarBg = isDark ? '#1F2C34' : '#F0F2F5';
-  const inputBg = isDark ? '#2A3942' : '#FFFFFF';
-  const inputBorder = isDark ? '#374248' : '#E2E8F0';
-  const sendBtnBg = '#00A884';
+  const headerMuted = isDark ? '#DDD9CE' : '#E3C1B4';
+  const userBubbleBg = '#610C27';
+  const userText = '#FFFFFF';
+  const botBubbleBg = isDark ? '#1A1215' : '#FFFFFF';
+  const botText = isDark ? '#EFECE9' : '#050505';
+  const timeMuted = isDark ? '#AC9C8D' : '#70625D';
+  // Input bar directly matches chatBg so bottom area has one unified color
+  const inputBarBg = chatBg;
+  const inputBg = isDark ? '#1A1215' : '#FFFFFF';
+  const inputBorder = isDark ? '#332328' : '#DDD9CE';
+  const sendBtnBg = '#610C27';
+  const accentColor = isDark ? '#E3C1B4' : '#610C27';
 
   const renderMessageItem = ({ item }: { item: Message }) => {
     const isUser = item.sender === 'user';
@@ -634,8 +636,8 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
       <AnimatedBubbleWrapper>
         <View style={[styles.messageRow, isUser ? styles.rowUser : styles.rowBot]}>
           {!isUser && (
-            <View style={[styles.avatarMini, { backgroundColor: isDark ? '#1F2C34' : '#E2E8F0' }]}>
-              <Ionicons name="sparkles" size={13} color="#00A884" />
+            <View style={[styles.avatarMini, { backgroundColor: isDark ? '#2D1B22' : '#F4EBE8' }]}>
+              <Ionicons name="sparkles" size={13} color={accentColor} />
             </View>
           )}
 
@@ -653,18 +655,18 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
               <ChatMessageText
                 text={item.text}
                 style={[styles.messageBody, { color: isUser ? userText : botText }]}
-                linkColor={isUser ? (isDark ? '#6EE7B7' : '#007A5E') : '#00A884'}
+                linkColor={isUser ? '#FFFFFF' : accentColor}
               />
 
               <View style={styles.timestampContainer}>
-                <Text style={[styles.timestampText, { color: timeMuted }]}>
+                <Text style={[styles.timestampText, { color: isUser ? '#E3C1B4' : timeMuted }]}>
                   {formatMessageTime(item.timestamp)}
                 </Text>
                 {isUser && (
                   <Ionicons
                     name="checkmark-done"
                     size={15}
-                    color="#53BDEB"
+                    color="#E3C1B4"
                     style={styles.checkIcon}
                   />
                 )}
@@ -679,7 +681,7 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
                     key={place.key}
                     style={[
                       styles.placeCard,
-                      { backgroundColor: isDark ? '#1F2C34' : '#FFFFFF', borderColor: isDark ? '#2A3942' : '#E2E8F0' },
+                      { backgroundColor: isDark ? '#1A1215' : '#FFFFFF', borderColor: isDark ? '#332328' : '#DDD9CE' },
                     ]}
                     onPress={() => handlePlaceDirections(place)}
                     activeOpacity={0.82}
@@ -687,19 +689,19 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
                     accessibilityLabel={`Get directions to ${place.name}`}
                   >
                     <View style={styles.placeHeader}>
-                      <View style={styles.placeIconCircle}>
-                        <Ionicons name="location" size={14} color="#00A884" />
+                      <View style={[styles.placeIconCircle, { backgroundColor: isDark ? 'rgba(227, 193, 180, 0.15)' : 'rgba(97, 12, 39, 0.08)' }]}>
+                        <Ionicons name="location" size={14} color={accentColor} />
                       </View>
                       <Text
                         numberOfLines={1}
-                        style={[styles.placeName, { color: isDark ? '#E9EDEF' : '#111B21' }]}
+                        style={[styles.placeName, { color: isDark ? '#EFECE9' : '#050505' }]}
                       >
                         {place.name}
                       </Text>
                       {typeof place.distance === 'number' && (
-                        <View style={styles.distanceBadge}>
-                          <Ionicons name="navigate" size={10} color="#00A884" />
-                          <Text style={styles.distanceText}>
+                        <View style={[styles.distanceBadge, { backgroundColor: isDark ? 'rgba(227, 193, 180, 0.15)' : 'rgba(97, 12, 39, 0.08)' }]}>
+                          <Ionicons name="navigate" size={10} color={accentColor} />
+                          <Text style={[styles.distanceText, { color: accentColor }]}>
                             {formatDistanceLabel(place.distance)}
                           </Text>
                         </View>
@@ -720,7 +722,7 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
                             key={feature}
                             style={[
                               styles.featureChip,
-                              { backgroundColor: isDark ? '#111B21' : '#F0FDF4', borderColor: isDark ? '#2A3942' : '#DCFCE7' },
+                              { backgroundColor: isDark ? '#22151A' : '#F7F0ED', borderColor: isDark ? '#38252C' : '#E3C1B4' },
                             ]}
                           >
                             <MaterialCommunityIcons
@@ -738,9 +740,9 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
                                           : 'check-circle'
                               }
                               size={11}
-                              color="#00A884"
+                              color={accentColor}
                             />
-                            <Text style={[styles.featureText, { color: isDark ? '#CBD5E1' : '#166534' }]}>
+                            <Text style={[styles.featureText, { color: accentColor }]}>
                               {feature}
                             </Text>
                           </View>
@@ -752,10 +754,10 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
                       )}
                     </View>
 
-                    <View style={styles.directionsBar}>
-                      <Ionicons name="navigate-circle-outline" size={14} color="#00A884" />
-                      <Text style={styles.directionsText}>Get Turn-by-Turn Directions</Text>
-                      <Ionicons name="chevron-forward" size={12} color="#00A884" style={{ marginLeft: 'auto' }} />
+                    <View style={[styles.directionsBar, { borderTopColor: isDark ? '#332328' : '#DDD9CE' }]}>
+                      <Ionicons name="navigate-circle-outline" size={14} color={accentColor} />
+                      <Text style={[styles.directionsText, { color: accentColor }]}>Get Turn-by-Turn Directions</Text>
+                      <Ionicons name="chevron-forward" size={12} color={accentColor} style={{ marginLeft: 'auto' }} />
                     </View>
                   </TouchableOpacity>
                 ))}
@@ -770,11 +772,11 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
                     key={line}
                     style={[
                       styles.receiptPill,
-                      { backgroundColor: isDark ? '#1F2C34' : '#F0FDF4', borderColor: '#10B981' },
+                      { backgroundColor: isDark ? '#22151A' : '#F7F0ED', borderColor: isDark ? '#4A202A' : '#E3C1B4' },
                     ]}
                   >
-                    <Ionicons name="checkmark-circle" size={15} color="#10B981" />
-                    <Text style={[styles.receiptText, { color: isDark ? '#E9EDEF' : '#065F46' }]}>
+                    <Ionicons name="checkmark-circle" size={15} color={accentColor} />
+                    <Text style={[styles.receiptText, { color: isDark ? '#EFECE9' : '#610C27' }]}>
                       {line}
                     </Text>
                   </View>
@@ -803,7 +805,7 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
             <Text style={[styles.headerTitle, { color: headerText }]}>
               Accessibility Assistant
             </Text>
-            <Ionicons name="checkmark-circle" size={15} color="#25D366" style={{ marginLeft: 4 }} />
+            <Ionicons name="checkmark-circle" size={15} color="#E3C1B4" style={{ marginLeft: 4 }} />
           </View>
           <Text style={[styles.headerStatus, { color: headerMuted }]}>
             {loading ? 'typing…' : 'online • real-time navigator'}
@@ -872,18 +874,18 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
           <View
             style={[
               styles.drawerSheet,
-              { backgroundColor: isDark ? '#1F2C34' : '#FFFFFF', borderTopColor: isDark ? '#2A3942' : '#E2E8F0' },
+              { backgroundColor: isDark ? '#1A1215' : '#FFFFFF', borderTopColor: isDark ? '#332328' : '#DDD9CE' },
             ]}
           >
             <View style={styles.drawerHeader}>
               <View style={styles.drawerTitleRow}>
-                <Ionicons name="sparkles" size={16} color="#00A884" />
-                <Text style={[styles.drawerTitle, { color: isDark ? '#E9EDEF' : '#111B21' }]}>
+                <Ionicons name="sparkles" size={16} color={accentColor} />
+                <Text style={[styles.drawerTitle, { color: isDark ? '#EFECE9' : '#050505' }]}>
                   Example Questions
                 </Text>
               </View>
               <TouchableOpacity onPress={() => setShowPromptLibrary(false)}>
-                <Ionicons name="close" size={20} color={isDark ? '#8696A0' : '#667781'} />
+                <Ionicons name="close" size={20} color={isDark ? '#AC9C8D' : '#70625D'} />
               </TouchableOpacity>
             </View>
             <ScrollView
@@ -896,7 +898,7 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
                   key={p.id}
                   style={[
                     styles.drawerCard,
-                    { backgroundColor: isDark ? '#111B21' : '#F8FAFC', borderColor: isDark ? '#2A3942' : '#E2E8F0' },
+                    { backgroundColor: isDark ? '#050505' : '#FBF9F7', borderColor: isDark ? '#332328' : '#DDD9CE' },
                   ]}
                   onPress={() => sendMessage(p.query)}
                   activeOpacity={0.8}
@@ -904,7 +906,7 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
                   <View style={[styles.drawerCardIcon, { backgroundColor: p.color + '22' }]}>
                     <Ionicons name={p.icon} size={16} color={p.color} />
                   </View>
-                  <Text style={[styles.drawerCardTitle, { color: isDark ? '#E9EDEF' : '#111B21' }]} numberOfLines={1}>
+                  <Text style={[styles.drawerCardTitle, { color: isDark ? '#EFECE9' : '#050505' }]} numberOfLines={1}>
                     {p.title}
                   </Text>
                   <Text style={[styles.drawerCardQuery, { color: timeMuted }]} numberOfLines={2}>
@@ -931,14 +933,14 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
                   style={[
                     styles.chipBtn,
                     {
-                      backgroundColor: isDark ? '#1F2C34' : '#FFFFFF',
-                      borderColor: isDark ? '#2A3942' : '#D1D5DB',
+                      backgroundColor: isDark ? '#1A1215' : '#FFFFFF',
+                      borderColor: isDark ? '#332328' : '#DDD9CE',
                     },
                   ]}
                   onPress={() => sendMessage(chip.query)}
                   activeOpacity={0.75}
                 >
-                  <Text style={[styles.chipText, { color: isDark ? '#E9EDEF' : '#111B21' }]}>
+                  <Text style={[styles.chipText, { color: isDark ? '#EFECE9' : '#610C27' }]}>
                     {chip.label}
                   </Text>
                 </TouchableOpacity>
@@ -947,7 +949,7 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
           </View>
         )}
 
-        {/* WhatsApp-Style Floating / Docked Input Bar */}
+        {/* WhatsApp-Style Docked Input Bar - Seamlessly matches chatBg */}
         <View style={[styles.inputBarWrap, { backgroundColor: inputBarBg }]}>
           <TouchableOpacity
             style={styles.inputLeftBtn}
@@ -958,7 +960,7 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
             <Ionicons
               name={showPromptLibrary ? 'sparkles' : 'bulb-outline'}
               size={22}
-              color={showPromptLibrary ? '#00A884' : (isDark ? '#8696A0' : '#54656F')}
+              color={showPromptLibrary ? accentColor : (isDark ? '#AC9C8D' : '#70625D')}
             />
           </TouchableOpacity>
 
@@ -971,12 +973,12 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
             <TextInput
               style={[
                 styles.textInput,
-                { color: isDark ? '#E9EDEF' : '#111B21' },
+                { color: isDark ? '#EFECE9' : '#050505' },
               ]}
               value={inputText}
               onChangeText={setInputText}
               placeholder="Ask accessibility assistant…"
-              placeholderTextColor={isDark ? '#8696A0' : '#8696A0'}
+              placeholderTextColor={isDark ? '#AC9C8D' : '#70625D'}
               editable={!loading}
               multiline
               maxLength={400}
@@ -990,7 +992,7 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
                 style={styles.clearTextBtn}
                 accessibilityLabel="Clear input"
               >
-                <Ionicons name="close-circle" size={17} color={isDark ? '#8696A0' : '#8696A0'} />
+                <Ionicons name="close-circle" size={17} color={isDark ? '#AC9C8D' : '#70625D'} />
               </TouchableOpacity>
             )}
           </View>
@@ -1027,19 +1029,20 @@ const WelcomeAndPromptLibrary: React.FC<{
   isDark: boolean;
   onSelectPrompt: (query: string) => void;
 }> = ({ isDark, onSelectPrompt }) => {
-  const cardBg = isDark ? '#1F2C34' : '#FFFFFF';
-  const cardBorder = isDark ? '#2A3942' : '#E2E8F0';
-  const titleColor = isDark ? '#E9EDEF' : '#111B21';
-  const descColor = isDark ? '#8696A0' : '#667781';
+  const cardBg = isDark ? '#1A1215' : '#FFFFFF';
+  const cardBorder = isDark ? '#332328' : '#DDD9CE';
+  const titleColor = isDark ? '#EFECE9' : '#050505';
+  const descColor = isDark ? '#AC9C8D' : '#70625D';
+  const accent = isDark ? '#E3C1B4' : '#610C27';
 
   return (
     <View style={styles.welcomeContainer}>
       <View style={[styles.heroCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
         <View style={styles.heroBadgeRow}>
-          <View style={styles.heroSparkleCircle}>
-            <Ionicons name="sparkles" size={16} color="#00A884" />
+          <View style={[styles.heroSparkleCircle, { backgroundColor: isDark ? 'rgba(227, 193, 180, 0.15)' : 'rgba(97, 12, 39, 0.08)' }]}>
+            <Ionicons name="sparkles" size={16} color={accent} />
           </View>
-          <Text style={styles.heroBadgeText}>AI ACCESSIBILITY NAVIGATOR</Text>
+          <Text style={[styles.heroBadgeText, { color: accent }]}>AI ACCESSIBILITY NAVIGATOR</Text>
         </View>
         <Text style={[styles.heroHeading, { color: titleColor }]}>
           Hi there! 👋 How can I help you today?
@@ -1050,8 +1053,8 @@ const WelcomeAndPromptLibrary: React.FC<{
       </View>
 
       <View style={styles.promptsSectionHeader}>
-        <Ionicons name="bulb" size={16} color="#00A884" />
-        <Text style={[styles.promptsSectionTitle, { color: isDark ? '#CBD5E1' : '#334155' }]}>
+        <Ionicons name="bulb" size={16} color={accent} />
+        <Text style={[styles.promptsSectionTitle, { color: accent }]}>
           SUGGESTED EXAMPLE PROMPTS
         </Text>
       </View>
@@ -1084,8 +1087,8 @@ const WelcomeAndPromptLibrary: React.FC<{
             </Text>
 
             <View style={styles.promptCardAction}>
-              <Text style={styles.promptActionText}>Tap to ask</Text>
-              <Ionicons name="arrow-forward" size={13} color="#00A884" />
+              <Text style={[styles.promptActionText, { color: accent }]}>Tap to ask</Text>
+              <Ionicons name="arrow-forward" size={13} color={accent} />
             </View>
           </TouchableOpacity>
         ))}
@@ -1135,16 +1138,16 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#25D366',
+    backgroundColor: '#E3C1B4',
     borderWidth: 1.5,
-    borderColor: '#FFFFFF',
+    borderColor: '#610C27',
   },
   pulseRing: {
     position: 'absolute',
     width: 14,
     height: 14,
     borderRadius: 7,
-    backgroundColor: 'rgba(37, 211, 102, 0.45)',
+    backgroundColor: 'rgba(227, 193, 180, 0.45)',
   },
   headerInfo: {
     flex: 1,
@@ -1217,7 +1220,7 @@ const styles = StyleSheet.create({
   },
   userBubbleDarkBorder: {
     borderWidth: 1,
-    borderColor: '#026E59',
+    borderColor: '#4A091E',
   },
   botBubble: {
     alignSelf: 'flex-start',
@@ -1230,7 +1233,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 2,
     shadowOffset: { width: 0, height: 1 },
-    borderColor: '#E2E8F0',
+    borderColor: '#DDD9CE',
   },
   messageBody: {
     fontSize: 14.5,
@@ -1268,12 +1271,12 @@ const styles = StyleSheet.create({
   typingBubbleLight: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#DDD9CE',
   },
   typingBubbleDark: {
-    backgroundColor: '#202C33',
+    backgroundColor: '#1A1215',
     borderWidth: 1,
-    borderColor: '#2A3942',
+    borderColor: '#332328',
   },
   typingDotsWrap: {
     flexDirection: 'row',
@@ -1312,7 +1315,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: 'rgba(0, 168, 132, 0.12)',
+    backgroundColor: 'rgba(97, 12, 39, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1328,12 +1331,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 8,
-    backgroundColor: 'rgba(0, 168, 132, 0.14)',
+    backgroundColor: 'rgba(97, 12, 39, 0.08)',
   },
   distanceText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#00A884',
+    color: '#610C27',
   },
   placeMeta: {
     fontSize: 12,
@@ -1371,7 +1374,7 @@ const styles = StyleSheet.create({
   directionsText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#00A884',
+    color: '#610C27',
   },
   receiptsContainer: {
     marginTop: 6,
@@ -1415,7 +1418,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: 'rgba(0, 168, 132, 0.15)',
+    backgroundColor: 'rgba(97, 12, 39, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1423,7 +1426,7 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     fontWeight: '800',
     letterSpacing: 0.8,
-    color: '#00A884',
+    color: '#610C27',
   },
   heroHeading: {
     fontSize: 17,
@@ -1499,7 +1502,7 @@ const styles = StyleSheet.create({
   promptActionText: {
     fontSize: 11.5,
     fontWeight: '700',
-    color: '#00A884',
+    color: '#610C27',
   },
   drawerSheet: {
     borderTopWidth: 1,

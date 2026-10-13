@@ -18,7 +18,7 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const systemScheme = useColorScheme();
-  const [theme, setTheme] = useState<AppColorTheme>('dark');
+  const [theme, setTheme] = useState<AppColorTheme>('light');
 
   useEffect(() => {
     let isActive = true;
@@ -27,7 +27,7 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       if (stored === 'light' || stored === 'dark') {
         setTheme(stored);
       } else {
-        setTheme(systemScheme === 'light' ? 'light' : 'dark');
+        setTheme(systemScheme === 'dark' ? 'dark' : 'light');
       }
     }).catch(() => undefined);
     return () => { isActive = false; };

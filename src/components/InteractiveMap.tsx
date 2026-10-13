@@ -18,7 +18,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   selectedPlaceId,
   onSelectPlace,
 }) => {
-  const { colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const webviewRef = useRef<WebView>(null);
   const iframeRef = useRef<any>(null);
 
@@ -48,9 +48,9 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       z-index: 1000 !important;
       box-shadow: 0 6px 12px rgba(0,0,0,0.5);
     }
-    .custom-marker.verified { background-color: #10B981; }
-    .custom-marker.disputed { background-color: #EF4444; }
-    .custom-marker.pending { background-color: #F59E0B; }
+    .custom-marker.verified { background-color: ${colors.statusDotVerified}; }
+    .custom-marker.disputed { background-color: ${colors.statusDotDisputed}; }
+    .custom-marker.pending { background-color: ${colors.statusDotPending}; }
   </style>
 </head>
 <body>
@@ -206,11 +206,11 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       <View style={styles.topControlOverlay}>
         <View style={[styles.legendContainer, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
           <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#10B981' }]} />
+            <View style={[styles.legendDot, { backgroundColor: colors.statusDotVerified }]} />
             <Text style={[styles.legendText, { color: colors.textPrimary }]}>Verified</Text>
           </View>
           <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#F59E0B' }]} />
+            <View style={[styles.legendDot, { backgroundColor: colors.statusDotPending }]} />
             <Text style={[styles.legendText, { color: colors.textPrimary }]}>Pending</Text>
           </View>
         </View>
@@ -219,28 +219,46 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       {/* Map Zoom Controls Floating Buttons */}
       <View style={styles.floatingControls}>
         <TouchableOpacity
-          style={styles.zoomButton}
+          style={[
+            styles.zoomButton,
+            {
+              backgroundColor: isDark ? 'rgba(15, 23, 42, 0.92)' : '#FFFFFF',
+              borderColor: colors.cardBorder,
+            },
+          ]}
           onPress={() => sendMapCommand('zoomIn')}
           accessibilityRole="button"
           accessibilityLabel="Zoom in on map"
         >
-          <Ionicons name="add" size={20} color="#FFF" />
+          <Ionicons name="add" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
         <TouchableOpacity
-          style={styles.zoomButton}
+          style={[
+            styles.zoomButton,
+            {
+              backgroundColor: isDark ? 'rgba(15, 23, 42, 0.92)' : '#FFFFFF',
+              borderColor: colors.cardBorder,
+            },
+          ]}
           onPress={() => sendMapCommand('zoomOut')}
           accessibilityRole="button"
           accessibilityLabel="Zoom out of map"
         >
-          <Ionicons name="remove" size={20} color="#FFF" />
+          <Ionicons name="remove" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
         <TouchableOpacity
-          style={styles.zoomButton}
+          style={[
+            styles.zoomButton,
+            {
+              backgroundColor: isDark ? 'rgba(15, 23, 42, 0.92)' : '#FFFFFF',
+              borderColor: colors.cardBorder,
+            },
+          ]}
           onPress={() => sendMapCommand('reset')}
           accessibilityRole="button"
           accessibilityLabel="Reset map view"
         >
-          <Ionicons name="locate" size={18} color="#FF5A36" />
+          <Ionicons name="locate" size={18} color={colors.accent} />
         </TouchableOpacity>
       </View>
     </View>

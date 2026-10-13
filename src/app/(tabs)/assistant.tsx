@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Redirect, useRouter } from 'expo-router';
 import { useApp } from '@/context/AppContext';
@@ -139,14 +139,21 @@ export default function AssistantScreen() {
       (Array.isArray(placesData) ? placesData : []).map(normalizeMarker).filter((m) => m.lat !== 0 || m.lng !== 0)
     );
 
+  const statusBarBg = isDark ? '#1A1215' : '#610C27';
+
   return (
     <SafeAreaView
       style={[
         styles.container,
-        { backgroundColor: isDark ? '#1F2C34' : '#008069' },
+        { backgroundColor: statusBarBg },
       ]}
       edges={['top', 'left', 'right']}
     >
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor={statusBarBg}
+        animated
+      />
       <AccessibilityAgentChat
         onPlaceAdded={handlePlaceAdded}
         onPlacesFound={handlePlacesFound}

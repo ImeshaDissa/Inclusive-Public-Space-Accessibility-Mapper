@@ -56,6 +56,7 @@ const STORAGE_KEYS = {
   places: '@inclusive-mapper/places',
   reports: '@inclusive-mapper/reports',
   notifications: '@inclusive-mapper/notifications',
+  guestSaved: '@inclusive-mapper/guest-saved',
 };
 
 const DEFAULT_AVATAR = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80';
@@ -177,6 +178,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     sendWelcomeEmailOnce(uid, email).catch(() => undefined);
   };
 
+  // Guests have no account, so their bookmark toggles live on this device.
+  // Only adds saves (never clears) so a signed-in user's own list is untouched.
+  const applyGuestSaved = async (list: Place[]): Promise<Place[]> => {
+    try {
+      const raw = await AsyncStorage.getItem(STORAGE_KEYS.guestSaved);
+      if (!raw) return list;
+      const ids = new Set<string>(JSON.parse(raw));
+      if (ids.size === 0) return list;
+      return list.map((p) => (ids.has(p.id) ? { ...p, saved: true } : p));
+    } catch {
+      return list;
+    }
+  };
+
   // Initialize Data & Load Supabase or Storage state
   useEffect(() => {
     let isActive = true;
@@ -210,7 +225,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           ]);
 
           if (isActive) {
-            if (fetchedPlaces.length > 0) setPlaces(fetchedPlaces);
+            const placeList = data.session?.user
+              ? fetchedPlaces
+              : await applyGuestSaved(fetchedPlaces);
+            if (placeList.length > 0) setPlaces(placeList);
             if (fetchedReports.length > 0) setReports(fetchedReports);
           }
         } else {
@@ -361,8 +379,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [notifications, authReady]);
 
   const toggleSavePlace = (placeId: string) => {
-    setPlaces((prevPlaces) =>
-      prevPlaces.map((p) => {
+    setPlaces((prevPlaces) => {
+      const next = prevPlaces.map((p) => {
         if (p.id === placeId) {
           const newSaved = !p.saved;
           if (isSupabaseConfigured && userId) {
@@ -371,8 +389,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           return { ...p, saved: newSaved };
         }
         return p;
-      })
-    );
+      });
+      if (isSupabaseConfigured && !userId) {
+        const ids = next.filter((p) => p.saved).map((p) => p.id);
+        AsyncStorage.setItem(STORAGE_KEYS.guestSaved, JSON.stringify(ids)).catch(() => undefined);
+      }
+      return next;
+    });
   };
 
   const addNotificationIfSaved = (
@@ -647,7 +670,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         userId ? fetchNotificationsFromSupabase(userId) : Promise.resolve([] as AppNotification[]),
       ]);
       // Same rule as the initial load: never blank out state with an empty read.
-      if (fetchedPlaces.length > 0) setPlaces(fetchedPlaces);
+      const placeList = userId ? fetchedPlaces : await applyGuestSaved(fetchedPlaces);
+      if (placeList.length > 0) setPlaces(placeList);
       if (fetchedReports.length > 0) setReports(fetchedReports);
       if (userId) setNotifications(fetchedNotifs);
     } catch (err) {
