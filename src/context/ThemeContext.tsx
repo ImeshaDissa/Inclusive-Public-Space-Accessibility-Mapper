@@ -18,7 +18,11 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const systemScheme = useColorScheme();
-  const [theme, setTheme] = useState<AppColorTheme>('light');
+  // Seed from the device scheme so a dark phone never flashes light on launch;
+  // the persisted choice (if any) is applied right after, in the effect below.
+  const [theme, setTheme] = useState<AppColorTheme>(() =>
+    systemScheme === 'dark' ? 'dark' : 'light'
+  );
 
   useEffect(() => {
     let isActive = true;
