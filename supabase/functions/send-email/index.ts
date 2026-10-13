@@ -92,19 +92,36 @@ Deno.serve(async (req: Request) => {
     }
 
     const authHeader = req.headers.get("Authorization") ?? "";
+    const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const isServiceRole = Boolean(serviceRoleKey && token === serviceRoleKey);
 
-    // Client identity: forward the caller's JWT so we know whose emails to send.
-    const supabaseAnon = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } },
-    );
+    let user: { id: string; email?: string } | null = null;
+    let targetUserId: string | null = null;
 
-    const { data: authData } = await supabaseAnon.auth.getUser();
-    const user = authData?.user;
+    if (isServiceRole) {
+      let bodyJson: Record<string, unknown> = {};
+      try {
+        bodyJson = await req.json();
+      } catch {
+        // empty body ok
+      }
+      targetUserId = typeof bodyJson?.user_id === "string" ? bodyJson.user_id : null;
+    } else {
+      // Client identity: forward the caller's JWT so we know whose emails to send.
+      const supabaseAnon = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_ANON_KEY")!,
+        { global: { headers: { Authorization: authHeader } } },
+      );
 
-    if (!user) {
-      return json({ ok: false, error: "Unauthorized: no valid session. Sign in and try again." }, 401);
+      const { data: authData } = await supabaseAnon.auth.getUser();
+      user = authData?.user ?? null;
+
+      if (!user) {
+        return json({ ok: false, error: "Unauthorized: no valid session. Sign in and try again." }, 401);
+      }
+      targetUserId = user.id;
     }
 
     const supabase = createClient(
@@ -112,13 +129,18 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // Fetch this user's pending email requests.
-    const { data: requests, error } = await supabase
+    // Fetch pending email requests.
+    let reqQuery = supabase
       .from("email_requests")
       .select("*")
-      .eq("user_id", user.id)
       .eq("status", "pending")
       .order("created_at", { ascending: true });
+
+    if (targetUserId) {
+      reqQuery = reqQuery.eq("user_id", targetUserId);
+    }
+
+    const { data: requests, error } = await reqQuery;
 
     if (error) {
       return json({ ok: false, error: `DB error: ${error.message}` }, 500);
@@ -129,26 +151,39 @@ Deno.serve(async (req: Request) => {
       return json({ ok: true, sent: 0, reason: "No pending email requests" });
     }
 
-    // Profile data used by templates (points, level, saved places count).
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("name, email, points, audits_count, level")
-      .eq("id", user.id)
-      .single();
-
-    // Anti-abuse: only allow delivering to the authenticated account's own
-    // address (never an arbitrary to_email from the client).
-    const ownAddresses = new Set(
-      [user.email, profile?.email].filter(Boolean).map((e) => String(e).toLowerCase()),
-    );
+    // Default profile data used by templates (points, level, saved places count).
+    const { data: defaultProfile } = targetUserId
+      ? await supabase
+          .from("profiles")
+          .select("name, email, points, audits_count, level")
+          .eq("id", targetUserId)
+          .single()
+      : { data: null };
 
     let sent = 0;
     const errors: string[] = [];
 
     for (const row of rows) {
+      // If row has a distinct user_id, load their profile if needed
+      let profile = defaultProfile;
+      if (row.user_id && row.user_id !== targetUserId) {
+        const { data: p } = await supabase
+          .from("profiles")
+          .select("name, email, points, audits_count, level")
+          .eq("id", row.user_id)
+          .single();
+        profile = p;
+      }
+
+      // Anti-abuse: allow delivering to the authenticated account's own
+      // address or profile email.
+      const ownAddresses = new Set(
+        [user?.email, profile?.email].filter(Boolean).map((e) => String(e).toLowerCase()),
+      );
+
       const requested = parseEmail(row.to_email);
-      const fallback = parseEmail(user.email) ?? parseEmail(profile?.email);
-      const to = requested && ownAddresses.has(requested) ? requested : fallback;
+      const fallback = parseEmail(user?.email) ?? parseEmail(profile?.email);
+      const to = requested && (ownAddresses.size === 0 || ownAddresses.has(requested)) ? requested : fallback;
       if (!to) {
         const msg = `No valid recipient for request ${row.id} (to_email=${row.to_email ?? "null"})`;
         errors.push(msg);
@@ -156,10 +191,31 @@ Deno.serve(async (req: Request) => {
         continue;
       }
 
+      // For emergency alerts, CC any trusted contacts with valid emails
+      const ccList: Array<{ email: string }> = [];
+      if (row.kind === "emergency_alert" && Array.isArray(row.payload?.trusted_contacts)) {
+        for (const contact of row.payload.trusted_contacts) {
+          const parsed = parseEmail(String(contact));
+          if (parsed && parsed !== to && !ccList.some((c) => c.email === parsed)) {
+            ccList.push({ email: parsed });
+          }
+        }
+      }
+
       const rendered = renderEmail(row, profile ?? {});
 
       let res: Response;
       try {
+        const brevoPayload: Record<string, unknown> = {
+          sender: { name: senderName, email: fromEmail },
+          to: [{ email: to }],
+          subject: rendered.subject,
+          htmlContent: rendered.html,
+        };
+        if (ccList.length > 0) {
+          brevoPayload.cc = ccList;
+        }
+
         res = await fetch("https://api.brevo.com/v3/smtp/email", {
           method: "POST",
           headers: {
@@ -167,12 +223,7 @@ Deno.serve(async (req: Request) => {
             "Content-Type": "application/json",
             "Accept": "application/json",
           },
-          body: JSON.stringify({
-            sender: { name: senderName, email: fromEmail },
-            to: [{ email: to }],
-            subject: rendered.subject,
-            htmlContent: rendered.html,
-          }),
+          body: JSON.stringify(brevoPayload),
         });
       } catch (fetchErr) {
         const msg = `Brevo network error: ${String(fetchErr)}`;
@@ -233,15 +284,53 @@ function brevoErrorHint(status: number, body: string): string {
 // ---------------------------------------------------------------------
 // Templates
 // ---------------------------------------------------------------------
-function emergencyTemplate(name: string, brand: string, message: string, triggeredAt: string): RenderedEmail {
+function emergencyTemplate(
+  name: string,
+  brand: string,
+  message: string,
+  triggeredAt: string,
+  email = "",
+  contacts: string[] = [],
+): RenderedEmail {
+  const contactsHtml = contacts.length
+    ? `<ul style="margin:8px 0 0;padding-left:18px">${contacts
+        .map((c) => `<li style="font-size:14px;color:#334155;line-height:1.8">${esc(c)}</li>`)
+        .join("")}</ul>`
+    : `<p style="margin:8px 0 0;font-size:13px;color:#94A3B8">None added yet — add trusted emails in Edit Profile so someone can be reached on your behalf.</p>`;
+
   return {
-    subject: "🚨 InclusiveMapper Emergency Alert",
+    subject: `🚨 Get help: SOS triggered by ${name}`,
     html: wrap(
       brand,
-      `<h2>Hi ${esc(name)}, this is an emergency alert</h2>
-       <p><strong>${esc(message)}</strong></p>
-       <p>Open the InclusiveMapper app and review your saved places right away.</p>
-       <p style="color:#64748B;font-size:12px">Triggered at ${esc(triggeredAt)}</p>`,
+      `<div style="display:inline-block;background:#FEE2E2;color:#DC2626;font-size:11px;font-weight:800;letter-spacing:1px;padding:6px 10px;border-radius:999px;text-transform:uppercase">SOS · Get Help</div>
+       <h2 style="margin:14px 0 8px;font-size:22px;line-height:1.3;color:#0F172A">Hi ${esc(name)}, this is your get-help message</h2>
+       <p style="margin:0 0 4px;color:#0F172A;font-size:14px;font-weight:700;line-height:1.6">${esc(message)}</p>
+
+       <div style="margin:16px 0;border:1px solid #E2E8F0;border-radius:14px;overflow:hidden">
+         <div style="background:#FEF2F2;padding:14px 18px;border-bottom:1px solid #E2E8F0">
+           <div style="font-size:13px;color:#475569">Triggered by <strong style="color:#0F172A">${esc(name)}</strong></div>
+           <div style="font-size:13px;color:#475569;margin-top:2px">Account email: <strong style="color:#0F172A">${esc(email || "not set")}</strong></div>
+           <div style="font-size:12px;color:#94A3B8;margin-top:4px">${esc(triggeredAt)}</div>
+         </div>
+         <div style="padding:16px 18px">
+           <div style="font-size:11px;font-weight:800;letter-spacing:1px;color:#94A3B8;text-transform:uppercase;margin-bottom:8px">What to do now</div>
+           <p style="margin:0;font-size:14px;color:#334155;line-height:1.8">
+             1. If you are in immediate danger, call your local emergency number.<br/>
+             2. Open InclusiveMapper → Profile → Emergency SOS for safety steps.<br/>
+             3. Tell someone you trust where you are.
+           </p>
+         </div>
+       </div>
+
+       <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:14px 16px">
+         <div style="font-size:11px;font-weight:800;letter-spacing:1px;color:#94A3B8;text-transform:uppercase;margin-bottom:6px">Your trusted contacts</div>
+         ${contactsHtml}
+       </div>
+
+       <p style="color:#64748B;font-size:12px;margin:16px 0 0">
+         Sent to ${esc(email || "your account email")} · ${esc(triggeredAt)}
+       </p>`,
+      "This SOS was triggered from your InclusiveMapper profile. If it was accidental, ignore this message — no further alerts are sent.",
     ),
   };
 }
@@ -372,6 +461,58 @@ function placeUpdateTemplate(
   };
 }
 
+/** New-place confirmation — fires when the user adds a place to the map. */
+function placeAddedTemplate(
+  name: string,
+  brand: string,
+  payload: Record<string, unknown>,
+): RenderedEmail {
+  const placeName = String(payload.place_name ?? "Your new place");
+  const address = String(payload.address ?? "Location you pinned");
+  const category = String(payload.category ?? "Community place");
+
+  return {
+    subject: `${placeName} is now on InclusiveMapper`,
+    html: wrap(
+      brand,
+      `<div style="display:inline-block;background:#FFF1EC;color:#FF5A36;font-size:11px;font-weight:800;letter-spacing:1px;padding:6px 10px;border-radius:999px;text-transform:uppercase">Place added</div>
+       <h2 style="margin:14px 0 8px;font-size:22px;line-height:1.3;color:#0F172A">Hi ${esc(name)}, your place is on the map 🎉</h2>
+       <p style="margin:0;color:#475569;font-size:14px;line-height:1.65">
+         Thanks for adding accessibility information the community can rely on.
+         Here is what you submitted:
+       </p>
+
+       <div style="margin:16px 0;border:1px solid #E2E8F0;border-radius:14px;overflow:hidden">
+         <div style="background:#F8FAFC;padding:16px 18px">
+           <div style="font-size:16px;font-weight:800;color:#0F172A">${esc(placeName)}</div>
+           <div style="font-size:13px;color:#64748B;margin-top:3px">${esc(address)}</div>
+           <div style="margin-top:10px">
+             <span style="display:inline-block;font-size:11px;font-weight:800;letter-spacing:0.5px;padding:6px 12px;border-radius:999px;background:#FEF3C7;color:#D97706;text-transform:uppercase">${esc(category)}</span>
+             <span style="display:inline-block;font-size:11px;font-weight:800;letter-spacing:0.5px;padding:6px 12px;border-radius:999px;background:#F1F5F9;color:#64748B;text-transform:uppercase;margin-left:6px">Pending review</span>
+           </div>
+         </div>
+       </div>
+
+       <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:14px 16px">
+         <div style="font-size:11px;font-weight:800;letter-spacing:1px;color:#94A3B8;text-transform:uppercase;margin-bottom:8px">What happens next</div>
+         <p style="margin:0;font-size:13px;color:#475569;line-height:1.7">
+           The community verifies the entrance, ramp and accessible toilet details.
+           You will get an Inbox notification and an email when its status changes
+           to verified — or if someone disputes a detail.
+         </p>
+       </div>
+
+       <p style="text-align:center;margin:20px 0 4px">
+         <a href="https://expo.dev" style="display:inline-block;background:${brand};color:#fff;text-decoration:none;font-weight:800;font-size:15px;padding:14px 28px;border-radius:999px">View place in app</a>
+       </p>
+       <p style="text-align:center;font-size:12px;color:#94A3B8;margin:8px 0 0">
+         Every confirmed place makes trip planning easier for someone who needs it.
+       </p>`,
+      "You are receiving this because you added a place on InclusiveMapper. Supporting SDG 10 and SDG 11 through shared accessibility knowledge.",
+    ),
+  };
+}
+
 function renderEmail(
   row: EmailRequestRow,
   profile: { name?: string; points?: number; audits_count?: number; level?: string },
@@ -388,12 +529,19 @@ function renderEmail(
       return placeUpdateTemplate(name, brand, row.payload ?? {});
     }
 
+    case "place_added": {
+      return placeAddedTemplate(name, brand, row.payload ?? {});
+    }
+
     case "emergency_alert": {
+      const rawContacts = row.payload?.trusted_contacts;
       return emergencyTemplate(
         name,
         brand,
         String(row.payload?.message ?? "Check your saved places for newly reported barriers."),
         String(row.payload?.triggered_at ?? new Date().toISOString()),
+        String(row.payload?.email ?? ""),
+        Array.isArray(rawContacts) ? rawContacts.map(String) : [],
       );
     }
 
@@ -401,11 +549,14 @@ function renderEmail(
       // Legacy rows: emergency alerts used to reuse account_export with a
       // payload flag — keep rendering the SOS template for those.
       if (row.payload?.type === "emergency_alert") {
+        const rawContacts = row.payload?.trusted_contacts;
         return emergencyTemplate(
           name,
           brand,
           String(row.payload?.message ?? "Check your saved places for newly reported barriers."),
           String(row.payload?.triggered_at ?? ""),
+          String(row.payload?.email ?? ""),
+          Array.isArray(rawContacts) ? rawContacts.map(String) : [],
         );
       }
 

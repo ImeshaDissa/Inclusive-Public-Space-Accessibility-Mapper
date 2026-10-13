@@ -2,11 +2,12 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { useApp } from '@/context/AppContext';
 import { useAppTheme } from '@/context/ThemeContext';
 import { useToast } from '@/context/ToastContext';
 import { AccessibilityAgentChat } from '@/components/AccessibilityAgentChat';
+import { sendPlaceAddedEmail } from '@/features/notifications/actions';
 import { Place, StatusType, AccessibilityFeatures } from '@/types/accessibility';
 
 /** Extract numeric coordinates from an AI tool result (lat/lng fields or PostGIS WKT). */
@@ -92,10 +93,26 @@ export default function AssistantScreen() {
   const router = useRouter();
   const { colors } = useAppTheme();
   const { showToast } = useToast();
-  const { addAiMarker, setAiMarkers, refreshCommunityData } = useApp();
+  const { addAiMarker, setAiMarkers, refreshCommunityData, userId, userProfile, authReady, isAuthenticated } =
+    useApp();
+
+  // The AI agent is a contribution feature — sign up / log in to use it.
+  if (!authReady) return null;
+  if (!isAuthenticated) return <Redirect href="/login" />;
 
   // Mirror the assistant's tool results into shared state for the Map tab.
-  const handlePlaceAdded = (placeData: any) => addAiMarker(normalizeMarker(placeData));
+  const handlePlaceAdded = (placeData: any) => {
+    addAiMarker(normalizeMarker(placeData));
+    // "New place added" confirmation email — best-effort, never blocks the chat.
+    const src = placeData?.place ?? placeData;
+    if (userId && userProfile.email) {
+      sendPlaceAddedEmail(userId, userProfile.email, {
+        place_name: String(src?.name ?? src?.place_name ?? 'New accessible place'),
+        address: typeof src?.address === 'string' ? src.address : undefined,
+        category: typeof src?.category === 'string' ? src.category : undefined,
+      }).catch(() => undefined);
+    }
+  };
 
   /**
    * Hand a customer who wants to add a place over to the Submit wizard, which

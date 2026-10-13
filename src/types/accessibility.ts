@@ -77,5 +77,10 @@ export interface UserProfile {
     requireElevator: boolean;
     requireAccessibleToilet: boolean;
     requireStepFree: boolean;
+    /**
+     * Friends / family emails shown in the SOS help sheet. Stored inside the
+     * existing `profiles.preferences` jsonb so no migration is needed.
+     */
+    trustedContacts?: string[];
   };
 }

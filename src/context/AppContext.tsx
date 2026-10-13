@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Place, Report, AppNotification, UserProfile, StatusType, NotificationCategory } from '@/types/accessibility';
 import { MOCK_PLACES, MOCK_REPORTS, INITIAL_USER_PROFILE, INITIAL_NOTIFICATIONS } from '@/constants/mockData';
@@ -30,7 +30,11 @@ import {
   clearNotificationsInSupabase,
 } from '@/features/notifications/api';
 import { registerPushToken } from '@/lib/pushNotifications';
-import { sendPlaceUpdateEmail, sendWelcomeEmail } from '@/features/notifications/actions';
+import {
+  sendPlaceAddedEmail,
+  sendPlaceUpdateEmail,
+  sendWelcomeEmailOnce,
+} from '@/features/notifications/actions';
 import { createReportInBackend } from '@/features/reports/api';
 import { CreateReportResult } from '@/features/reports/types';
 
@@ -163,6 +167,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setAiMarkers((prev) => (prev.some((m) => m.id === place.id) ? prev : [...prev, place]));
   };
 
+  // Welcome email fires at most once per account: this in-memory guard
+  // dedupes sign-up + SIGNED_IN within a session, and sendWelcomeEmailOnce
+  // checks the queue so relaunches never repeat it.
+  const welcomeSentFor = useRef<string | null>(null);
+  const sendWelcomeOnce = (uid: string, email?: string | null) => {
+    if (!email || welcomeSentFor.current === uid) return;
+    welcomeSentFor.current = uid;
+    sendWelcomeEmailOnce(uid, email).catch(() => undefined);
+  };
+
   // Initialize Data & Load Supabase or Storage state
   useEffect(() => {
     let isActive = true;
@@ -176,6 +190,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             const user = data.session.user;
             setUserId(user.id);
             setAuthEmail(user.email || null);
+            sendWelcomeOnce(user.id, user.email);
 
             const [profile, userNotifs] = await Promise.all([
               fetchSupabaseProfile(user.id, user.email || ''),
@@ -241,6 +256,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (session?.user) {
           setUserId(session.user.id);
           setAuthEmail(session.user.email || null);
+          sendWelcomeOnce(session.user.id, session.user.email);
           const [profile, userNotifs] = await Promise.all([
             fetchSupabaseProfile(session.user.id, session.user.email || ''),
             fetchNotificationsFromSupabase(session.user.id),
@@ -448,6 +464,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setPlaces((prev) => [newPlace, ...prev]);
       if (isSupabaseConfigured) {
         insertPlaceToSupabase(newPlace);
+      }
+      // "New place added" confirmation email — best-effort, never blocks the report.
+      if (isSupabaseConfigured && userId && userProfile.email) {
+        sendPlaceAddedEmail(userId, userProfile.email, {
+          place_name: newPlace.name,
+          address: newPlace.address,
+          category: newPlace.category,
+        }).catch(() => undefined);
       }
     } else {
       targetPlaceId = existingPlace.id;
@@ -699,7 +723,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setUserId(res.user.id);
         setAuthEmail(res.user.email);
         if (res.profile) setUserProfile(res.profile);
-        sendWelcomeEmail(res.user.id, res.user.email).catch(() => undefined);
+        sendWelcomeOnce(res.user.id, res.user.email);
         return { success: true };
       }
       return { success: false, message: res.message || 'Supabase account creation failed.' };

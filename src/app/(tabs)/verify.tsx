@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { useApp } from '@/context/AppContext';
 import { useAppTheme } from '@/context/ThemeContext';
 import { useToast } from '@/context/ToastContext';
@@ -65,7 +65,7 @@ const ReportCardImage = ({ photoUri, reportId, placeName }: { photoUri?: string;
 
 export default function VerificationQueueScreen() {
   const router = useRouter();
-  const { reports, confirmReport, disputeReport, userProfile, signOut } = useApp();
+  const { reports, confirmReport, disputeReport, userProfile, signOut, authReady, isAuthenticated } = useApp();
   const { colors, isDark, toggleTheme } = useAppTheme();
   const { showToast } = useToast();
   const insets = useSafeAreaInsets();
@@ -149,6 +149,10 @@ export default function VerificationQueueScreen() {
     await signOut();
     router.replace('/login');
   };
+
+  // Verifying places is a contribution feature — sign up / log in first.
+  if (!authReady) return null;
+  if (!isAuthenticated) return <Redirect href="/login" />;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
