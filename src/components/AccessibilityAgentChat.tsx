@@ -12,6 +12,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  AccessibilityInfo,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
@@ -596,6 +597,10 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
       };
 
       setMessages((prev) => [...prev, botMsg]);
+      // Screen readers wait in silence while the AI "types" — announce the reply.
+      AccessibilityInfo.announceForAccessibility(
+        botText ? 'Assistant replied' : 'Assistant sent a result'
+      );
       if (wroteToMap) onDataChanged?.();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);

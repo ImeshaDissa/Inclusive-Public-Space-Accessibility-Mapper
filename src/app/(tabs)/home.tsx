@@ -32,13 +32,15 @@ const SafeActivityImage = ({ uri, seed, style }: { uri?: string; seed: string; s
   }
   const fallback = LOCAL_FALLBACK_IMAGES[Math.abs(hash) % LOCAL_FALLBACK_IMAGES.length];
 
-  return (
-    <Image
-      source={!failed && uri ? { uri } : fallback}
-      style={style}
-      onError={() => setFailed(true)}
-    />
-  );
+    return (
+      <Image
+        source={!failed && uri ? { uri } : fallback}
+        style={style}
+        onError={() => setFailed(true)}
+        accessible={false}
+        importantForAccessibility="no"
+      />
+    );
 };
 
 export default function HomeScreen() {
@@ -88,6 +90,7 @@ export default function HomeScreen() {
             ]}
             onPress={toggleTheme}
             activeOpacity={0.8}
+            hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
             accessibilityRole="button"
             accessibilityLabel={`Switch to ${isDark ? 'Light' : 'Dark'} theme`}
           >
@@ -105,7 +108,7 @@ export default function HomeScreen() {
             style={[styles.profileBadgeBtn, { backgroundColor: colors.accentBg, borderColor: colors.accent }]}
             onPress={() => router.push('/profile' as any)}
             accessibilityRole="button"
-            accessibilityLabel="View profile"
+            accessibilityLabel="Member — view your profile"
           >
             <Ionicons name="ribbon-outline" size={15} color={colors.accent} />
             <Text style={[styles.profileBadgeText, { color: colors.accent }]}>Member</Text>
@@ -381,6 +384,7 @@ export default function HomeScreen() {
                 style={[styles.savedCloseBtn, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9' }]}
                 accessibilityRole="button"
                 accessibilityLabel="Close Saved Places"
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               >
                 <Ionicons name="close" size={18} color={colors.textPrimary} />
               </TouchableOpacity>

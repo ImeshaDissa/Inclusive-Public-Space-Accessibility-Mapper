@@ -16,6 +16,7 @@ import { useAppTheme } from '@/context/ThemeContext';
 import { useApp } from '@/context/AppContext';
 import { createReportInBackend } from '@/features/reports/api';
 import { ReportDetailsSection } from '@/components/ReportDetailsSection';
+import * as Haptics from 'expo-haptics';
 
 export default function ReportIssueScreen() {
   const router = useRouter();
@@ -91,6 +92,7 @@ export default function ReportIssueScreen() {
 
     if (result.success) {
       addReport(result.report);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
       Alert.alert(
         'Report Submitted',
         'Thank you for updating the accessibility status! Your report helps the community stay informed.',
@@ -102,7 +104,10 @@ export default function ReportIssueScreen() {
         ]
       );
     } else {
-      Alert.alert('Submission Error', result.error || 'Failed to submit report. Please try again.');
+      Alert.alert(
+        "We couldn't send your report",
+        result.error || 'Check your connection and try again. Your answers are still here.'
+      );
     }
   };
 

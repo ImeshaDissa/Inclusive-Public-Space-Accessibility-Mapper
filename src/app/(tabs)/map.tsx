@@ -9,6 +9,7 @@ import {
   ScrollView,
   Image,
   ActivityIndicator,
+  AccessibilityInfo,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -119,6 +120,11 @@ export default function MapScreen() {
         if (worldSearchRequestId.current !== requestId) return;
         setWorldResults(outcome.results);
         setAiHint(outcome.hint);
+        AccessibilityInfo.announceForAccessibility(
+          outcome.results.length > 0
+            ? `${outcome.results.length} places found worldwide`
+            : 'No matching places found'
+        );
       } catch {
         if (worldSearchRequestId.current === requestId) {
           setWorldResults([]);
@@ -249,7 +255,12 @@ export default function MapScreen() {
             }}
           />
           {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={clearSearch}>
+            <TouchableOpacity
+              onPress={clearSearch}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              accessibilityRole="button"
+              accessibilityLabel="Clear search"
+            >
               <Ionicons name="close-circle" size={16} color={colors.textMuted} />
             </TouchableOpacity>
           )}
@@ -381,8 +392,11 @@ export default function MapScreen() {
                 style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
                 activeOpacity={0.85}
                 onPress={() => handleSelectPlace(item)}
+                accessibilityRole="button"
+                accessibilityLabel={`${item.name}, ${item.status}, ${item.address}`}
+                accessibilityHint="Opens place details"
               >
-                <Image source={{ uri: item.photos[0] }} style={styles.cardImage} />
+                <Image source={{ uri: item.photos[0] }} style={styles.cardImage} accessible={false} importantForAccessibility="no" />
                 <View style={styles.cardInfo}>
                   <View style={styles.cardTitleRow}>
                     <Text style={[styles.cardTitle, { color: colors.textPrimary }]} numberOfLines={1}>
@@ -391,6 +405,9 @@ export default function MapScreen() {
                     <TouchableOpacity
                       onPress={() => handleToggleSave(item.id)}
                       style={styles.cardSaveBtn}
+                      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={item.saved ? `Remove ${item.name} from saved` : `Save ${item.name}`}
                     >
                       <Ionicons
                         name={item.saved ? 'bookmark' : 'bookmark-outline'}
@@ -452,12 +469,20 @@ export default function MapScreen() {
                 style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
                 activeOpacity={0.85}
                 onPress={() => handleSelectPlace(item)}
+                accessibilityRole="button"
+                accessibilityLabel={`${item.name}, ${item.status}, ${item.address}`}
+                accessibilityHint="Opens place details"
               >
-                <Image source={{ uri: item.photos[0] }} style={styles.cardImage} />
+                <Image source={{ uri: item.photos[0] }} style={styles.cardImage} accessible={false} importantForAccessibility="no" />
                 <View style={styles.cardInfo}>
                   <View style={styles.cardTitleRow}>
                     <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{item.name}</Text>
-                    <TouchableOpacity onPress={() => handleToggleSave(item.id)}>
+                    <TouchableOpacity
+                      onPress={() => handleToggleSave(item.id)}
+                      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={item.saved ? `Remove ${item.name} from saved` : `Save ${item.name}`}
+                    >
                       <Ionicons
                         name={item.saved ? 'bookmark' : 'bookmark-outline'}
                         size={20}

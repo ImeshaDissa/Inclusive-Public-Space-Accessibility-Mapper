@@ -48,6 +48,7 @@ export default function TabLayout() {
         name="home"
         options={{
           title: 'Home',
+          tabBarAccessibilityLabel: 'Home',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={focused ? 'home' : 'home-outline'} size={22} color={color} />
           ),
@@ -57,6 +58,7 @@ export default function TabLayout() {
         name="map"
         options={{
           title: 'Map',
+          tabBarAccessibilityLabel: 'Map — find accessible places',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={focused ? 'map' : 'map-outline'} size={22} color={color} />
           ),
@@ -66,6 +68,7 @@ export default function TabLayout() {
         name="assistant"
         options={{
           title: 'AI',
+          tabBarAccessibilityLabel: 'AI assistant',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={focused ? 'sparkles' : 'sparkles-outline'} size={22} color={color} />
           ),
@@ -75,6 +78,7 @@ export default function TabLayout() {
         name="report"
         options={{
           title: 'Submit',
+          tabBarAccessibilityLabel: 'Submit a new report',
           tabBarIcon: () => (
             <View style={[styles.elevatedSubmitBtn, { backgroundColor: colors.accent }]}>
               <Ionicons name="add" size={26} color="#FFFFFF" />
@@ -86,6 +90,7 @@ export default function TabLayout() {
         name="verify"
         options={{
           title: 'Verify',
+          tabBarAccessibilityLabel: `Verify places, ${pendingReportsCount} pending reports`,
           tabBarBadge: pendingReportsCount > 0 ? pendingReportsCount : undefined,
           tabBarBadgeStyle: {
             backgroundColor: colors.badgePendingBg || '#78350F',
@@ -102,6 +107,7 @@ export default function TabLayout() {
         name="inbox"
         options={{
           title: 'Inbox',
+          tabBarAccessibilityLabel: `Inbox, ${unreadNotificationsCount} unread notifications`,
           tabBarBadge: unreadNotificationsCount > 0 ? unreadNotificationsCount : undefined,
           tabBarBadgeStyle: {
             backgroundColor: colors.accent,
@@ -118,6 +124,7 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: 'Profile',
+          tabBarAccessibilityLabel: 'Your profile',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={focused ? 'person' : 'person-outline'} size={22} color={color} />
           ),

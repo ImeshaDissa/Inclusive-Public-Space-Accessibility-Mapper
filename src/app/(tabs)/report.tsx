@@ -17,9 +17,11 @@ import {
   Platform,
   ActivityIndicator,
   Keyboard,
+  AccessibilityInfo,
 } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { Redirect, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
@@ -237,6 +239,13 @@ export default function SubmitReportScreen() {
 
   const [step, setStep] =
     useState<1 | 2>(1);
+
+  // Tell screen-reader users which wizard step they are on.
+  useEffect(() => {
+    AccessibilityInfo.announceForAccessibility(
+      `Step ${step} of 2, ${step === 1 ? 'Location' : 'Details'}`
+    );
+  }, [step]);
 
   // ============================================================
   // STEP 1 - LOCATION
@@ -1206,6 +1215,8 @@ export default function SubmitReportScreen() {
           );
         }
 
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
+
         setShowSuccessToast(
           true
         );
@@ -1231,7 +1242,7 @@ export default function SubmitReportScreen() {
         );
 
         showToast(
-          `Failed to submit report for ${finalPlaceName}`,
+          `We couldn't send your report for ${finalPlaceName}. Check your connection and try again — your answers are still here.`,
           'error',
           'alert-circle'
         );

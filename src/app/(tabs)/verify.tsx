@@ -352,6 +352,9 @@ export default function VerificationQueueScreen() {
                     onPress={() => handleConfirm(item.id, item.placeName)}
                     disabled={locked}
                     activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Confirm report for ${item.placeName}`}
+                    accessibilityState={{ disabled: locked }}
                   >
                     <Ionicons
                       name="checkmark-circle-outline"
@@ -376,6 +379,9 @@ export default function VerificationQueueScreen() {
                     onPress={() => setActiveDisputeReport(item)}
                     disabled={locked}
                     activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Dispute report for ${item.placeName}`}
+                    accessibilityState={{ disabled: locked }}
                   >
                     <Ionicons
                       name="flag-outline"

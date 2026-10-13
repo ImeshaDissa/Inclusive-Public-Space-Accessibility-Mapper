@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
+import { View, Text, StyleSheet, Animated, TouchableOpacity, AccessibilityInfo } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 type ToastType = 'success' | 'error' | 'info' | 'warning';
@@ -16,7 +16,9 @@ interface ToastContextType {
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined);
 
-const TOAST_DURATION = 3200;
+// Long enough for screen-reader users to hear the message and for anyone
+// with tremors or slow touch to reach the toast before it disappears.
+const TOAST_DURATION = 8000;
 
 /**
  * Solid dark cards read clearly on both light and dark themes (the old info
@@ -79,6 +81,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     (message: string, type: ToastType = 'success', icon?: string) => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       setToast({ message, type, icon });
+      AccessibilityInfo.announceForAccessibility(message);
       slideAnim.setValue(100);
       opacityAnim.setValue(0);
       progressAnim.setValue(1);
@@ -113,36 +116,47 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       {children}
       {toast && config && (
         <Animated.View
-          pointerEvents="none"
+          pointerEvents="box-none"
+          accessibilityLiveRegion="polite"
           style={[
             styles.toast,
             {
-              backgroundColor: config.bg,
-              borderColor: config.border,
               transform: [{ translateY: slideAnim }],
               opacity: opacityAnim,
             },
           ]}
         >
-          <View style={[styles.iconChip, { backgroundColor: config.chip }]}>
-            <Ionicons
-              name={(toast.icon || config.defaultIcon) as any}
-              size={18}
-              color={config.iconColor}
-            />
-          </View>
-          <Text style={styles.toastText} numberOfLines={3}>
-            {toast.message}
-          </Text>
-          <Animated.View
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={hideToast}
+            accessibilityRole="alert"
+            accessibilityLabel={`${toast.type}: ${toast.message}`}
+            accessibilityHint="Activates to dismiss this message"
             style={[
-              styles.progress,
-              {
-                backgroundColor: config.iconColor,
-                width: progressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
-              },
+              styles.toastCard,
+              { backgroundColor: config.bg, borderColor: config.border },
             ]}
-          />
+          >
+            <View style={[styles.iconChip, { backgroundColor: config.chip }]}>
+              <Ionicons
+                name={(toast.icon || config.defaultIcon) as any}
+                size={18}
+                color={config.iconColor}
+              />
+            </View>
+            <Text style={styles.toastText} numberOfLines={3}>
+              {toast.message}
+            </Text>
+            <Animated.View
+              style={[
+                styles.progress,
+                {
+                  backgroundColor: config.iconColor,
+                  width: progressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }),
+                },
+              ]}
+            />
+          </TouchableOpacity>
         </Animated.View>
       )}
     </ToastContext.Provider>
@@ -163,6 +177,14 @@ const styles = StyleSheet.create({
     bottom: 80,
     left: 16,
     right: 16,
+    zIndex: 10000,
+    elevation: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+  },
+  toastCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
@@ -171,12 +193,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     overflow: 'hidden',
-    zIndex: 10000,
-    elevation: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
   },
   iconChip: {
     width: 32,

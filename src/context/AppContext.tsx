@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Haptics from 'expo-haptics';
 import { Place, Report, AppNotification, UserProfile, StatusType, NotificationCategory } from '@/types/accessibility';
 import { MOCK_PLACES, MOCK_REPORTS, INITIAL_USER_PROFILE, INITIAL_NOTIFICATIONS } from '@/constants/mockData';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
@@ -379,6 +380,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [notifications, authReady]);
 
   const toggleSavePlace = (placeId: string) => {
+    // Light tick so save/unsave is felt (and works without sight).
+    Haptics.selectionAsync().catch(() => undefined);
     setPlaces((prevPlaces) => {
       const next = prevPlaces.map((p) => {
         if (p.id === placeId) {

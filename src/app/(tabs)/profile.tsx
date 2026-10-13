@@ -7,6 +7,7 @@ import { useApp } from '@/context/AppContext';
 import { useAppTheme } from '@/context/ThemeContext';
 import { useToast } from '@/context/ToastContext';
 import { requestAccountExport, sendSavedPlaceAlert, sendTestEmail } from '@/features/notifications/actions';
+import * as Haptics from 'expo-haptics';
 import { Place, StatusType } from '@/types/accessibility';
 import { Ionicons } from '@expo/vector-icons';
 import { Redirect, useRouter } from 'expo-router';
@@ -199,6 +200,7 @@ export default function ProfileScreen() {
     const emailAttempted = result.emailOk !== undefined;
     if (result.ok && (!emailAttempted || result.emailOk)) {
       showToast('Emergency alert sent to your devices and email.', 'success');
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
     } else if (result.ok && emailAttempted) {
       showToast(`Alert on device, but email failed: ${result.detail ?? 'unknown error'}`, 'error');
     } else if (result.detail) {
@@ -460,6 +462,7 @@ export default function ProfileScreen() {
               activeOpacity={0.7}
               accessibilityRole="button"
               accessibilityLabel="Close Saved Places"
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Ionicons name="close" size={22} color={colors.textPrimary} />
             </TouchableOpacity>
@@ -537,6 +540,7 @@ export default function ProfileScreen() {
               activeOpacity={0.7}
               accessibilityRole="button"
               accessibilityLabel="Close Accessibility Preferences"
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Ionicons name="close" size={22} color={colors.textPrimary} />
             </TouchableOpacity>
@@ -626,6 +630,7 @@ export default function ProfileScreen() {
               activeOpacity={0.7}
               accessibilityRole="button"
               accessibilityLabel="Close Help and Support"
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Ionicons name="close" size={22} color={colors.textPrimary} />
             </TouchableOpacity>
@@ -701,6 +706,7 @@ export default function ProfileScreen() {
               activeOpacity={0.7}
               accessibilityRole="button"
               accessibilityLabel="Close Emergency Help"
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Ionicons name="close" size={22} color={colors.textPrimary} />
             </TouchableOpacity>

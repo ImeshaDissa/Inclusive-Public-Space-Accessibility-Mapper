@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,8 @@ import {
   Image,
   ImageSourcePropType,
   Platform,
+  useWindowDimensions,
+  AccessibilityInfo,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -20,7 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '@/context/ThemeContext';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface BadgeItem {
   text: string;
@@ -208,10 +210,26 @@ const SLIDES: OnboardingSlide[] = [
 export default function OnboardingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { isDark, colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
+  // Live width/height so slides resize when the phone rotates (landscape mounts).
+  const { width, height } = useWindowDimensions();
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then(setReduceMotion)
+      .catch(() => undefined);
+  }, []);
+
+  // Tell screen-reader users which slide they are on.
+  useEffect(() => {
+    AccessibilityInfo.announceForAccessibility(
+      `Slide ${currentIndex + 1} of ${SLIDES.length}`
+    );
+  }, [currentIndex]);
 
   const handleNext = () => {
     if (currentIndex < SLIDES.length - 1) {
@@ -246,14 +264,14 @@ export default function OnboardingScreen() {
       useNativeDriver: false,
       listener: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
         const contentOffset = event.nativeEvent.contentOffset.x;
-        const index = Math.round(contentOffset / SCREEN_WIDTH);
+        const index = Math.round(contentOffset / width);
         setCurrentIndex(index);
       },
     },
   );
 
   const renderSlide = ({ item, index }: { item: OnboardingSlide; index: number }) => {
-    const inputRange = [(index - 1) * SCREEN_WIDTH, index * SCREEN_WIDTH, (index + 1) * SCREEN_WIDTH];
+    const inputRange = [(index - 1) * width, index * width, (index + 1) * width];
 
     const opacity = scrollX.interpolate({
       inputRange,
@@ -263,32 +281,35 @@ export default function OnboardingScreen() {
 
     const translateY = scrollX.interpolate({
       inputRange,
-      outputRange: [30, 0, 30],
+      outputRange: reduceMotion ? [0, 0, 0] : [30, 0, 30],
       extrapolate: 'clamp',
     });
 
     return (
-      <View style={[styles.slideContainer, { width: SCREEN_WIDTH }]}>
+      <View
+        style={[styles.slideContainer, { width }]}
+        accessibilityLabel={`Slide ${index + 1} of ${SLIDES.length}: ${item.title}`}
+      >
         {/* Top Visual Masonry Section */}
-        <View style={styles.collageContainer}>
+        <View style={[styles.collageContainer, { height: height * (width > height ? 0.4 : 0.48) }]}>
           <View style={styles.masonryGrid}>
             {/* Left Column (Staggered Downwards) */}
             <View style={[styles.column, styles.leftColumn]}>
               <View style={[styles.cardFrame, { height: '56%' }]}>
-                <Image source={item.img1} style={styles.cardImage} resizeMode="cover" />
+                <Image source={item.img1} style={styles.cardImage} resizeMode="cover" accessible={false} importantForAccessibility="no" />
               </View>
               <View style={[styles.cardFrame, { height: '40%' }]}>
-                <Image source={item.img3} style={styles.cardImage} resizeMode="cover" />
+                <Image source={item.img3} style={styles.cardImage} resizeMode="cover" accessible={false} importantForAccessibility="no" />
               </View>
             </View>
 
             {/* Right Column (Staggered Upwards) */}
             <View style={[styles.column, styles.rightColumn]}>
               <View style={[styles.cardFrame, { height: '42%' }]}>
-                <Image source={item.img2} style={styles.cardImage} resizeMode="cover" />
+                <Image source={item.img2} style={styles.cardImage} resizeMode="cover" accessible={false} importantForAccessibility="no" />
               </View>
               <View style={[styles.cardFrame, { height: '54%' }]}>
-                <Image source={item.img1} style={styles.cardImage} resizeMode="cover" />
+                <Image source={item.img1} style={styles.cardImage} resizeMode="cover" accessible={false} importantForAccessibility="no" />
               </View>
             </View>
           </View>
