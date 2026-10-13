@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '@/context/ThemeContext';
@@ -220,11 +221,22 @@ export default function OnboardingScreen() {
     }
   };
 
+  const enterApp = () => {
+    // Guests can browse the map without an account; index.tsx reads this
+    // flag to decide whether to show onboarding on next launch.
+    AsyncStorage.setItem('onboardingSeen', '1').catch(() => {});
+    router.replace('/map');
+  };
+
   const handleSkip = () => {
-    router.replace('/login');
+    enterApp();
   };
 
   const handleGetStarted = () => {
+    enterApp();
+  };
+
+  const handleSignIn = () => {
     router.replace('/login');
   };
 
@@ -426,7 +438,7 @@ export default function OnboardingScreen() {
           ) : (
             <>
               <TouchableOpacity
-                onPress={handleSkip}
+                onPress={handleSignIn}
                 style={styles.skipButton}
                 activeOpacity={0.7}
                 accessibilityLabel="Sign in"

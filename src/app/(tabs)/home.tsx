@@ -190,7 +190,7 @@ export default function HomeScreen() {
               <View style={styles.activityInfo}>
                 <Text style={styles.activityPlace}>{item.placeName}</Text>
                 <Text style={styles.activityNote} numberOfLines={2}>
-                  "{item.note}"
+                  &ldquo;{item.note}&rdquo;
                 </Text>
                 <View style={styles.activityMetaRow}>
                   <Text style={styles.activitySubmitter}>By {item.submitterName}</Text>

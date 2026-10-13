@@ -1,6 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Redirect, useRouter } from 'expo-router';
 import { useApp } from '@/context/AppContext';
@@ -91,7 +90,7 @@ const normalizeMarker = (raw: any): Place => {
  */
 export default function AssistantScreen() {
   const router = useRouter();
-  const { colors } = useAppTheme();
+  const { isDark } = useAppTheme();
   const { showToast } = useToast();
   const { addAiMarker, setAiMarkers, refreshCommunityData, userId, userProfile, authReady, isAuthenticated } =
     useApp();
@@ -141,73 +140,29 @@ export default function AssistantScreen() {
     );
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View
-        style={[
-          styles.header,
-          { backgroundColor: colors.headerBg, borderBottomColor: colors.headerBorder },
-        ]}
-      >
-        <View style={[styles.headerIcon, { backgroundColor: colors.accentBg }]}>
-          <Ionicons name="sparkles" size={20} color={colors.accent} />
-        </View>
-        <View style={styles.headerText}>
-          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>
-            Accessibility Assistant
-          </Text>
-          <Text style={[styles.headerSubtitle, { color: colors.textMuted }]}>
-            Ask about accessible places near you
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.chatBody}>
-        <AccessibilityAgentChat
-          onPlaceAdded={handlePlaceAdded}
-          onPlacesFound={handlePlacesFound}
-          onAddPlace={handleAddPlace}
-          onAddReport={handleAddReport}
-          onVerifyPlace={handleVerifyPlace}
-          onDataChanged={() => {
-            refreshCommunityData().catch(() => undefined);
-          }}
-        />
-      </View>
+    <SafeAreaView
+      style={[
+        styles.container,
+        { backgroundColor: isDark ? '#1F2C34' : '#008069' },
+      ]}
+      edges={['top', 'left', 'right']}
+    >
+      <AccessibilityAgentChat
+        onPlaceAdded={handlePlaceAdded}
+        onPlacesFound={handlePlacesFound}
+        onAddPlace={handleAddPlace}
+        onAddReport={handleAddReport}
+        onVerifyPlace={handleVerifyPlace}
+        onDataChanged={() => {
+          refreshCommunityData().catch(() => undefined);
+        }}
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-  headerIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerText: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  headerSubtitle: {
-    fontSize: 11,
-    marginTop: 2,
-  },
-  chatBody: {
     flex: 1,
   },
 });

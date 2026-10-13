@@ -1,15 +1,17 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  View,
+  Alert,
+  Animated,
+  Easing,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  FlatList,
-  ScrollView,
-  StyleSheet,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
+  View,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
@@ -21,27 +23,24 @@ import { useToast } from '../context/ToastContext';
 import { ChatMessageText } from './ChatMessageText';
 
 /** One place row shown under an assistant answer (features + distance). */
-interface ChatPlace {
+export interface ChatPlace {
   key: string;
   name: string;
   category?: string;
   address?: string;
-  /** Coordinates, so a result card can offer real turn-by-turn directions. */
   lat?: number;
   lng?: number;
-  /** Metres, as returned by the find_nearby_accessible_places RPC. */
   distance?: number;
-  /** Human labels of the accessibility features this place has. */
   features: string[];
 }
 
-interface Message {
+export interface Message {
   id: string;
   sender: 'user' | 'bot';
   text: string;
+  timestamp: number;
   actionResponse?: unknown[];
   places?: ChatPlace[];
-  /** Green "what I just did for you" lines for the agentic write tools. */
   receipts?: string[];
 }
 
@@ -72,7 +71,6 @@ const featureLabel = (raw: string): string => {
   );
 };
 
-/** Turn a tool result (features jsonb / array + distance) into display data. */
 const toChatPlaces = (raw: any, index: number): ChatPlace => {
   const features = Array.isArray(raw?.features)
     ? (raw.features as unknown[]).map((f) => featureLabel(String(f)))
@@ -104,49 +102,234 @@ const toChatPlaces = (raw: any, index: number): ChatPlace => {
   };
 };
 
-/** One-tap questions shown above the input so nobody has to think of wording. */
-const SUGGESTIONS = [
-  'Accessible places near me',
-  'Places with a ramp near me',
-  'Is this place wheelchair accessible?',
-  'How do I add a place?',
-  'Which places have an accessible toilet?',
+const formatMessageTime = (dateNum?: number): string => {
+  const d = dateNum ? new Date(dateNum) : new Date();
+  return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+};
+
+interface ExamplePrompt {
+  id: string;
+  category: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  query: string;
+  tag: string;
+  color: string;
+}
+
+const EXAMPLE_PROMPTS: ExamplePrompt[] = [
+  {
+    id: 'p1',
+    category: 'Nearby Search',
+    icon: 'location',
+    title: 'Accessible Places Near Me',
+    query: 'Find wheelchair accessible places near my current location',
+    tag: 'GPS Near You',
+    color: '#00A884',
+  },
+  {
+    id: 'p2',
+    category: 'Mobility & Step-free',
+    icon: 'walk',
+    title: 'Places With Wheelchair Ramp',
+    query: 'Which places near me have a ramp and step-free entrance?',
+    tag: 'Ramp Access',
+    color: '#25D366',
+  },
+  {
+    id: 'p3',
+    category: 'Restrooms',
+    icon: 'water',
+    title: 'Accessible Toilet Nearby',
+    query: 'Where is the nearest place with an accessible toilet?',
+    tag: 'Restrooms',
+    color: '#0284C7',
+  },
+  {
+    id: 'p4',
+    category: 'Vertical Access',
+    icon: 'business',
+    title: 'Places With Elevator or Lift',
+    query: 'Show me venues or stations with an elevator or lift access',
+    tag: 'Elevators',
+    color: '#8B5CF6',
+  },
+  {
+    id: 'p5',
+    category: 'Contribution',
+    icon: 'add-circle',
+    title: 'Add a New Accessible Place',
+    query: 'How do I add a new accessible place to the map?',
+    tag: 'Contribute',
+    color: '#FF5A36',
+  },
+  {
+    id: 'p6',
+    category: 'Barrier Report',
+    icon: 'warning',
+    title: 'Report Broken Ramp or Issue',
+    query: 'How do I report an accessibility barrier or broken elevator?',
+    tag: 'Report Issue',
+    color: '#EF4444',
+  },
 ];
 
-/**
- * "I want to add a place", "add my shop", "register a new venue" — the
- * customer wants to put something on the map themselves, so the chat hands
- * them over to the Add Place form instead of interviewing them.
- */
+const QUICK_CHIPS = [
+  { label: '📍 Near me', query: 'Accessible places near me' },
+  { label: '♿ Ramps', query: 'Places with a wheelchair ramp near me' },
+  { label: '🚻 Accessible toilet', query: 'Which places have an accessible toilet?' },
+  { label: '🛗 Elevators', query: 'Venues with elevator or lift access near me' },
+  { label: '➕ Add place', query: 'I want to add a new place' },
+  { label: '📝 File report', query: 'I want to add a report for a barrier' },
+  { label: '✅ Verify', query: 'I want to verify places on the map' },
+];
+
+/** Hand-over intents to specialized screens */
 const ADD_PLACE_INTENT =
   /\b(add|register|pin|put|create|submit|save)\b[^.?!]{0,40}?\b(place|venue|location|spot|shop|store|business|building|mall|hospital|school|temple|park|restaurant|cafe|hotel|pharmacy|bank|office|facility|centre|center)\b/i;
-
-/** "add a report/issue for this place" is the REPORT flow, not the add-place form. */
 const REPORT_INTENT = /\b(report|issue|problem|barrier|complaint)\b/i;
-
 const wantsToAddPlace = (text: string): boolean =>
   ADD_PLACE_INTENT.test(text) && !REPORT_INTENT.test(text);
 
-/** "I want to add report", "file an issue", "report a problem" → Submit wizard. */
 const ADD_REPORT_INTENT =
   /\b(add|file|submit|raise|lodge|make|create|start|send|report|write)\b[^.?!]{0,40}?\b(report|issue|problem|complaint|barrier)\b/i;
-
 const wantsToAddReport = (text: string): boolean => ADD_REPORT_INTENT.test(text);
 
-/** "verify this place", "validate entry" → the Verify queue tab. */
 const VERIFY_INTENT = /\b(verify|validate)\b/i;
-
 const wantsToVerify = (text: string): boolean => VERIFY_INTENT.test(text);
+
+/** WhatsApp Pulsing Online Indicator */
+const PulsingOnlineDot: React.FC = () => {
+  const pulse = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1.45,
+          duration: 900,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.ease),
+        }),
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 900,
+          useNativeDriver: true,
+          easing: Easing.in(Easing.ease),
+        }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+
+  return (
+    <View style={styles.onlineContainer}>
+      <Animated.View style={[styles.pulseRing, { transform: [{ scale: pulse }] }]} />
+      <View style={styles.onlineDot} />
+    </View>
+  );
+};
+
+/** WhatsApp-Style 3 Bouncing Dots Typing Animation */
+const WhatsAppTypingIndicator: React.FC<{ isDark: boolean }> = ({ isDark }) => {
+  const dot1 = useRef(new Animated.Value(0)).current;
+  const dot2 = useRef(new Animated.Value(0)).current;
+  const dot3 = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const animateDot = (dot: Animated.Value, delay: number) => {
+      return Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(dot, {
+            toValue: -7,
+            duration: 260,
+            useNativeDriver: true,
+            easing: Easing.out(Easing.quad),
+          }),
+          Animated.timing(dot, {
+            toValue: 0,
+            duration: 260,
+            useNativeDriver: true,
+            easing: Easing.in(Easing.quad),
+          }),
+          Animated.delay(350),
+        ])
+      );
+    };
+
+    const a1 = animateDot(dot1, 0);
+    const a2 = animateDot(dot2, 140);
+    const a3 = animateDot(dot3, 280);
+
+    a1.start();
+    a2.start();
+    a3.start();
+
+    return () => {
+      a1.stop();
+      a2.stop();
+      a3.stop();
+    };
+  }, [dot1, dot2, dot3]);
+
+  const dotColor = isDark ? '#25D366' : '#00A884';
+
+  return (
+    <View style={styles.typingRow}>
+      <View style={[styles.avatarMini, { backgroundColor: isDark ? '#1F2C34' : '#E2E8F0' }]}>
+        <Ionicons name="sparkles" size={12} color="#00A884" />
+      </View>
+      <View style={[styles.typingBubble, isDark ? styles.typingBubbleDark : styles.typingBubbleLight]}>
+        <View style={styles.typingDotsWrap}>
+          <Animated.View style={[styles.typingDot, { backgroundColor: dotColor, transform: [{ translateY: dot1 }] }]} />
+          <Animated.View style={[styles.typingDot, { backgroundColor: dotColor, transform: [{ translateY: dot2 }] }]} />
+          <Animated.View style={[styles.typingDot, { backgroundColor: dotColor, transform: [{ translateY: dot3 }] }]} />
+        </View>
+        <Text style={[styles.typingLabel, { color: isDark ? '#8696A0' : '#667781' }]}>
+          typing…
+        </Text>
+      </View>
+    </View>
+  );
+};
+
+/** Message Entrance Animation */
+const AnimatedBubbleWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(10)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 220,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.ease),
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 220,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.ease),
+      }),
+    ]).start();
+  }, [opacity, translateY]);
+
+  return (
+    <Animated.View style={{ opacity, transform: [{ translateY }] }}>
+      {children}
+    </Animated.View>
+  );
+};
 
 export interface AccessibilityAgentChatProps {
   onPlaceAdded?: (placeData: any) => void;
   onPlacesFound?: (placesData: any[]) => void;
-  /** Called after the assistant writes to the map, so shared state refetches. */
   onDataChanged?: () => void;
-  /** Auto-navigates to the Submit wizard when the customer mentions add place / add report. */
   onAddPlace?: () => void;
   onAddReport?: () => void;
-  /** Auto-navigates to the Verify queue when the customer mentions verifying a place. */
   onVerifyPlace?: () => void;
 }
 
@@ -161,13 +344,15 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPromptLibrary, setShowPromptLibrary] = useState(false);
 
-  // Shown only while the chat is empty. Hidden for good after the first question.
-  const [showIntro, setShowIntro] = useState(true);
-  const { colors } = useAppTheme();
+  const { isDark } = useAppTheme();
   const { showToast } = useToast();
+  const listRef = useRef<FlatList<Message>>(null);
 
-  /** A suggested place is only useful if the user can actually get to it. */
+  // Send button press scale animation
+  const sendScale = useRef(new Animated.Value(1)).current;
+
   const handlePlaceDirections = async (place: ChatPlace) => {
     const opened = await openDirections({
       name: place.name,
@@ -180,18 +365,13 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
     }
   };
 
-  const listRef = useRef<FlatList<Message>>(null);
-
-  // Keep the newest bubble in view when a reply (or the typing bubble) lands.
   useEffect(() => {
     const timer = setTimeout(() => {
       listRef.current?.scrollToEnd({ animated: true });
-    }, 80);
+    }, 90);
     return () => clearTimeout(timer);
   }, [messages.length, loading]);
 
-  // GPS position, sent with every message so the assistant can suggest nearby
-  // accessible places without having to ask the user for coordinates.
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const locationRequest = useRef<Promise<{ lat: number; lng: number } | null> | null>(null);
 
@@ -225,25 +405,48 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
     if (!locationRequest.current) {
       locationRequest.current = fetchLocation().then((loc) => {
         if (loc) setUserLocation(loc);
-        else locationRequest.current = null; // allow a retry on the next message
+        else locationRequest.current = null;
         return loc;
       });
     }
     return locationRequest.current;
   };
 
-  /** Sends the typed text, or `override` when a suggestion chip was tapped. */
+  const handleClearChat = () => {
+    if (messages.length === 0) return;
+    Alert.alert(
+      'Clear Conversation',
+      'Do you want to reset this chat and start fresh?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear',
+          style: 'destructive',
+          onPress: () => {
+            setMessages([]);
+            showToast('Chat conversation reset.', 'info');
+          },
+        },
+      ]
+    );
+  };
+
   const sendMessage = async (override?: string) => {
     const text = (override ?? inputText).trim();
     if (!text || loading) return;
+
+    Animated.sequence([
+      Animated.timing(sendScale, { toValue: 0.85, duration: 100, useNativeDriver: true }),
+      Animated.timing(sendScale, { toValue: 1, duration: 100, useNativeDriver: true }),
+    ]).start();
 
     const userMsg: Message = {
       id: Date.now().toString(),
       sender: 'user',
       text,
+      timestamp: Date.now(),
     };
 
-    // Previous turns give the assistant context (and the user's language).
     const history = messages.slice(-12).map((m) => ({
       role: m.sender === 'user' ? 'user' : 'assistant',
       content: m.text,
@@ -251,14 +454,17 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
 
     setMessages((prev) => [...prev, userMsg]);
     setInputText('');
-    setShowIntro(false);
+    setShowPromptLibrary(false);
 
-    // One-line bot bubble + jump to the right screen: these phrases are a
-    // hand-over, not a conversation, so the AI round-trip is skipped.
     const handOff = (botText: string, go?: () => void) => {
       setMessages((prev) => [
         ...prev,
-        { id: (Date.now() + 1).toString(), sender: 'bot' as const, text: botText },
+        {
+          id: (Date.now() + 1).toString(),
+          sender: 'bot' as const,
+          text: botText,
+          timestamp: Date.now(),
+        },
       ]);
       go?.();
     };
@@ -301,8 +507,6 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
       });
 
       if (error) {
-        // supabase-js hides the response body ("non-2xx status code"), so read
-        // it and turn it into a sentence the user can act on.
         let detail = error.message || 'Edge function call failed';
         try {
           const ctx: any = (error as any).context;
@@ -316,7 +520,7 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
             }
           }
         } catch {
-          // keep the generic message
+          // generic error
         }
 
         if (/rate limit|429|free-models-per-day/i.test(detail)) {
@@ -331,12 +535,9 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
         throw new Error(detail);
       }
 
-      // Handle return payload format: { text: "...", actionResponse: [...] }
       const botText = data?.text || 'No response received from AI.';
       const actionResponse = data?.actionResponse || [];
       const chatPlaces: ChatPlace[] = [];
-
-      // "What I just did for you" lines for the agentic write tools.
       const receipts: string[] = [];
       let wroteToMap = false;
 
@@ -374,7 +575,6 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
             });
             onPlacesFound?.(list);
           } else if (action?.tool === 'findPlaceInDatabase') {
-            // Saved match: show its accessibility details as a card too.
             const places = action.result?.places;
             if (Array.isArray(places)) {
               places.forEach((place: any, index: number) => {
@@ -389,15 +589,13 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
         id: (Date.now() + 1).toString(),
         sender: 'bot',
         text: botText,
+        timestamp: Date.now(),
         actionResponse,
         places: chatPlaces.length > 0 ? chatPlaces : undefined,
         receipts: receipts.length > 0 ? receipts : undefined,
       };
 
       setMessages((prev) => [...prev, botMsg]);
-
-      // Pull the real rows back in so the Map / Inbox / Profile tabs show the
-      // change straight away instead of only after a restart.
       if (wroteToMap) onDataChanged?.();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
@@ -407,6 +605,7 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
           id: (Date.now() + 1).toString(),
           sender: 'bot',
           text: `Error: ${message}`,
+          timestamp: Date.now(),
         },
       ]);
     } finally {
@@ -414,406 +613,732 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
     }
   };
 
-  const bubbleStyle = (isUser: boolean) => ({
-    backgroundColor: isUser ? colors.accent : colors.card,
-    borderColor: isUser ? colors.accent : colors.cardBorder,
-  });
+  // WhatsApp Color Palette
+  const chatBg = isDark ? '#0B141A' : '#EFEAE2';
+  const headerBg = isDark ? '#1F2C34' : '#008069';
+  const headerText = '#FFFFFF';
+  const headerMuted = isDark ? '#8696A0' : '#E1F2EE';
+  const userBubbleBg = isDark ? '#005C4B' : '#D9FDD3';
+  const userText = isDark ? '#E9EDEF' : '#111B21';
+  const botBubbleBg = isDark ? '#202C33' : '#FFFFFF';
+  const botText = isDark ? '#E9EDEF' : '#111B21';
+  const timeMuted = isDark ? '#8696A0' : '#667781';
+  const inputBarBg = isDark ? '#1F2C34' : '#F0F2F5';
+  const inputBg = isDark ? '#2A3942' : '#FFFFFF';
+  const inputBorder = isDark ? '#374248' : '#E2E8F0';
+  const sendBtnBg = '#00A884';
 
-  const renderItem = ({ item }: { item: Message }) => {
+  const renderMessageItem = ({ item }: { item: Message }) => {
     const isUser = item.sender === 'user';
     return (
-      <View>
-        <View
-          style={[
-            styles.bubble,
-            bubbleStyle(isUser),
-            isUser ? styles.userBubble : styles.botBubble,
-          ]}
-        >
-          <ChatMessageText
-            text={item.text}
-            style={[styles.messageText, { color: isUser ? '#FFF' : colors.textPrimary }]}
-            linkColor={isUser ? '#FFF' : colors.accent}
-          />
-        </View>
+      <AnimatedBubbleWrapper>
+        <View style={[styles.messageRow, isUser ? styles.rowUser : styles.rowBot]}>
+          {!isUser && (
+            <View style={[styles.avatarMini, { backgroundColor: isDark ? '#1F2C34' : '#E2E8F0' }]}>
+              <Ionicons name="sparkles" size={13} color="#00A884" />
+            </View>
+          )}
 
-        {!isUser && item.places && item.places.length > 0 && (
-          <View style={styles.placesBlock}>
-            {item.places.map((place) => (
-              <TouchableOpacity
-                key={place.key}
-                style={[styles.placeCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
-                onPress={() => handlePlaceDirections(place)}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel={`Get directions to ${place.name}`}
-              >
-                <View style={styles.placeHeader}>
-                  <Ionicons name="location" size={14} color={colors.accent} />
-                  <Text
-                    numberOfLines={1}
-                    style={[styles.placeName, { color: colors.textPrimary }]}
-                  >
-                    {place.name}
-                  </Text>
-                  {typeof place.distance === 'number' && (
-                    <View style={[styles.distanceChip, { backgroundColor: colors.accentBg }]}>
-                      <Ionicons name="navigate" size={10} color={colors.accent} />
-                      <Text style={[styles.distanceText, { color: colors.accent }]}>
-                        {formatDistanceLabel(place.distance)}
-                      </Text>
-                    </View>
-                  )}
-                </View>
+          <View style={styles.bubbleCol}>
+            <View
+              style={[
+                styles.bubbleBase,
+                isUser
+                  ? [styles.userBubble, { backgroundColor: userBubbleBg }]
+                  : [styles.botBubble, { backgroundColor: botBubbleBg }],
+                isDark && isUser && styles.userBubbleDarkBorder,
+                !isDark && !isUser && styles.botBubbleLightShadow,
+              ]}
+            >
+              <ChatMessageText
+                text={item.text}
+                style={[styles.messageBody, { color: isUser ? userText : botText }]}
+                linkColor={isUser ? (isDark ? '#6EE7B7' : '#007A5E') : '#00A884'}
+              />
 
-                {!!place.category && (
-                  <Text numberOfLines={1} style={[styles.placeMeta, { color: colors.textMuted }]}>
-                    {place.category}
-                    {place.address ? ` · ${place.address}` : ''}
-                  </Text>
+              <View style={styles.timestampContainer}>
+                <Text style={[styles.timestampText, { color: timeMuted }]}>
+                  {formatMessageTime(item.timestamp)}
+                </Text>
+                {isUser && (
+                  <Ionicons
+                    name="checkmark-done"
+                    size={15}
+                    color="#53BDEB"
+                    style={styles.checkIcon}
+                  />
                 )}
-
-                <View style={styles.featuresRow}>
-                  {place.features.length > 0 ? (
-                    place.features.map((feature) => (
-                      <View
-                        key={feature}
-                        style={[styles.featureChip, { backgroundColor: colors.chipBg, borderColor: colors.chipBorder }]}
-                      >
-                        <MaterialCommunityIcons
-                          name={
-                            /toilet/i.test(feature)
-                              ? 'human-handsdown'
-                              : /step|ramp/i.test(feature)
-                                ? 'walk'
-                                : /elevator|lift/i.test(feature)
-                                  ? 'elevator-passenger'
-                                  : /parking/i.test(feature)
-                                    ? 'car'
-                                    : /door/i.test(feature)
-                                      ? 'door-sliding'
-                                      : 'check-circle'
-                          }
-                          size={11}
-                          color={colors.accent}
-                        />
-                        <Text style={[styles.featureText, { color: colors.textSecondary }]}>
-                          {feature}
-                        </Text>
-                      </View>
-                    ))
-                  ) : (
-                    <Text style={[styles.placeMeta, { color: colors.textMuted }]}>
-                      No accessibility features listed
-                    </Text>
-                  )}
-                </View>
-
-                {/* Discoverability: tapping the card opens the maps app. */}
-                <View style={styles.placeCardCta}>
-                  <Ionicons name="navigate-outline" size={13} color={colors.accent} />
-                  <Text style={[styles.placeCardCtaText, { color: colors.accent }]}>
-                    Get directions
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
-        {/* Confirmation of an agentic write (place added / report filed / verified). */}
-        {!isUser && item.receipts && item.receipts.length > 0 && (
-          <View style={styles.receiptsBlock}>
-            {item.receipts.map((line) => (
-              <View
-                key={line}
-                style={[
-                  styles.receipt,
-                  { backgroundColor: colors.card, borderColor: colors.cardBorder },
-                ]}
-              >
-                <Ionicons name="checkmark-circle" size={14} color="#10B981" />
-                <Text style={[styles.receiptText, { color: colors.textPrimary }]}>{line}</Text>
               </View>
-            ))}
+            </View>
+
+            {/* Places rich cards under bot answer */}
+            {!isUser && item.places && item.places.length > 0 && (
+              <View style={styles.placesContainer}>
+                {item.places.map((place) => (
+                  <TouchableOpacity
+                    key={place.key}
+                    style={[
+                      styles.placeCard,
+                      { backgroundColor: isDark ? '#1F2C34' : '#FFFFFF', borderColor: isDark ? '#2A3942' : '#E2E8F0' },
+                    ]}
+                    onPress={() => handlePlaceDirections(place)}
+                    activeOpacity={0.82}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Get directions to ${place.name}`}
+                  >
+                    <View style={styles.placeHeader}>
+                      <View style={styles.placeIconCircle}>
+                        <Ionicons name="location" size={14} color="#00A884" />
+                      </View>
+                      <Text
+                        numberOfLines={1}
+                        style={[styles.placeName, { color: isDark ? '#E9EDEF' : '#111B21' }]}
+                      >
+                        {place.name}
+                      </Text>
+                      {typeof place.distance === 'number' && (
+                        <View style={styles.distanceBadge}>
+                          <Ionicons name="navigate" size={10} color="#00A884" />
+                          <Text style={styles.distanceText}>
+                            {formatDistanceLabel(place.distance)}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+
+                    {!!place.category && (
+                      <Text numberOfLines={1} style={[styles.placeMeta, { color: timeMuted }]}>
+                        {place.category}
+                        {place.address ? ` · ${place.address}` : ''}
+                      </Text>
+                    )}
+
+                    <View style={styles.featuresRow}>
+                      {place.features.length > 0 ? (
+                        place.features.map((feature) => (
+                          <View
+                            key={feature}
+                            style={[
+                              styles.featureChip,
+                              { backgroundColor: isDark ? '#111B21' : '#F0FDF4', borderColor: isDark ? '#2A3942' : '#DCFCE7' },
+                            ]}
+                          >
+                            <MaterialCommunityIcons
+                              name={
+                                /toilet/i.test(feature)
+                                  ? 'human-handsdown'
+                                  : /step|ramp/i.test(feature)
+                                    ? 'walk'
+                                    : /elevator|lift/i.test(feature)
+                                      ? 'elevator-passenger'
+                                      : /parking/i.test(feature)
+                                        ? 'car'
+                                        : /door/i.test(feature)
+                                          ? 'door-sliding'
+                                          : 'check-circle'
+                              }
+                              size={11}
+                              color="#00A884"
+                            />
+                            <Text style={[styles.featureText, { color: isDark ? '#CBD5E1' : '#166534' }]}>
+                              {feature}
+                            </Text>
+                          </View>
+                        ))
+                      ) : (
+                        <Text style={[styles.placeMeta, { color: timeMuted }]}>
+                          No accessibility features listed
+                        </Text>
+                      )}
+                    </View>
+
+                    <View style={styles.directionsBar}>
+                      <Ionicons name="navigate-circle-outline" size={14} color="#00A884" />
+                      <Text style={styles.directionsText}>Get Turn-by-Turn Directions</Text>
+                      <Ionicons name="chevron-forward" size={12} color="#00A884" style={{ marginLeft: 'auto' }} />
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            {/* Receipts block */}
+            {!isUser && item.receipts && item.receipts.length > 0 && (
+              <View style={styles.receiptsContainer}>
+                {item.receipts.map((line) => (
+                  <View
+                    key={line}
+                    style={[
+                      styles.receiptPill,
+                      { backgroundColor: isDark ? '#1F2C34' : '#F0FDF4', borderColor: '#10B981' },
+                    ]}
+                  >
+                    <Ionicons name="checkmark-circle" size={15} color="#10B981" />
+                    <Text style={[styles.receiptText, { color: isDark ? '#E9EDEF' : '#065F46' }]}>
+                      {line}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
           </View>
-        )}
-      </View>
+        </View>
+      </AnimatedBubbleWrapper>
     );
   };
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={90}
-    >
-      <FlatList
-        ref={listRef}
-        data={messages}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={styles.listContent}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        ListEmptyComponent={showIntro ? <IntroBubble colors={colors} /> : null}
-        ListFooterComponent={
-          loading ? (
-            <View
-              style={[
-                styles.bubble,
-                styles.botBubble,
-                bubbleStyle(false),
-                styles.typingBubble,
-              ]}
-            >
-              <ActivityIndicator size="small" color={colors.accent} />
-              <Text style={[styles.typingText, { color: colors.textMuted }]}>
-                Assistant is typing…
-              </Text>
-            </View>
-          ) : null
-        }
-      />
+    <View style={[styles.mainWrapper, { backgroundColor: chatBg }]}>
+      {/* WhatsApp Header Bar */}
+      <View style={[styles.headerBar, { backgroundColor: headerBg }]}>
+        <View style={styles.headerAvatarContainer}>
+          <View style={styles.headerAvatar}>
+            <Ionicons name="sparkles" size={20} color="#FFFFFF" />
+          </View>
+          <PulsingOnlineDot />
+        </View>
 
-      {/* Hand-over happens from typed words (add place / add report / verify);
-          no shortcut button here anymore. */}
-      {!loading && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={styles.suggestionsRow}
-        >
-          {SUGGESTIONS.map((suggestion) => (
+        <View style={styles.headerInfo}>
+          <View style={styles.headerTitleRow}>
+            <Text style={[styles.headerTitle, { color: headerText }]}>
+              Accessibility Assistant
+            </Text>
+            <Ionicons name="checkmark-circle" size={15} color="#25D366" style={{ marginLeft: 4 }} />
+          </View>
+          <Text style={[styles.headerStatus, { color: headerMuted }]}>
+            {loading ? 'typing…' : 'online • real-time navigator'}
+          </Text>
+        </View>
+
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={styles.headerActionBtn}
+            onPress={() => setShowPromptLibrary((prev) => !prev)}
+            activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityLabel="Toggle example prompts"
+          >
+            <Ionicons
+              name={showPromptLibrary ? 'chatbubbles' : 'bulb-outline'}
+              size={20}
+              color="#FFFFFF"
+            />
+          </TouchableOpacity>
+
+          {messages.length > 0 && (
             <TouchableOpacity
-              key={suggestion}
+              style={styles.headerActionBtn}
+              onPress={handleClearChat}
+              activeOpacity={0.75}
               accessibilityRole="button"
-              accessibilityLabel={`Ask: ${suggestion}`}
-              style={[
-                styles.suggestionChip,
-                { backgroundColor: colors.accentBg, borderColor: colors.accent },
-              ]}
-              onPress={() => sendMessage(suggestion)}
+              accessibilityLabel="Reset conversation"
             >
-              <Ionicons name="sparkles-outline" size={12} color={colors.accent} />
-              <Text style={[styles.suggestionText, { color: colors.accent }]}>
-                {suggestion}
-              </Text>
+              <Ionicons name="refresh-outline" size={20} color="#FFFFFF" />
             </TouchableOpacity>
-          ))}
-        </ScrollView>
-      )}
-
-      <View
-        style={[
-          styles.inputContainer,
-          { backgroundColor: colors.headerBg, borderColor: colors.headerBorder },
-        ]}
-      >
-        <TextInput
-          style={[
-            styles.input,
-            {
-              backgroundColor: colors.chipBg,
-              borderColor: colors.chipBorder,
-              color: colors.textPrimary,
-            },
-          ]}
-          value={inputText}
-          onChangeText={setInputText}
-          placeholder="Ask accessibility assistant..."
-          placeholderTextColor={colors.textMuted}
-          editable={!loading}
-          returnKeyType="send"
-          accessibilityLabel="Message the accessibility assistant"
-          onSubmitEditing={() => sendMessage()}
-        />
-        <TouchableOpacity
-          style={[
-            styles.sendButton,
-            { backgroundColor: colors.accent },
-            loading && styles.disabledButton,
-          ]}
-          accessibilityRole="button"
-          accessibilityLabel="Send message"
-          onPress={() => sendMessage()}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Text style={styles.sendButtonText}>Send</Text>
           )}
-        </TouchableOpacity>
+        </View>
       </View>
-    </KeyboardAvoidingView>
+
+      {/* Main Chat Flow with Keyboard Avoidance */}
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
+      >
+        <FlatList
+          ref={listRef}
+          data={messages}
+          keyExtractor={(item) => item.id}
+          renderItem={renderMessageItem}
+          contentContainerStyle={[
+            styles.listContainer,
+            messages.length === 0 && styles.listContainerEmpty,
+          ]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          ListEmptyComponent={
+            <WelcomeAndPromptLibrary
+              isDark={isDark}
+              onSelectPrompt={(query) => sendMessage(query)}
+            />
+          }
+          ListFooterComponent={
+            loading ? <WhatsAppTypingIndicator isDark={isDark} /> : null
+          }
+        />
+
+        {/* Example Prompts Library Sheet (when toggled via bulb) */}
+        {showPromptLibrary && messages.length > 0 && (
+          <View
+            style={[
+              styles.drawerSheet,
+              { backgroundColor: isDark ? '#1F2C34' : '#FFFFFF', borderTopColor: isDark ? '#2A3942' : '#E2E8F0' },
+            ]}
+          >
+            <View style={styles.drawerHeader}>
+              <View style={styles.drawerTitleRow}>
+                <Ionicons name="sparkles" size={16} color="#00A884" />
+                <Text style={[styles.drawerTitle, { color: isDark ? '#E9EDEF' : '#111B21' }]}>
+                  Example Questions
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowPromptLibrary(false)}>
+                <Ionicons name="close" size={20} color={isDark ? '#8696A0' : '#667781'} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.drawerCardsRow}
+            >
+              {EXAMPLE_PROMPTS.map((p) => (
+                <TouchableOpacity
+                  key={p.id}
+                  style={[
+                    styles.drawerCard,
+                    { backgroundColor: isDark ? '#111B21' : '#F8FAFC', borderColor: isDark ? '#2A3942' : '#E2E8F0' },
+                  ]}
+                  onPress={() => sendMessage(p.query)}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.drawerCardIcon, { backgroundColor: p.color + '22' }]}>
+                    <Ionicons name={p.icon} size={16} color={p.color} />
+                  </View>
+                  <Text style={[styles.drawerCardTitle, { color: isDark ? '#E9EDEF' : '#111B21' }]} numberOfLines={1}>
+                    {p.title}
+                  </Text>
+                  <Text style={[styles.drawerCardQuery, { color: timeMuted }]} numberOfLines={2}>
+                    {p.query}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* Quick Suggestion Chips Carousel */}
+        {!loading && (
+          <View style={styles.chipsRowContainer}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.chipsScroll}
+            >
+              {QUICK_CHIPS.map((chip, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={[
+                    styles.chipBtn,
+                    {
+                      backgroundColor: isDark ? '#1F2C34' : '#FFFFFF',
+                      borderColor: isDark ? '#2A3942' : '#D1D5DB',
+                    },
+                  ]}
+                  onPress={() => sendMessage(chip.query)}
+                  activeOpacity={0.75}
+                >
+                  <Text style={[styles.chipText, { color: isDark ? '#E9EDEF' : '#111B21' }]}>
+                    {chip.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* WhatsApp-Style Floating / Docked Input Bar */}
+        <View style={[styles.inputBarWrap, { backgroundColor: inputBarBg }]}>
+          <TouchableOpacity
+            style={styles.inputLeftBtn}
+            onPress={() => setShowPromptLibrary((prev) => !prev)}
+            activeOpacity={0.75}
+            accessibilityLabel="Prompt examples"
+          >
+            <Ionicons
+              name={showPromptLibrary ? 'sparkles' : 'bulb-outline'}
+              size={22}
+              color={showPromptLibrary ? '#00A884' : (isDark ? '#8696A0' : '#54656F')}
+            />
+          </TouchableOpacity>
+
+          <View
+            style={[
+              styles.inputBox,
+              { backgroundColor: inputBg, borderColor: inputBorder },
+            ]}
+          >
+            <TextInput
+              style={[
+                styles.textInput,
+                { color: isDark ? '#E9EDEF' : '#111B21' },
+              ]}
+              value={inputText}
+              onChangeText={setInputText}
+              placeholder="Ask accessibility assistant…"
+              placeholderTextColor={isDark ? '#8696A0' : '#8696A0'}
+              editable={!loading}
+              multiline
+              maxLength={400}
+              returnKeyType="send"
+              onSubmitEditing={() => sendMessage()}
+            />
+
+            {inputText.length > 0 && (
+              <TouchableOpacity
+                onPress={() => setInputText('')}
+                style={styles.clearTextBtn}
+                accessibilityLabel="Clear input"
+              >
+                <Ionicons name="close-circle" size={17} color={isDark ? '#8696A0' : '#8696A0'} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <Animated.View style={{ transform: [{ scale: sendScale }] }}>
+            <TouchableOpacity
+              style={[
+                styles.sendCircle,
+                { backgroundColor: sendBtnBg },
+                (!inputText.trim() || loading) && styles.sendCircleDisabled,
+              ]}
+              onPress={() => sendMessage()}
+              disabled={!inputText.trim() || loading}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Send message"
+            >
+              <Ionicons
+                name="send"
+                size={16}
+                color="#FFFFFF"
+                style={{ marginLeft: 2 }}
+              />
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
+      </KeyboardAvoidingView>
+    </View>
   );
 };
 
-const ABILITIES = [
-  'Find accessible places near you, with distance in metres or km',
-  'Tell you which accessibility features each place has (ramp, toilet, step-free...)',
-  'Check if a place is saved in our database and share its accessibility details',
-  'Look up places we do not have yet, with a phone number or website to contact them',
-  'Add a new accessible place to the map',
-];
+/** Empty State Hero & Categorized Prompt Cards */
+const WelcomeAndPromptLibrary: React.FC<{
+  isDark: boolean;
+  onSelectPrompt: (query: string) => void;
+}> = ({ isDark, onSelectPrompt }) => {
+  const cardBg = isDark ? '#1F2C34' : '#FFFFFF';
+  const cardBorder = isDark ? '#2A3942' : '#E2E8F0';
+  const titleColor = isDark ? '#E9EDEF' : '#111B21';
+  const descColor = isDark ? '#8696A0' : '#667781';
 
-const IntroBubble: React.FC<{ colors: Record<string, string> }> = ({ colors }) => (
-  <View
-    style={[
-      styles.bubble,
-      styles.botBubble,
-      { backgroundColor: colors.card, borderColor: colors.cardBorder },
-    ]}
-  >
-    <Text style={[styles.messageText, { color: colors.textPrimary }]}>
-      {'Hi! I am your accessibility helper.\n\nI can do these things for you:'}
-    </Text>
-    {ABILITIES.map((ability) => (
-      <Text
-        key={ability}
-        style={[styles.messageText, { color: colors.textSecondary }, styles.abilityItem]}
-      >
-        {`\u2022 ${ability}`}
-      </Text>
-    ))}
-    <Text style={[styles.messageText, { color: colors.textMuted }, styles.introFooter]}>
-      {'Tap a suggestion below, or type your question. Any website, phone number or email I share can be tapped to open it.'}
-    </Text>
-  </View>
-);
+  return (
+    <View style={styles.welcomeContainer}>
+      <View style={[styles.heroCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+        <View style={styles.heroBadgeRow}>
+          <View style={styles.heroSparkleCircle}>
+            <Ionicons name="sparkles" size={16} color="#00A884" />
+          </View>
+          <Text style={styles.heroBadgeText}>AI ACCESSIBILITY NAVIGATOR</Text>
+        </View>
+        <Text style={[styles.heroHeading, { color: titleColor }]}>
+          Hi there! 👋 How can I help you today?
+        </Text>
+        <Text style={[styles.heroSubheading, { color: descColor }]}>
+          Ask me about wheelchair ramps, accessible restrooms, step-free venues, or add new places to our shared accessibility map.
+        </Text>
+      </View>
+
+      <View style={styles.promptsSectionHeader}>
+        <Ionicons name="bulb" size={16} color="#00A884" />
+        <Text style={[styles.promptsSectionTitle, { color: isDark ? '#CBD5E1' : '#334155' }]}>
+          SUGGESTED EXAMPLE PROMPTS
+        </Text>
+      </View>
+
+      <View style={styles.promptsGrid}>
+        {EXAMPLE_PROMPTS.map((prompt) => (
+          <TouchableOpacity
+            key={prompt.id}
+            style={[styles.promptGridCard, { backgroundColor: cardBg, borderColor: cardBorder }]}
+            onPress={() => onSelectPrompt(prompt.query)}
+            activeOpacity={0.78}
+          >
+            <View style={styles.promptCardTop}>
+              <View style={[styles.promptIconBadge, { backgroundColor: prompt.color + '1A' }]}>
+                <Ionicons name={prompt.icon} size={16} color={prompt.color} />
+              </View>
+              <View style={[styles.promptTagPill, { backgroundColor: prompt.color + '15' }]}>
+                <Text style={[styles.promptTagText, { color: prompt.color }]}>
+                  {prompt.tag}
+                </Text>
+              </View>
+            </View>
+
+            <Text style={[styles.promptCardTitle, { color: titleColor }]}>
+              {prompt.title}
+            </Text>
+
+            <Text style={[styles.promptCardQuery, { color: descColor }]} numberOfLines={2}>
+              &ldquo;{prompt.query}&rdquo;
+            </Text>
+
+            <View style={styles.promptCardAction}>
+              <Text style={styles.promptActionText}>Tap to ask</Text>
+              <Ionicons name="arrow-forward" size={13} color="#00A884" />
+            </View>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+};
 
 const styles = StyleSheet.create({
-  container: {
+  mainWrapper: {
     flex: 1,
   },
-  listContent: {
-    padding: 12,
+  flex: {
+    flex: 1,
   },
-  bubble: {
-    maxWidth: '80%',
-    padding: 10,
-    borderRadius: 10,
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  headerAvatarContainer: {
+    position: 'relative',
+    marginRight: 11,
+  },
+  headerAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  onlineContainer: {
+    position: 'absolute',
+    bottom: -1,
+    right: -1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  onlineDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#25D366',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  pulseRing: {
+    position: 'absolute',
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: 'rgba(37, 211, 102, 0.45)',
+  },
+  headerInfo: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  headerStatus: {
+    fontSize: 12,
+    marginTop: 1,
+    fontWeight: '500',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  headerActionBtn: {
+    padding: 6,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+  },
+  listContainer: {
+    paddingHorizontal: 10,
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  listContainerEmpty: {
+    flexGrow: 1,
+  },
+  messageRow: {
+    flexDirection: 'row',
     marginVertical: 4,
-    borderWidth: 1,
+    alignItems: 'flex-end',
+  },
+  rowUser: {
+    justifyContent: 'flex-end',
+  },
+  rowBot: {
+    justifyContent: 'flex-start',
+  },
+  avatarMini: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 6,
+    marginBottom: 4,
+  },
+  bubbleCol: {
+    maxWidth: '82%',
+  },
+  bubbleBase: {
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 6,
+    borderRadius: 14,
   },
   userBubble: {
     alignSelf: 'flex-end',
+    borderTopRightRadius: 2,
+  },
+  userBubbleDarkBorder: {
+    borderWidth: 1,
+    borderColor: '#026E59',
   },
   botBubble: {
     alignSelf: 'flex-start',
+    borderTopLeftRadius: 2,
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
-  messageText: {
-    fontSize: 15,
-    lineHeight: 20,
+  botBubbleLightShadow: {
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+    borderColor: '#E2E8F0',
   },
-  abilityItem: {
-    marginTop: 4,
+  messageBody: {
+    fontSize: 14.5,
+    lineHeight: 21,
   },
-  introFooter: {
-    marginTop: 10,
+  timestampContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    marginTop: 3,
+    gap: 3,
+  },
+  timestampText: {
+    fontSize: 10.5,
+    fontWeight: '500',
+  },
+  checkIcon: {
+    marginLeft: 1,
+  },
+  typingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 4,
+    paddingLeft: 4,
   },
   typingBubble: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderTopLeftRadius: 2,
     gap: 8,
-    paddingVertical: 8,
   },
-  typingText: {
-    fontSize: 13,
+  typingBubbleLight: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
-  suggestionsRow: {
-    paddingHorizontal: 10,
-    paddingTop: 6,
-    paddingBottom: 2,
-    gap: 6,
+  typingBubbleDark: {
+    backgroundColor: '#202C33',
+    borderWidth: 1,
+    borderColor: '#2A3942',
   },
-  suggestionChip: {
+  typingDotsWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 16,
-    borderWidth: 1,
+    gap: 4,
+    height: 14,
   },
-  suggestionText: {
+  typingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  typingLabel: {
     fontSize: 12,
-    fontWeight: '600',
+    fontStyle: 'italic',
   },
-  placesBlock: {
-    marginTop: 4,
-    marginBottom: 6,
+  placesContainer: {
+    marginTop: 6,
     gap: 6,
   },
   placeCard: {
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
-    padding: 10,
-    maxWidth: '85%',
-    alignSelf: 'flex-start',
+    padding: 11,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
   },
   placeHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  receiptsBlock: {
-    gap: 6,
-    marginTop: 8,
-    marginBottom: 4,
-    maxWidth: '88%',
-    alignSelf: 'flex-start',
-  },
-  receipt: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    paddingVertical: 9,
-    paddingHorizontal: 12,
+  placeIconCircle: {
+    width: 24,
+    height: 24,
     borderRadius: 12,
-    borderWidth: 1,
-  },
-  receiptText: {
-    flexShrink: 1,
-    fontSize: 12.5,
-    fontWeight: '600',
-  },
-  placeCardCta: {
-    flexDirection: 'row',
+    backgroundColor: 'rgba(0, 168, 132, 0.12)',
     alignItems: 'center',
-    gap: 5,
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(148, 163, 184, 0.35)',
-  },
-  placeCardCtaText: {
-    fontSize: 12,
-    fontWeight: '700',
+    justifyContent: 'center',
   },
   placeName: {
-    flexShrink: 1,
+    flex: 1,
     fontSize: 14,
     fontWeight: '700',
   },
-  distanceChip: {
+  distanceBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 10,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0, 168, 132, 0.14)',
   },
   distanceText: {
     fontSize: 11,
     fontWeight: '700',
+    color: '#00A884',
   },
   placeMeta: {
     fontSize: 12,
-    lineHeight: 16,
     marginTop: 3,
+    lineHeight: 16,
   },
   featuresRow: {
     flexDirection: 'row',
@@ -827,38 +1352,268 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 7,
     paddingVertical: 3,
-    borderRadius: 10,
+    borderRadius: 8,
     borderWidth: 1,
   },
   featureText: {
     fontSize: 11,
     fontWeight: '600',
   },
-  inputContainer: {
+  directionsBar: {
     flexDirection: 'row',
-    padding: 8,
-    borderTopWidth: 1,
     alignItems: 'center',
+    gap: 5,
+    marginTop: 8,
+    paddingTop: 7,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(148, 163, 184, 0.35)',
   },
-  input: {
-    flex: 1,
-    height: 40,
+  directionsText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#00A884',
+  },
+  receiptsContainer: {
+    marginTop: 6,
+    gap: 5,
+  },
+  receiptPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderRadius: 10,
     borderWidth: 1,
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    marginRight: 8,
   },
-  sendButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-  },
-  disabledButton: {
-    opacity: 0.6,
-  },
-  sendButtonText: {
-    color: '#FFF',
+  receiptText: {
+    flex: 1,
+    fontSize: 12,
     fontWeight: '600',
+  },
+  welcomeContainer: {
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+  },
+  heroCard: {
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+  },
+  heroBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  heroSparkleCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0, 168, 132, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    color: '#00A884',
+  },
+  heroHeading: {
+    fontSize: 17,
+    fontWeight: '800',
+    lineHeight: 23,
+    marginBottom: 6,
+  },
+  heroSubheading: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  promptsSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 10,
+    paddingHorizontal: 2,
+  },
+  promptsSectionTitle: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+  promptsGrid: {
+    gap: 8,
+  },
+  promptGridCard: {
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+  },
+  promptCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  promptIconBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  promptTagPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  promptTagText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+  },
+  promptCardTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 3,
+  },
+  promptCardQuery: {
+    fontSize: 12,
+    lineHeight: 16,
+    marginBottom: 8,
+  },
+  promptCardAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  promptActionText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#00A884',
+  },
+  drawerSheet: {
+    borderTopWidth: 1,
+    paddingTop: 10,
+    paddingBottom: 8,
+  },
+  drawerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    marginBottom: 8,
+  },
+  drawerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  drawerTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  drawerCardsRow: {
+    paddingHorizontal: 10,
+    gap: 8,
+  },
+  drawerCard: {
+    width: 170,
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  drawerCardIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  drawerCardTitle: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  drawerCardQuery: {
+    fontSize: 11,
+    lineHeight: 14,
+  },
+  chipsRowContainer: {
+    paddingVertical: 5,
+  },
+  chipsScroll: {
+    paddingHorizontal: 8,
+    gap: 6,
+  },
+  chipBtn: {
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+  },
+  chipText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  inputBarWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+    gap: 6,
+  },
+  inputLeftBtn: {
+    padding: 6,
+    borderRadius: 20,
+  },
+  inputBox: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 22,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: Platform.OS === 'ios' ? 8 : 4,
+    minHeight: 40,
+    maxHeight: 100,
+  },
+  textInput: {
+    flex: 1,
+    fontSize: 14.5,
+    paddingTop: 0,
+    paddingBottom: 0,
+  },
+  clearTextBtn: {
+    padding: 2,
+  },
+  sendCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+  },
+  sendCircleDisabled: {
+    opacity: 0.5,
   },
 });
 

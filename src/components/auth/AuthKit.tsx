@@ -29,7 +29,8 @@ export function AuthTopBar({
     if (router.canGoBack()) {
       router.back();
     } else {
-      router.replace('/onboarding');
+      // Root decides: first launch -> onboarding, otherwise -> map (guests browse).
+      router.replace('/');
     }
   };
 

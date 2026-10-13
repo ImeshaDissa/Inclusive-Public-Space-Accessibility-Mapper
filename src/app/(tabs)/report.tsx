@@ -21,7 +21,7 @@ import {
 
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
 
@@ -194,6 +194,8 @@ export default function SubmitReportScreen() {
   const {
     places,
     addReport,
+    authReady,
+    isAuthenticated,
   } = useApp();
 
   const {
@@ -1242,6 +1244,11 @@ export default function SubmitReportScreen() {
   // UI
   // ============================================================
 
+  // Adding a place or filing a report is a contribution feature —
+  // sign up / log in first.
+  if (!authReady) return null;
+  if (!isAuthenticated) return <Redirect href="/login" />;
+
   return (
     <SafeAreaView
       style={[
@@ -1961,7 +1968,7 @@ export default function SubmitReportScreen() {
               location. This text also
               confirms your selection
               for screen-reader users
-              who can't see the map.
+              who can&apos;t see the map.
             </Text>
           </View>
 

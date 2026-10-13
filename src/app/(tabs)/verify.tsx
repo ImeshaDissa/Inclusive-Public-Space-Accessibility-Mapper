@@ -232,7 +232,7 @@ export default function VerificationQueueScreen() {
             <Ionicons name="search-outline" size={36} color={colors.emptyIcon} />
             <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No Matching Reports</Text>
             <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>
-              No verification entries found matching "{searchQuery}". Try a different location or keyword.
+              No verification entries found matching &ldquo;{searchQuery}&rdquo;. Try a different location or keyword.
             </Text>
           </View>
         }

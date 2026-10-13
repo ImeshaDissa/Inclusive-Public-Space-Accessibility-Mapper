@@ -10,7 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '@/context/ThemeContext';
 import { useApp } from '@/context/AppContext';
@@ -21,7 +21,7 @@ export default function ReportIssueScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { colors } = useAppTheme();
-  const { addReport } = useApp();
+  const { addReport, authReady, isAuthenticated } = useApp();
 
   // Extract params passed from the map
   const placeId = (params.placeId as string) || '';
@@ -105,6 +105,10 @@ export default function ReportIssueScreen() {
       Alert.alert('Submission Error', result.error || 'Failed to submit report. Please try again.');
     }
   };
+
+  // Filing an issue report is a contribution feature — sign up / log in first.
+  if (!authReady) return null;
+  if (!isAuthenticated) return <Redirect href="/login" />;
 
   return (
     <KeyboardAvoidingView
