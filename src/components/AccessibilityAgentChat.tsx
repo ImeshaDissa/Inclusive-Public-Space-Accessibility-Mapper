@@ -864,19 +864,14 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
           ]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
-          ListEmptyComponent={
-            <WelcomeAndPromptLibrary
-              isDark={isDark}
-              onSelectPrompt={(query) => sendMessage(query)}
-            />
-          }
+          ListEmptyComponent={<WelcomeNote isDark={isDark} />}
           ListFooterComponent={
             loading ? <WhatsAppTypingIndicator isDark={isDark} /> : null
           }
         />
 
         {/* Example Prompts Library Sheet (when toggled via bulb) */}
-        {showPromptLibrary && messages.length > 0 && (
+        {showPromptLibrary && (
           <View
             style={[
               styles.drawerSheet,
@@ -925,7 +920,7 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
         )}
 
         {/* Quick Suggestion Chips Carousel */}
-        {!loading && (
+        {!loading && inputText.trim().length === 0 && (
           <View style={styles.chipsRowContainer}>
             <ScrollView
               horizontal
@@ -1035,11 +1030,8 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
   );
 };
 
-/** Empty State Hero & Categorized Prompt Cards */
-const WelcomeAndPromptLibrary: React.FC<{
-  isDark: boolean;
-  onSelectPrompt: (query: string) => void;
-}> = ({ isDark, onSelectPrompt }) => {
+/** Empty State Hero — short note only; examples live behind the bulb button */
+const WelcomeNote: React.FC<{ isDark: boolean }> = ({ isDark }) => {
   const cardBg = isDark ? '#1A1215' : '#FFFFFF';
   const cardBorder = isDark ? '#332328' : '#DDD9CE';
   const titleColor = isDark ? '#EFECE9' : '#050505';
@@ -1059,50 +1051,8 @@ const WelcomeAndPromptLibrary: React.FC<{
           Hi there! 👋 How can I help you today?
         </Text>
         <Text style={[styles.heroSubheading, { color: descColor }]}>
-          Ask me about wheelchair ramps, accessible restrooms, step-free venues, or add new places to our shared accessibility map.
+          Ask me about wheelchair ramps, accessible restrooms, step-free venues, or add new places to our shared accessibility map. Tap the 💡 icon below for example questions.
         </Text>
-      </View>
-
-      <View style={styles.promptsSectionHeader}>
-        <Ionicons name="bulb" size={16} color={accent} />
-        <Text style={[styles.promptsSectionTitle, { color: accent }]}>
-          SUGGESTED EXAMPLE PROMPTS
-        </Text>
-      </View>
-
-      <View style={styles.promptsGrid}>
-        {EXAMPLE_PROMPTS.map((prompt) => (
-          <TouchableOpacity
-            key={prompt.id}
-            style={[styles.promptGridCard, { backgroundColor: cardBg, borderColor: cardBorder }]}
-            onPress={() => onSelectPrompt(prompt.query)}
-            activeOpacity={0.78}
-          >
-            <View style={styles.promptCardTop}>
-              <View style={[styles.promptIconBadge, { backgroundColor: prompt.color + '1A' }]}>
-                <Ionicons name={prompt.icon} size={16} color={prompt.color} />
-              </View>
-              <View style={[styles.promptTagPill, { backgroundColor: prompt.color + '15' }]}>
-                <Text style={[styles.promptTagText, { color: prompt.color }]}>
-                  {prompt.tag}
-                </Text>
-              </View>
-            </View>
-
-            <Text style={[styles.promptCardTitle, { color: titleColor }]}>
-              {prompt.title}
-            </Text>
-
-            <Text style={[styles.promptCardQuery, { color: descColor }]} numberOfLines={2}>
-              &ldquo;{prompt.query}&rdquo;
-            </Text>
-
-            <View style={styles.promptCardAction}>
-              <Text style={[styles.promptActionText, { color: accent }]}>Tap to ask</Text>
-              <Ionicons name="arrow-forward" size={13} color={accent} />
-            </View>
-          </TouchableOpacity>
-        ))}
       </View>
     </View>
   );
