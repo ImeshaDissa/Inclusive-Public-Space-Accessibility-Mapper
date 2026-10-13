@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   View,
   AccessibilityInfo,
+  Keyboard,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { VoiceTypingButton } from '@/components/VoiceTypingButton';
@@ -351,6 +352,28 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
   const { isDark } = useAppTheme();
   const { showToast } = useToast();
   const listRef = useRef<FlatList<Message>>(null);
+  const rootRef = useRef<View>(null);
+  // Android KAV height behavior leaves the input half under the keyboard, so
+  // measure the real overlap ourselves and pad the chat flow by exactly that.
+  // Self-corrects whether or not the window resizes (adjustResize).
+  const [kbOverlap, setKbOverlap] = useState(0);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const applyOverlap = (kbTopScreenY: number) => {
+      rootRef.current?.measureInWindow((_x, y, _w, h) => {
+        if (h > 0) setKbOverlap(Math.max(0, y + h - kbTopScreenY));
+      });
+    };
+    const show = Keyboard.addListener('keyboardDidShow', (e) =>
+      applyOverlap(e.endCoordinates.screenY)
+    );
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKbOverlap(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   // Send button press scale animation
   const sendScale = useRef(new Animated.Value(1)).current;
@@ -796,7 +819,7 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
   };
 
   return (
-    <View style={[styles.mainWrapper, { backgroundColor: chatBg }]}>
+    <View ref={rootRef} style={[styles.mainWrapper, { backgroundColor: chatBg }]}>
       {/* WhatsApp Header Bar */}
       <View style={[styles.headerBar, { backgroundColor: headerBg }]}>
         <View style={styles.headerAvatarContainer}>
@@ -849,7 +872,7 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
 
       {/* Main Chat Flow with Keyboard Avoidance */}
       <KeyboardAvoidingView
-        style={styles.flex}
+        style={[styles.flex, Platform.OS === 'android' && { paddingBottom: kbOverlap }]}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
       >
