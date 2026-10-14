@@ -70,32 +70,6 @@ const DEMO_ACCOUNT: LocalAccount = {
   profile: INITIAL_USER_PROFILE,
 };
 
-const DEMO_ACCOUNTS: LocalAccount[] = [
-  DEMO_ACCOUNT,
-  {
-    name: 'Taylor Brooks',
-    email: 'taylor.brooks@accessibility.org',
-    password: 'demo1234',
-    profile: {
-      ...INITIAL_USER_PROFILE,
-      name: 'Taylor Brooks',
-      email: 'taylor.brooks@accessibility.org',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=300&q=80',
-    },
-  },
-  {
-    name: 'Jordan Lee',
-    email: 'jordan.lee@accessibility.org',
-    password: 'demo1234',
-    profile: {
-      ...INITIAL_USER_PROFILE,
-      name: 'Jordan Lee',
-      email: 'jordan.lee@accessibility.org',
-      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=300&q=80',
-    },
-  },
-];
-
 const parseArray = <T,>(value: string | null, fallback: T[]): T[] => {
   if (!value) return fallback;
   try {
@@ -148,7 +122,7 @@ interface AppContextType {
     priority?: 'High' | 'Medium' | 'Low';
     location?: { latitude: number; longitude: number; address: string };
   }) => Promise<CreateReportResult>;
-  confirmReport: (reportId: string) => { success: boolean; message: string };
+  confirmReport: (reportId: string) => void;
   disputeReport: (reportId: string, reason: string, note?: string) => void;
   updateUserProfile: (updates: Partial<UserProfile>) => void;
   /** Uploads a picked local image to Supabase Storage and sets it as the avatar. */
@@ -159,18 +133,15 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-export function computeStatus(confirmCountOrUsers: number | string[], disputeCount: number): StatusType {
-  const count = Array.isArray(confirmCountOrUsers)
-    ? new Set(confirmCountOrUsers.map((u) => u.trim().toLowerCase())).size
-    : confirmCountOrUsers;
+export function computeStatus(confirmCount: number, disputeCount: number): StatusType {
   if (disputeCount >= 2) return 'disputed';
-  if (count >= 3) return 'verified';
+  if (confirmCount >= 3) return 'verified';
   return 'pending';
 }
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [authReady, setAuthReady] = useState(false);
-  const [accounts, setAccounts] = useState<LocalAccount[]>(DEMO_ACCOUNTS);
+  const [accounts, setAccounts] = useState<LocalAccount[]>([DEMO_ACCOUNT]);
   const [authEmail, setAuthEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [places, setPlaces] = useState<Place[]>(MOCK_PLACES);
@@ -232,7 +203,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               AsyncStorage.getItem(STORAGE_KEYS.notifications),
             ]);
 
-          const nextAccounts = parseArray<LocalAccount>(storedAccounts, DEMO_ACCOUNTS);
+          const nextAccounts = parseArray<LocalAccount>(storedAccounts, [DEMO_ACCOUNT]);
           const nextActiveEmail = parseString(storedActiveEmail);
           const activeAccount = nextActiveEmail
             ? nextAccounts.find((a) => a.email.toLowerCase() === nextActiveEmail.toLowerCase())
@@ -240,7 +211,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
           if (!isActive) return;
 
-          setAccounts(nextAccounts.length > 0 ? nextAccounts : DEMO_ACCOUNTS);
+          setAccounts(nextAccounts.length > 0 ? nextAccounts : [DEMO_ACCOUNT]);
           setAuthEmail(activeAccount ? activeAccount.email : null);
           setUserProfile(activeAccount ? activeAccount.profile : INITIAL_USER_PROFILE);
           setPlaces(parseArray<Place>(storedPlaces, MOCK_PLACES));
@@ -466,7 +437,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         status: 'pending',
         saved: true,
         description: note || 'Newly submitted place by a community member.',
-        confirmedBy: [(userId || authEmail || userProfile.email || userProfile.name || 'creator').trim().toLowerCase()],
       };
 
       setPlaces((prev) => [newPlace, ...prev]);
@@ -506,94 +476,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return result;
   };
 
-  const confirmReport = (reportId: string): { success: boolean; message: string } => {
+  const confirmReport = (reportId: string) => {
     const targetReport = reports.find((r) => r.id === reportId);
-    if (!targetReport) {
-      return { success: false, message: 'Report not found.' };
-    }
-    if (targetReport.status === 'verified') {
-      return { success: false, message: 'This record has already been verified by 3 unique users.' };
-    }
-    if (targetReport.status === 'disputed') {
-      return { success: false, message: 'This report has been disputed.' };
-    }
+    if (!targetReport || targetReport.status === 'verified' || targetReport.status === 'disputed') return;
 
-    // Determine current user identifier
-    const currentUserId = (userId || authEmail || userProfile.email || userProfile.name || 'current-user').trim().toLowerCase();
-
-    // Reconstruct list of users who have confirmed so far
-    let existingConfirmedBy = Array.isArray(targetReport.confirmedBy)
-      ? [...targetReport.confirmedBy]
-      : [];
-
-    // If confirmedBy array was not initialized, backfill from submitter / previous count
-    if (existingConfirmedBy.length === 0 && targetReport.confirmCount > 0) {
-      const initialUser = (targetReport.submitterName || 'submitter').trim().toLowerCase();
-      existingConfirmedBy.push(initialUser);
-      while (existingConfirmedBy.length < targetReport.confirmCount) {
-        existingConfirmedBy.push(`prior-verifier-${existingConfirmedBy.length}`);
-      }
-    }
-
-    // Check if the current user has already confirmed or submitted this report
-    const alreadyConfirmed = existingConfirmedBy.some((u) => {
-      const norm = u.trim().toLowerCase();
-      return (
-        norm === currentUserId ||
-        (authEmail && norm === authEmail.trim().toLowerCase()) ||
-        (userProfile.email && norm === userProfile.email.trim().toLowerCase()) ||
-        (userProfile.name && norm === userProfile.name.trim().toLowerCase())
-      );
-    });
-
-    if (alreadyConfirmed) {
-      return {
-        success: false,
-        message: 'You have already confirmed this record. Only confirmations from 3 unique users count toward verification.',
-      };
-    }
-
-    // Append current user to confirmedBy array
-    const updatedConfirmedBy = [...existingConfirmedBy, currentUserId];
-    // Strictly count unique users
-    const uniqueUsers = Array.from(new Set(updatedConfirmedBy.map((u) => u.trim().toLowerCase())));
-    const newConfirm = uniqueUsers.length;
-    const newStatus = computeStatus(uniqueUsers, targetReport.disputeCount);
+    const newConfirm = targetReport.confirmCount + 1;
+    const newStatus = computeStatus(newConfirm, targetReport.disputeCount);
 
     setReports((prevReports) =>
       prevReports.map((r) => {
         if (r.id !== reportId) return r;
-        return {
-          ...r,
-          confirmedBy: updatedConfirmedBy,
-          confirmCount: newConfirm,
-          status: newStatus,
-        };
+        return { ...r, confirmCount: newConfirm, status: newStatus };
       })
     );
 
     if (isSupabaseConfigured) {
-      updateReportConfirmInSupabase(reportId, newConfirm, newStatus, updatedConfirmedBy);
+      updateReportConfirmInSupabase(reportId, newConfirm, newStatus);
     }
 
     setPlaces((prevPlaces) =>
       prevPlaces.map((p) => {
         if (p.id !== targetReport.placeId) return p;
-        const placeConfirmedBy = Array.isArray(p.confirmedBy) ? [...p.confirmedBy] : [];
-        const isUserAlreadyInPlace = placeConfirmedBy.some((u) => {
-          const norm = u.trim().toLowerCase();
-          return (
-            norm === currentUserId ||
-            (authEmail && norm === authEmail.trim().toLowerCase()) ||
-            (userProfile.email && norm === userProfile.email.trim().toLowerCase())
-          );
-        });
-
-        const updatedPlaceConfirmedBy = isUserAlreadyInPlace
-          ? placeConfirmedBy
-          : [...placeConfirmedBy, currentUserId];
-        const placeUniqueUsers = Array.from(new Set(updatedPlaceConfirmedBy.map((u) => u.trim().toLowerCase())));
-        const placeConfirms = Math.max(placeUniqueUsers.length, isUserAlreadyInPlace ? p.confirmCount : p.confirmCount + 1);
+        const placeConfirms = p.confirmCount + 1;
         const updatedPlaceStatus = computeStatus(placeConfirms, p.disputeCount);
         if (updatedPlaceStatus !== p.status) {
           addNotificationIfSaved(p.id, p.name, p.status, updatedPlaceStatus);
@@ -601,21 +505,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (isSupabaseConfigured) {
           updatePlaceStatusInSupabase(p.id, placeConfirms, p.disputeCount, updatedPlaceStatus);
         }
-        return {
-          ...p,
-          confirmedBy: updatedPlaceConfirmedBy,
-          confirmCount: placeConfirms,
-          status: updatedPlaceStatus,
-        };
+        return { ...p, confirmCount: placeConfirms, status: updatedPlaceStatus };
       })
     );
-
-    return {
-      success: true,
-      message: newStatus === 'verified'
-        ? 'Verification complete! Verified by 3 unique users.'
-        : `Confirmation recorded (${newConfirm}/3 unique user confirmations).`,
-    };
   };
 
   const disputeReport = (reportId: string, reason: string, note?: string) => {

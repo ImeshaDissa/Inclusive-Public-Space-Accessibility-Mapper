@@ -149,7 +149,6 @@ export async function createReportInBackend(
     confirmCount: 1,
     disputeCount: 0,
     status: 'pending',
-    confirmedBy: [input.submitterName || 'Community Auditor (You)'],
   };
 
   // 3. Prepare Supabase database row payload
@@ -163,9 +162,6 @@ export async function createReportInBackend(
   } catch (e) {
     // Ignore auth errors
   }
-
-  const initialConfirmedBy = [submitterId || input.submitterName || 'Community Auditor (You)'];
-  frontendReport.confirmedBy = initialConfirmedBy;
 
   const dbRow: Partial<ReportDbRow> = {
     id: reportId,
@@ -181,7 +177,6 @@ export async function createReportInBackend(
     confirm_count: 1,
     dispute_count: 0,
     status: 'pending',
-    confirmed_by: initialConfirmedBy,
     latitude: input.location?.latitude ?? null,
     longitude: input.location?.longitude ?? null,
     address: input.location?.address ?? null,
@@ -265,9 +260,6 @@ export async function fetchReportsFromBackend(userId?: string): Promise<Report[]
       disputeCount: row.dispute_count || 0,
       status: row.status || 'pending',
       disputeReasons: row.dispute_reasons || [],
-      confirmedBy: Array.isArray(row.confirmed_by)
-        ? row.confirmed_by
-        : (row.confirm_count > 0 ? [row.submitter_id || row.submitter_name || 'initial_user'] : []),
     }));
   } catch (e) {
     console.warn('[Backend Supabase] Error in fetchReportsFromBackend:', e);
@@ -281,8 +273,7 @@ export async function fetchReportsFromBackend(userId?: string): Promise<Report[]
 export async function confirmReportInBackend(
   reportId: string,
   newConfirmCount: number,
-  newStatus: StatusType,
-  confirmedBy?: string[]
+  newStatus: StatusType
 ): Promise<boolean> {
   return true;
 }

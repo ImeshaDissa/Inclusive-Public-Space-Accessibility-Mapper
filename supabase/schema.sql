@@ -48,7 +48,6 @@ create table if not exists public.places (
   confirm_count integer default 0,
   dispute_count integer default 0,
   status text default 'pending',
-  confirmed_by text[] default array[]::text[],
   saved boolean default true,
   description text,
   created_at timestamptz default now()
@@ -69,7 +68,6 @@ create table if not exists public.reports (
   confirm_count integer default 1,
   dispute_count integer default 0,
   dispute_reasons text[] default array[]::text[],
-  confirmed_by text[] default array[]::text[],
   status text default 'pending',
   created_at timestamptz default now()
 );
@@ -347,14 +345,7 @@ on conflict (id) do nothing;
 
 create or replace function public.handle_report_verification_threshold()
 returns trigger as $$
-declare
-  unique_confirms integer;
 begin
-  if new.confirmed_by is not null and array_length(new.confirmed_by, 1) > 0 then
-    select count(distinct lower(trim(u))) into unique_confirms from unnest(new.confirmed_by) as u;
-    new.confirm_count := unique_confirms;
-  end if;
-
   if new.dispute_count >= 2 then
     new.status := 'disputed';
   elsif new.confirm_count >= 3 then
@@ -368,19 +359,12 @@ $$ language plpgsql security definer;
 
 drop trigger if exists on_report_verification_update on public.reports;
 create trigger on_report_verification_update
-  before insert or update of confirm_count, dispute_count, confirmed_by on public.reports
+  before insert or update of confirm_count, dispute_count on public.reports
   for each row execute function public.handle_report_verification_threshold();
 
 create or replace function public.handle_place_verification_threshold()
 returns trigger as $$
-declare
-  unique_confirms integer;
 begin
-  if new.confirmed_by is not null and array_length(new.confirmed_by, 1) > 0 then
-    select count(distinct lower(trim(u))) into unique_confirms from unnest(new.confirmed_by) as u;
-    new.confirm_count := unique_confirms;
-  end if;
-
   if new.dispute_count >= 2 then
     new.status := 'disputed';
   elsif new.confirm_count >= 3 then
@@ -394,5 +378,5 @@ $$ language plpgsql security definer;
 
 drop trigger if exists on_place_verification_update on public.places;
 create trigger on_place_verification_update
-  before insert or update of confirm_count, dispute_count, confirmed_by on public.places
+  before insert or update of confirm_count, dispute_count on public.places
   for each row execute function public.handle_place_verification_threshold();
