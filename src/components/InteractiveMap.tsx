@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { View, StyleSheet, Platform, TouchableOpacity, Text } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,15 +22,31 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   const webviewRef = useRef<WebView>(null);
   const iframeRef = useRef<any>(null);
 
-  // Modern UI Map HTML using Leaflet and free CartoDB Voyager tiles (shows real Sri Lanka places)
-  const mapHtml = `
+  // Content-only serialization of the pins: same places (even a new array
+  // identity from filtering) yields the same string, so the memo below — and
+  // the WebView document — stays untouched. Passing the raw array made the
+  // map reload on every keystroke/theme render.
+  const markerData = useMemo(
+    () => JSON.stringify(places.map(({ id, lat, lng, status }) => ({ id, lat, lng, status }))),
+    [places]
+  );
+
+  // Memoized so the WebView `source` prop keeps a stable identity: React Native
+  // compares it with !==, so a new object every render reloaded the whole map
+  // document (Leaflet CDN + tiles) on each keystroke/context update.
+  // Theme colors are deliberately excluded: a theme change used to rebuild the
+  // HTML and reload the WebView, which on Android could abort the first load
+  // and leave the map permanently blank in dark mode. The container View
+  // carries the themed background instead.
+  const mapHtml = useMemo(
+    () => `
 <!DOCTYPE html>
 <html>
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
-    html, body, #map { height: 100%; margin: 0; padding: 0; background: ${colors.background}; }
+    html, body, #map { height: 100%; margin: 0; padding: 0; background: transparent; }
     .leaflet-control-attribution { display: none !important; }
 
     .custom-marker {
@@ -48,9 +64,9 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       z-index: 1000 !important;
       box-shadow: 0 6px 12px rgba(0,0,0,0.5);
     }
-    .custom-marker.verified { background-color: ${colors.statusDotVerified}; }
-    .custom-marker.disputed { background-color: ${colors.statusDotDisputed}; }
-    .custom-marker.pending { background-color: ${colors.statusDotPending}; }
+    .custom-marker.verified { background-color: #2D6A4F; }
+    .custom-marker.disputed { background-color: #8B1E2F; }
+    .custom-marker.pending { background-color: #8F5C1B; }
   </style>
 </head>
 <body>
@@ -65,7 +81,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
       maxZoom: 20,
     }).addTo(map);
 
-    const places = ${JSON.stringify(places)};
+    const places = ${markerData};
     const selectedId = "${selectedPlaceId || ''}";
 
     const markers = {};
@@ -134,7 +150,11 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
     });
   </script>
 </body>
-</html>`;
+</html>`,
+    [markerData, selectedPlaceId],
+  );
+
+  const source = useMemo(() => ({ html: mapHtml }), [mapHtml]);
 
   const sendMapCommand = (cmd: MapCommand) => {
     if (Platform.OS === 'web') {
@@ -181,7 +201,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
   }, [places]);
 
   return (
-    <View style={[styles.container, { borderColor: colors.cardBorder }]}>
+    <View style={[styles.container, { backgroundColor: colors.background, borderColor: colors.cardBorder }]}>
       {Platform.OS === 'web' ? (
         // @ts-ignore: iframe is supported in react-native-web
         <iframe
@@ -195,7 +215,7 @@ export const InteractiveMap: React.FC<InteractiveMapProps> = ({
           ref={webviewRef}
           style={styles.map}
           originWhitelist={['*']}
-          source={{ html: mapHtml }}
+          source={source}
           onMessage={handleMessage}
           javaScriptEnabled
           domStorageEnabled
