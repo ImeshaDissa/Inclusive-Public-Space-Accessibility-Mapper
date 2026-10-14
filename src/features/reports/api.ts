@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Report, StatusType, Place } from '@/types/accessibility';
 import { CreateReportInput, CreateReportResult, ReportDbRow } from './types';
 
@@ -19,9 +19,8 @@ export async function uploadReportPhotoToSupabase(
     return photoUri;
   }
 
-  // Bypass dummy Supabase URL to prevent network crash logs in console
-  const dummyUrl = 'vevjkvbkmanzihstkrxm.supabase.co';
-  if (process.env.EXPO_PUBLIC_SUPABASE_URL?.includes(dummyUrl)) {
+  // Offline mock mode: keep the local uri instead of hitting Supabase Storage.
+  if (!isSupabaseConfigured) {
     return photoUri; // Return local uri immediately for offline mock mode
   }
 
@@ -185,8 +184,7 @@ export async function createReportInBackend(
 
   // 4. Insert into Supabase table 'reports'
   try {
-    const isDummy = process.env.EXPO_PUBLIC_SUPABASE_URL?.includes('vevjkvbkmanzihstkrxm');
-    if (isDummy) {
+    if (!isSupabaseConfigured) {
       return {
         success: true,
         report: frontendReport,
@@ -227,8 +225,7 @@ export async function createReportInBackend(
  */
 export async function fetchReportsFromBackend(userId?: string): Promise<Report[]> {
   try {
-    const isDummy = process.env.EXPO_PUBLIC_SUPABASE_URL?.includes('vevjkvbkmanzihstkrxm');
-    if (isDummy) {
+    if (!isSupabaseConfigured) {
       return []; // Return empty array for offline mock mode instead of failing network request
     }
 

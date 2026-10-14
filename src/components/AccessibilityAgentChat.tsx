@@ -16,6 +16,8 @@ import * as Location from 'expo-location';
 import { supabase } from '../lib/supabase';
 import { useAppTheme } from '../context/ThemeContext';
 import { formatDistanceLabel } from '../lib/geoUtils';
+import { openDirections } from '../lib/directions';
+import { useToast } from '../context/ToastContext';
 import { ChatMessageText } from './ChatMessageText';
 
 /** One place row shown under an assistant answer (features + distance). */
@@ -24,6 +26,9 @@ interface ChatPlace {
   name: string;
   category?: string;
   address?: string;
+  /** Coordinates, so a result card can offer real turn-by-turn directions. */
+  lat?: number;
+  lng?: number;
   /** Metres, as returned by the find_nearby_accessible_places RPC. */
   distance?: number;
   /** Human labels of the accessibility features this place has. */
@@ -36,6 +41,8 @@ interface Message {
   text: string;
   actionResponse?: unknown[];
   places?: ChatPlace[];
+  /** Green "what I just did for you" lines for the agentic write tools. */
+  receipts?: string[];
 }
 
 /** Friendly labels for feature keys coming from the DB / AI tools. */
@@ -82,11 +89,16 @@ const toChatPlaces = (raw: any, index: number): ChatPlace => {
         ? raw.distance_m
         : undefined;
 
+  const lat = Number(raw?.lat ?? raw?.latitude);
+  const lng = Number(raw?.lng ?? raw?.longitude);
+
   return {
     key: `${raw?.id ?? raw?.name ?? 'place'}-${index}`,
     name: String(raw?.name ?? raw?.place_name ?? 'Accessible place'),
     category: typeof raw?.category === 'string' ? raw.category : undefined,
     address: typeof raw?.address === 'string' ? raw.address : undefined,
+    lat: Number.isFinite(lat) ? lat : undefined,
+    lng: Number.isFinite(lng) ? lng : undefined,
     distance,
     features,
   };
@@ -101,14 +113,50 @@ const SUGGESTIONS = [
   'Which places have an accessible toilet?',
 ];
 
+/**
+ * "I want to add a place", "add my shop", "register a new venue" — the
+ * customer wants to put something on the map themselves, so the chat hands
+ * them over to the Add Place form instead of interviewing them.
+ */
+const ADD_PLACE_INTENT =
+  /\b(add|register|pin|put|create|submit|save)\b[^.?!]{0,40}?\b(place|venue|location|spot|shop|store|business|building|mall|hospital|school|temple|park|restaurant|cafe|hotel|pharmacy|bank|office|facility|centre|center)\b/i;
+
+/** "add a report/issue for this place" is the REPORT flow, not the add-place form. */
+const REPORT_INTENT = /\b(report|issue|problem|barrier|complaint)\b/i;
+
+const wantsToAddPlace = (text: string): boolean =>
+  ADD_PLACE_INTENT.test(text) && !REPORT_INTENT.test(text);
+
+/** "I want to add report", "file an issue", "report a problem" → Submit wizard. */
+const ADD_REPORT_INTENT =
+  /\b(add|file|submit|raise|lodge|make|create|start|send|report|write)\b[^.?!]{0,40}?\b(report|issue|problem|complaint|barrier)\b/i;
+
+const wantsToAddReport = (text: string): boolean => ADD_REPORT_INTENT.test(text);
+
+/** "verify this place", "validate entry" → the Verify queue tab. */
+const VERIFY_INTENT = /\b(verify|validate)\b/i;
+
+const wantsToVerify = (text: string): boolean => VERIFY_INTENT.test(text);
+
 export interface AccessibilityAgentChatProps {
   onPlaceAdded?: (placeData: any) => void;
   onPlacesFound?: (placesData: any[]) => void;
+  /** Called after the assistant writes to the map, so shared state refetches. */
+  onDataChanged?: () => void;
+  /** Auto-navigates to the Submit wizard when the customer mentions add place / add report. */
+  onAddPlace?: () => void;
+  onAddReport?: () => void;
+  /** Auto-navigates to the Verify queue when the customer mentions verifying a place. */
+  onVerifyPlace?: () => void;
 }
 
 export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
   onPlaceAdded,
   onPlacesFound,
+  onDataChanged,
+  onAddPlace,
+  onAddReport,
+  onVerifyPlace,
 }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
@@ -117,6 +165,20 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
   // Shown only while the chat is empty. Hidden for good after the first question.
   const [showIntro, setShowIntro] = useState(true);
   const { colors } = useAppTheme();
+  const { showToast } = useToast();
+
+  /** A suggested place is only useful if the user can actually get to it. */
+  const handlePlaceDirections = async (place: ChatPlace) => {
+    const opened = await openDirections({
+      name: place.name,
+      address: place.address,
+      lat: place.lat,
+      lng: place.lng,
+    });
+    if (!opened) {
+      showToast('Could not open a maps app on this device.', 'warning');
+    }
+  };
 
   const listRef = useRef<FlatList<Message>>(null);
 
@@ -189,8 +251,43 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
 
     setMessages((prev) => [...prev, userMsg]);
     setInputText('');
-    setLoading(true);
     setShowIntro(false);
+
+    // One-line bot bubble + jump to the right screen: these phrases are a
+    // hand-over, not a conversation, so the AI round-trip is skipped.
+    const handOff = (botText: string, go?: () => void) => {
+      setMessages((prev) => [
+        ...prev,
+        { id: (Date.now() + 1).toString(), sender: 'bot' as const, text: botText },
+      ]);
+      go?.();
+    };
+
+    if (onAddPlace && wantsToAddPlace(text)) {
+      handOff(
+        'Sure — let us put it on the map. I have opened the Add Place form for you: search for the place or drag the pin to its exact spot, then tap “+ Add New” to name it and tick the accessibility features it has. Come back here any time if you get stuck.',
+        onAddPlace
+      );
+      return;
+    }
+
+    if (onAddReport && wantsToAddReport(text)) {
+      handOff(
+        'Opening the report form — pick the place on the map, tap Continue, then describe what you found and add a photo if you can.',
+        onAddReport
+      );
+      return;
+    }
+
+    if (onVerifyPlace && wantsToVerify(text)) {
+      handOff(
+        'Opening the verification queue — confirm or dispute the places waiting for a check.',
+        onVerifyPlace
+      );
+      return;
+    }
+
+    setLoading(true);
 
     try {
       const location = await resolveLocation();
@@ -239,10 +336,36 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
       const actionResponse = data?.actionResponse || [];
       const chatPlaces: ChatPlace[] = [];
 
+      // "What I just did for you" lines for the agentic write tools.
+      const receipts: string[] = [];
+      let wroteToMap = false;
+
       if (Array.isArray(actionResponse) && actionResponse.length > 0) {
         actionResponse.forEach((action: any) => {
           if (action?.tool === 'addAccessiblePlace') {
-            onPlaceAdded?.(action.result);
+            const result = action.result ?? {};
+            if (result.status === 'created') {
+              onPlaceAdded?.(result);
+              wroteToMap = true;
+              receipts.push(
+                `Added “${result.place?.name ?? 'the place'}” to the map — pending verification`
+              );
+            }
+          } else if (action?.tool === 'reportPlaceIssue') {
+            const result = action.result ?? {};
+            if (result.status === 'created') {
+              wroteToMap = true;
+              receipts.push(`Filed your report for “${result.report?.place_name ?? 'the place'}”`);
+            }
+          } else if (action?.tool === 'verifyPlace') {
+            const result = action.result ?? {};
+            if (result.status === 'recorded') {
+              wroteToMap = true;
+              const word = result.verdict === 'dispute' ? 'dispute' : 'confirmation';
+              receipts.push(
+                `Recorded your ${word} for “${result.place_name}” — now ${result.confirm_count} confirms / ${result.dispute_count} disputes (${String(result.place_status ?? '').toUpperCase()})`
+              );
+            }
           } else if (action?.tool === 'searchAccessiblePlaces') {
             const places = action.result?.places || action.result;
             const list = Array.isArray(places) ? places : [places];
@@ -268,9 +391,14 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
         text: botText,
         actionResponse,
         places: chatPlaces.length > 0 ? chatPlaces : undefined,
+        receipts: receipts.length > 0 ? receipts : undefined,
       };
 
       setMessages((prev) => [...prev, botMsg]);
+
+      // Pull the real rows back in so the Map / Inbox / Profile tabs show the
+      // change straight away instead of only after a restart.
+      if (wroteToMap) onDataChanged?.();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       setMessages((prev) => [
@@ -312,9 +440,13 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
         {!isUser && item.places && item.places.length > 0 && (
           <View style={styles.placesBlock}>
             {item.places.map((place) => (
-              <View
+              <TouchableOpacity
                 key={place.key}
                 style={[styles.placeCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+                onPress={() => handlePlaceDirections(place)}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={`Get directions to ${place.name}`}
               >
                 <View style={styles.placeHeader}>
                   <Ionicons name="location" size={14} color={colors.accent} />
@@ -376,6 +508,32 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
                     </Text>
                   )}
                 </View>
+
+                {/* Discoverability: tapping the card opens the maps app. */}
+                <View style={styles.placeCardCta}>
+                  <Ionicons name="navigate-outline" size={13} color={colors.accent} />
+                  <Text style={[styles.placeCardCtaText, { color: colors.accent }]}>
+                    Get directions
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {/* Confirmation of an agentic write (place added / report filed / verified). */}
+        {!isUser && item.receipts && item.receipts.length > 0 && (
+          <View style={styles.receiptsBlock}>
+            {item.receipts.map((line) => (
+              <View
+                key={line}
+                style={[
+                  styles.receipt,
+                  { backgroundColor: colors.card, borderColor: colors.cardBorder },
+                ]}
+              >
+                <Ionicons name="checkmark-circle" size={14} color="#10B981" />
+                <Text style={[styles.receiptText, { color: colors.textPrimary }]}>{line}</Text>
               </View>
             ))}
           </View>
@@ -418,6 +576,8 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
         }
       />
 
+      {/* Hand-over happens from typed words (add place / add report / verify);
+          no shortcut button here anymore. */}
       {!loading && (
         <ScrollView
           horizontal
@@ -598,6 +758,40 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+  },
+  receiptsBlock: {
+    gap: 6,
+    marginTop: 8,
+    marginBottom: 4,
+    maxWidth: '88%',
+    alignSelf: 'flex-start',
+  },
+  receipt: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  receiptText: {
+    flexShrink: 1,
+    fontSize: 12.5,
+    fontWeight: '600',
+  },
+  placeCardCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(148, 163, 184, 0.35)',
+  },
+  placeCardCtaText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
   placeName: {
     flexShrink: 1,

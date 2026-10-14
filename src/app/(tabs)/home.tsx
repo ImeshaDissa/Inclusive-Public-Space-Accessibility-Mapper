@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,30 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useApp } from '@/context/AppContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+const LOCAL_FALLBACK_IMAGES = [
+  require('@/assets/images/train_station.jpg'),
+  require('@/assets/images/botanical_gardens.jpg'),
+  require('@/assets/images/public_restroom.jpg'),
+];
+
+const SafeActivityImage = ({ uri, seed, style }: { uri?: string; seed: string; style: any }) => {
+  const [failed, setFailed] = useState(false);
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = (hash << 5) - hash + seed.charCodeAt(i);
+    hash |= 0;
+  }
+  const fallback = LOCAL_FALLBACK_IMAGES[Math.abs(hash) % LOCAL_FALLBACK_IMAGES.length];
+
+  return (
+    <Image
+      source={!failed && uri ? { uri } : fallback}
+      style={style}
+      onError={() => setFailed(true)}
+    />
+  );
+};
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -162,7 +186,7 @@ export default function HomeScreen() {
               style={styles.activityCard}
               onPress={() => router.push('/verify' as any)}
             >
-              <Image source={{ uri: item.photos[0] }} style={styles.activityImage} />
+              <SafeActivityImage uri={item.photos[0]} seed={item.id} style={styles.activityImage} />
               <View style={styles.activityInfo}>
                 <Text style={styles.activityPlace}>{item.placeName}</Text>
                 <Text style={styles.activityNote} numberOfLines={2}>

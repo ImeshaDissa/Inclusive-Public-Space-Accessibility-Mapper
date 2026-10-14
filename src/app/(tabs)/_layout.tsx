@@ -21,6 +21,7 @@ export default function TabLayout() {
 
   return (
     <Tabs
+      initialRouteName="map"
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.accent,

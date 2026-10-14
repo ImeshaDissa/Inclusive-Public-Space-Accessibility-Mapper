@@ -2,8 +2,10 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { useApp } from '@/context/AppContext';
 import { useAppTheme } from '@/context/ThemeContext';
+import { useToast } from '@/context/ToastContext';
 import { AccessibilityAgentChat } from '@/components/AccessibilityAgentChat';
 import { Place, StatusType, AccessibilityFeatures } from '@/types/accessibility';
 
@@ -87,11 +89,34 @@ const normalizeMarker = (raw: any): Place => {
  * tab still renders those pins.
  */
 export default function AssistantScreen() {
+  const router = useRouter();
   const { colors } = useAppTheme();
-  const { addAiMarker, setAiMarkers } = useApp();
+  const { showToast } = useToast();
+  const { addAiMarker, setAiMarkers, refreshCommunityData } = useApp();
 
   // Mirror the assistant's tool results into shared state for the Map tab.
   const handlePlaceAdded = (placeData: any) => addAiMarker(normalizeMarker(placeData));
+
+  /**
+   * Hand a customer who wants to add a place over to the Submit wizard, which
+   * already pins a spot and writes the new place row (see CategoryPlacesSection's
+   * "+ Add New" card). A toast tells them what to do once they arrive.
+   */
+  const handleAddPlace = () => {
+    showToast('Add Place form opened — pin the spot, then tap "+ Add New".', 'info');
+    router.push('/report' as any);
+  };
+
+  /** Same wizard, second step: pick the place, Continue, describe the issue. */
+  const handleAddReport = () => {
+    showToast('Report form opened — pick the place, tap Continue, describe the issue.', 'info');
+    router.push('/report' as any);
+  };
+
+  const handleVerifyPlace = () => {
+    showToast('Verification queue opened — confirm or dispute the places listed.', 'info');
+    router.push('/verify' as any);
+  };
 
   const handlePlacesFound = (placesData: any[]) =>
     setAiMarkers(
@@ -123,6 +148,12 @@ export default function AssistantScreen() {
         <AccessibilityAgentChat
           onPlaceAdded={handlePlaceAdded}
           onPlacesFound={handlePlacesFound}
+          onAddPlace={handleAddPlace}
+          onAddReport={handleAddReport}
+          onVerifyPlace={handleVerifyPlace}
+          onDataChanged={() => {
+            refreshCommunityData().catch(() => undefined);
+          }}
         />
       </View>
     </SafeAreaView>

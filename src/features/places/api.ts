@@ -1,29 +1,3 @@
-<<<<<<< HEAD
-import { supabase } from "@/lib/supabase";
-import type { Place } from "./types";
-
-export async function getNearbyPlaces(
-  latitude: number,
-  longitude: number,
-): Promise<Place[]> {
-  // TODO: add radius filter using latitude/longitude once place count grows
-  // large enough that fetching every row stops being practical. Options:
-  // - PostGIS ST_DWithin query via a Postgres RPC function
-  // - Simple bounding-box filter (.gte/.lte on lat/long) as a lighter interim step
-  const { data, error } = await supabase
-    .from("places")
-    .select("id, name, latitude, longitude, overall_status")
-    .order("id");
-
-  if (error) {
-    throw error;
-  }
-
-  void latitude;
-  void longitude;
-  return (data ?? []) as Place[];
-}
-=======
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { Place, StatusType } from '@/types/accessibility';
 import { MOCK_PLACES } from '@/constants/mockData';
@@ -64,8 +38,8 @@ export async function fetchPlacesFromSupabase(userId?: string): Promise<Place[]>
       name: p.name,
       category: p.category,
       address: p.address,
-      lat: p.lat,
-      lng: p.lng,
+      lat: p.lat ?? p.latitude ?? 0,
+      lng: p.lng ?? p.longitude ?? 0,
       features: p.features || {
         ramp: false,
         elevator: false,
@@ -74,6 +48,7 @@ export async function fetchPlacesFromSupabase(userId?: string): Promise<Place[]>
         stepFree: false,
         tactilePaving: false,
         automaticDoor: false,
+        brailleSignage: false,
       },
       photos: p.photos && p.photos.length > 0 ? p.photos : ['https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=800&q=80'],
       confirmCount: p.confirm_count || 0,
@@ -86,6 +61,25 @@ export async function fetchPlacesFromSupabase(userId?: string): Promise<Place[]>
     console.error('Error fetching places from Supabase:', err);
     return MOCK_PLACES;
   }
+}
+
+/**
+ * Compatibility helper for useNearbyPlaces
+ */
+export async function getNearbyPlaces(
+  latitude: number,
+  longitude: number
+): Promise<any[]> {
+  const places = await fetchPlacesFromSupabase();
+  void latitude;
+  void longitude;
+  return places.map((p) => ({
+    id: p.id,
+    name: p.name,
+    latitude: p.lat,
+    longitude: p.lng,
+    overall_status: p.status === 'verified' ? 'green' : p.status === 'disputed' ? 'red' : 'yellow',
+  }));
 }
 
 /**
@@ -176,4 +170,3 @@ export async function toggleSavePlaceInSupabase(
     return false;
   }
 }
->>>>>>> 744f926984dd6c25fa44c0e284a64b9731a6a9f2
