@@ -5,15 +5,12 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  Dimensions,
   Animated,
-  NativeSyntheticEvent,
-  NativeScrollEvent,
   Image,
   ImageSourcePropType,
-  Platform,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
   useWindowDimensions,
-  AccessibilityInfo,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -22,197 +19,73 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAppTheme } from '@/context/ThemeContext';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-
-interface BadgeItem {
-  text: string;
-  emoji: string;
-  bg: string;
-  border: string;
-  color: string;
-  style: {
-    top?: number;
-    bottom?: number;
-    left?: number;
-    right?: number;
-  };
-}
-
 interface OnboardingSlide {
   id: string;
+  image: ImageSourcePropType;
+  eyebrow: string;
   title: string;
   description: string;
-  img1: ImageSourcePropType;
-  img2: ImageSourcePropType;
-  img3: ImageSourcePropType;
-  badges: BadgeItem[];
+  highlights: string[];
+  color: string;
+  surfaceColor: string;
+  iconBg: string;
+  isGuestPromise?: boolean;
 }
 
 const SLIDES: OnboardingSlide[] = [
   {
-    id: '1',
-    title: 'Make your journey absolute effortless',
-    description:
-      'Find verified ramps, tactile paths, and step-free venues before you head out. Powered by direct community audits.',
-    img1: require('@/assets/images/onboarding/wheelchair-user.png'),
-    img2: require('@/assets/images/onboarding/auditor.png'),
-    img3: require('@/assets/images/onboarding/tactile-guide.png'),
-    badges: [
-      {
-        text: 'Verified Access',
-        emoji: '♿',
-        bg: '#E6F8EE',
-        border: '#BBF7D0',
-        color: '#0E8345',
-        style: { bottom: 12, left: 10 },
-      },
-      {
-        text: 'Smart Alerts',
-        emoji: '⚡',
-        bg: '#FEF6E4',
-        border: '#FDE047',
-        color: '#B45309',
-        style: { top: 12, right: 10 },
-      },
-      {
-        text: 'Step-Free Ramp',
-        emoji: '📐',
-        bg: '#FEF9C3',
-        border: '#FDE047',
-        color: '#713F12',
-        style: { top: 24, left: 12 },
-      },
-      {
-        text: 'Tactile Path',
-        emoji: '🧭',
-        bg: '#E8F5FE',
-        border: '#BAE6FD',
-        color: '#0369A1',
-        style: { bottom: 20, right: 10 },
-      },
-    ],
+    id: 'welcome',
+    image: require('@/assets/images/onboarding/welcome-accessibility.png'),
+    eyebrow: 'INCLUSIVE MAPPER',
+    title: 'Move through your city with confidence.',
+    description: 'Accessibility details, shared by the people who use public spaces every day.',
+    highlights: ['Ramps & step-free paths', 'Elevators & accessible restrooms'],
+    color: '#2563EB',
+    surfaceColor: '#F4F8FF',
+    iconBg: '#DCEBFF',
   },
   {
-    id: '2',
-    title: 'Report barriers & update city access in seconds',
-    description:
-      'Snap photos of steep slopes, broken elevators, or new ramps to keep the community database accurate and live.',
-    img1: require('@/assets/images/onboarding/auditor.png'),
-    img2: require('@/assets/images/onboarding/wheelchair-user.png'),
-    img3: require('@/assets/images/onboarding/scenic-terrace.png'),
-    badges: [
-      {
-        text: 'Photo Evidence',
-        emoji: '📸',
-        bg: '#FEF08A',
-        border: '#FDE047',
-        color: '#713F12',
-        style: { bottom: 12, right: 10 },
-      },
-      {
-        text: '1:12 Incline Passed',
-        emoji: '📏',
-        bg: '#E6F8EE',
-        border: '#BBF7D0',
-        color: '#0E8345',
-        style: { top: 14, left: 10 },
-      },
-      {
-        text: 'Barrier Flagged',
-        emoji: '⚠️',
-        bg: '#FFF1EE',
-        border: '#FECDD3',
-        color: '#C2410C',
-        style: { bottom: 14, left: 10 },
-      },
-      {
-        text: 'Real-Time Pin',
-        emoji: '📍',
-        bg: '#E8F5FE',
-        border: '#BAE6FD',
-        color: '#0369A1',
-        style: { top: 16, right: 10 },
-      },
-    ],
+    id: 'discover',
+    image: require('@/assets/images/onboarding/discover-accessibility.png'),
+    eyebrow: 'PLAN WITH CLARITY',
+    title: 'Know what to expect before you go.',
+    description: 'Find nearby places and see community-verified access information at a glance.',
+    highlights: ['Search nearby venues', 'See verified access details'],
+    color: '#047857',
+    surfaceColor: '#F2FCF7',
+    iconBg: '#D5F5E6',
   },
   {
-    id: '3',
-    title: 'Community verified data you can genuinely trust',
-    description:
-      'Official blueprints are often outdated. Our vibrant navigator community inspects and rates routes so you step forward with confidence.',
-    img1: require('@/assets/images/onboarding/tactile-guide.png'),
-    img2: require('@/assets/images/onboarding/scenic-terrace.png'),
-    img3: require('@/assets/images/onboarding/wheelchair-user.png'),
-    badges: [
-      {
-        text: 'Community Verified',
-        emoji: '🛡️',
-        bg: '#E6F8EE',
-        border: '#BBF7D0',
-        color: '#0E8345',
-        style: { top: 16, left: 12 },
-      },
-      {
-        text: '99.4% Accuracy',
-        emoji: '⭐',
-        bg: '#FEF6E4',
-        border: '#FDE047',
-        color: '#B45309',
-        style: { top: 10, right: 12 },
-      },
-      {
-        text: '3x Peer Checks',
-        emoji: '👥',
-        bg: '#E8F5FE',
-        border: '#BAE6FD',
-        color: '#0369A1',
-        style: { bottom: 18, right: 12 },
-      },
-    ],
+    id: 'contribute',
+    image: require('@/assets/images/onboarding/update-accessibility.png'),
+    eyebrow: 'KEEP THE MAP CURRENT',
+    title: 'Your local knowledge makes a difference.',
+    description: 'Pin an entrance, barrier, or accessibility change as soon as you spot it.',
+    highlights: ['Add a new location', 'Update accessibility details'],
+    color: '#7C3AED',
+    surfaceColor: '#F8F5FF',
+    iconBg: '#EDE4FF',
+    isGuestPromise: true,
   },
   {
-    id: '4',
-    title: 'Save favorites & navigate your city with freedom',
-    description:
-      'Bookmark accessible spots and receive live alerts when transit elevators go down or access improves.',
-    img1: require('@/assets/images/onboarding/scenic-terrace.png'),
-    img2: require('@/assets/images/onboarding/auditor.png'),
-    img3: require('@/assets/images/onboarding/tactile-guide.png'),
-    badges: [
-      {
-        text: 'Saved Places',
-        emoji: '❤️',
-        bg: '#FFF1EE',
-        border: '#FECDD3',
-        color: '#E11D48',
-        style: { top: 16, left: 12 },
-      },
-      {
-        text: 'Route Alert Active',
-        emoji: '🔔',
-        bg: '#FEF6E4',
-        border: '#FDE047',
-        color: '#B45309',
-        style: { top: 28, right: 12 },
-      },
-      {
-        text: 'SDG 10 & 11',
-        emoji: '🌍',
-        bg: '#E6F8EE',
-        border: '#BBF7D0',
-        color: '#0D9488',
-        style: { bottom: 16, left: 14 },
-      },
-    ],
+    id: 'community',
+    image: require('@/assets/images/onboarding/community-accessibility.png'),
+    eyebrow: 'OPTIONAL, ALWAYS',
+    title: 'Create an account only when it helps you.',
+    description: 'Sign in later to save places and receive updates. The map is ready whenever you are.',
+    highlights: ['Save your favorite places', 'Follow community updates'],
+    color: '#DB2777',
+    surfaceColor: '#FFF5F9',
+    iconBg: '#FFE0EC',
   },
 ];
 
 export default function OnboardingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { colors, isDark } = useAppTheme();
+  const { width } = useWindowDimensions();
   const [currentIndex, setCurrentIndex] = useState(0);
-  const flatListRef = useRef<FlatList>(null);
+  const flatListRef = useRef<FlatList<OnboardingSlide>>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
   // Live width/height so slides resize when the phone rotates (landscape mounts).
   const { width, height } = useWindowDimensions();
@@ -231,139 +104,85 @@ export default function OnboardingScreen() {
     );
   }, [currentIndex]);
 
-  const handleNext = () => {
-    if (currentIndex < SLIDES.length - 1) {
-      flatListRef.current?.scrollToIndex({ index: currentIndex + 1, animated: true });
-    } else {
-      handleGetStarted();
-    }
+  const goToSlide = (index: number) => {
+    const nextIndex = Math.min(Math.max(index, 0), SLIDES.length - 1);
+    setCurrentIndex(nextIndex);
+    flatListRef.current?.scrollToOffset({ offset: nextIndex * width, animated: true });
   };
 
-  const enterApp = () => {
-    // Guests can browse the map without an account; index.tsx reads this
-    // flag to decide whether to show onboarding on next launch.
-    AsyncStorage.setItem('onboardingSeen', '1').catch(() => {});
+  const enterAsGuest = () => {
     router.replace('/map');
-  };
-
-  const handleSkip = () => {
-    enterApp();
-  };
-
-  const handleGetStarted = () => {
-    enterApp();
-  };
-
-  const handleSignIn = () => {
-    router.replace('/login');
   };
 
   const onScroll = Animated.event(
     [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-    {
-      useNativeDriver: false,
-      listener: (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-        const contentOffset = event.nativeEvent.contentOffset.x;
-        const index = Math.round(contentOffset / width);
-        setCurrentIndex(index);
-      },
-    },
+    { useNativeDriver: false },
   );
+
+  const onMomentumScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    setCurrentIndex(Math.round(event.nativeEvent.contentOffset.x / width));
+  };
 
   const renderSlide = ({ item, index }: { item: OnboardingSlide; index: number }) => {
     const inputRange = [(index - 1) * width, index * width, (index + 1) * width];
-
-    const opacity = scrollX.interpolate({
+    const scale = scrollX.interpolate({
       inputRange,
-      outputRange: [0.3, 1, 0.3],
+      outputRange: [0.84, 1, 0.84],
       extrapolate: 'clamp',
     });
-
+    const opacity = scrollX.interpolate({
+      inputRange,
+      outputRange: [0.28, 1, 0.28],
+      extrapolate: 'clamp',
+    });
     const translateY = scrollX.interpolate({
       inputRange,
-      outputRange: reduceMotion ? [0, 0, 0] : [30, 0, 30],
+      outputRange: [28, 0, 28],
       extrapolate: 'clamp',
     });
 
     return (
-      <View
-        style={[styles.slideContainer, { width }]}
-        accessibilityLabel={`Slide ${index + 1} of ${SLIDES.length}: ${item.title}`}
-      >
-        {/* Top Visual Masonry Section */}
-        <View style={[styles.collageContainer, { height: height * (width > height ? 0.4 : 0.48) }]}>
-          <View style={styles.masonryGrid}>
-            {/* Left Column (Staggered Downwards) */}
-            <View style={[styles.column, styles.leftColumn]}>
-              <View style={[styles.cardFrame, { height: '56%' }]}>
-                <Image source={item.img1} style={styles.cardImage} resizeMode="cover" accessible={false} importantForAccessibility="no" />
-              </View>
-              <View style={[styles.cardFrame, { height: '40%' }]}>
-                <Image source={item.img3} style={styles.cardImage} resizeMode="cover" accessible={false} importantForAccessibility="no" />
-              </View>
-            </View>
-
-            {/* Right Column (Staggered Upwards) */}
-            <View style={[styles.column, styles.rightColumn]}>
-              <View style={[styles.cardFrame, { height: '42%' }]}>
-                <Image source={item.img2} style={styles.cardImage} resizeMode="cover" accessible={false} importantForAccessibility="no" />
-              </View>
-              <View style={[styles.cardFrame, { height: '54%' }]}>
-                <Image source={item.img1} style={styles.cardImage} resizeMode="cover" accessible={false} importantForAccessibility="no" />
-              </View>
-            </View>
-          </View>
-
-          {/* Floating Pill Badges */}
-          {item.badges.map((badge, bIdx) => (
-            <View
-              key={bIdx}
-              style={[
-                styles.badgePill,
-                {
-                  backgroundColor: badge.bg,
-                  borderColor: badge.border,
-                },
-                badge.style,
-              ]}
-            >
-              <Text style={styles.badgeEmoji}>{badge.emoji}</Text>
-              <Text style={[styles.badgeText, { color: badge.color }]}>{badge.text}</Text>
-            </View>
-          ))}
-
-          {/* Bottom Gradient Overlay Mask */}
-          <LinearGradient
-            colors={[
-              'rgba(255, 255, 255, 0)',
-              isDark ? 'rgba(11, 15, 25, 0.75)' : 'rgba(248, 250, 252, 0.75)',
-              colors.background,
+      <View style={[styles.slide, { width, backgroundColor: item.surfaceColor }]}>
+        <View style={styles.slideContent}>
+          <Animated.View
+            style={[
+              styles.illustration,
+              {
+                borderColor: `${item.color}30`,
+                opacity,
+                transform: [{ scale }],
+              },
             ]}
-            style={styles.gradientFade}
-            pointerEvents="none"
-          />
-        </View>
+          >
+            <Image source={item.image} style={styles.illustrationImage} resizeMode="cover" />
+          </Animated.View>
 
-        {/* Bottom Card Content */}
-        <Animated.View
-          style={[
-            styles.bottomContent,
-            {
-              backgroundColor: colors.card,
-              opacity,
-              transform: [{ translateY }],
-            },
-          ]}
-        >
-          <View style={styles.textContainer}>
-            <Text style={[styles.headline, { color: colors.textPrimary }]}>
-              {item.title}
-            </Text>
-            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-              {item.description}
-            </Text>
-          </View>
-        </Animated.View>
+          <Animated.View style={[styles.copy, { opacity, transform: [{ translateY }] }]}>
+            <Text style={[styles.eyebrow, { color: item.color }]}>{item.eyebrow}</Text>
+            <Text style={styles.title}>{item.title}</Text>
+            <Text style={styles.description}>{item.description}</Text>
+
+            {item.isGuestPromise && (
+              <View style={[styles.guestPromise, { backgroundColor: '#FFFFFF', borderColor: `${item.color}2E` }]}>
+                <View style={[styles.guestPromiseIcon, { backgroundColor: item.iconBg }]}>
+                  <Ionicons name="flash" size={16} color={item.color} />
+                </View>
+                <Text style={styles.guestPromiseText}>
+                  Update locations without logging in or signing up.
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.highlights}>
+              {item.highlights.map((highlight) => (
+                <View key={highlight} style={styles.highlight}>
+                  <Ionicons name="checkmark-circle" size={18} color={item.color} />
+                  <Text style={styles.highlightText}>{highlight}</Text>
+                </View>
+              ))}
+            </View>
+          </Animated.View>
+        </View>
       </View>
     );
   };
@@ -371,27 +190,25 @@ export default function OnboardingScreen() {
   const isLastSlide = currentIndex === SLIDES.length - 1;
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Brand Header */}
-      <View style={[styles.header, { paddingTop: Math.max(insets.top + 8, 16) }]}>
-        <View style={styles.brandRow}>
-          <LinearGradient
-            colors={['#FF5A36', '#F43F5E', '#F59E0B']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.logoGradient}
-          >
-            <View style={styles.logoInner}>
-              <Ionicons name="compass" size={16} color="#FF5A36" />
-            </View>
-          </LinearGradient>
-          <Text style={[styles.brandTitle, { color: colors.textPrimary }]}>
-            Inclusive<Text style={styles.brandTitleAccent}>Mapper</Text>
-          </Text>
+    <View style={styles.container}>
+      <View style={[styles.topBar, { paddingTop: insets.top + 12 }]}>
+        <View style={styles.progressLabel}>
+          <Text style={styles.progressText}>{String(currentIndex + 1).padStart(2, '0')}</Text>
+          <Text style={styles.progressTotal}> / {String(SLIDES.length).padStart(2, '0')}</Text>
         </View>
+        {!isLastSlide && (
+          <TouchableOpacity
+            onPress={enterAsGuest}
+            style={styles.skipBtn}
+            accessibilityLabel="Explore the map as a guest"
+            accessibilityRole="button"
+          >
+            <Text style={styles.skipText}>Explore as guest</Text>
+            <Ionicons name="arrow-forward" size={16} color="#475569" />
+          </TouchableOpacity>
+        )}
       </View>
 
-      {/* Main Slides List */}
       <FlatList
         ref={flatListRef}
         data={SLIDES}
@@ -401,309 +218,115 @@ export default function OnboardingScreen() {
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         onScroll={onScroll}
+        onMomentumScrollEnd={onMomentumScrollEnd}
         scrollEventThrottle={16}
         bounces={false}
+        initialNumToRender={SLIDES.length}
+        maxToRenderPerBatch={SLIDES.length}
+        getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
       />
 
-      {/* Footer Navigation Controls */}
-      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom + 12, 20) }]}>
-        {/* Pagination Dots */}
-        <View style={styles.paginationRow}>
-          {SLIDES.map((_, index) => {
+      <View style={[styles.bottomSection, { paddingBottom: Math.max(insets.bottom, 16) + 12 }]}>
+        <View style={styles.pagination} accessibilityLabel={`Onboarding step ${currentIndex + 1} of ${SLIDES.length}`}>
+          {SLIDES.map((slide, index) => {
             const isActive = index === currentIndex;
             return (
-              <Animated.View
-                key={index}
+              <View
+                key={slide.id}
                 style={[
                   styles.dot,
-                  {
-                    backgroundColor: isActive
-                      ? '#FF5A36'
-                      : isDark
-                      ? '#334155'
-                      : '#CBD5E1',
-                    width: isActive ? 24 : 8,
-                  },
+                  { backgroundColor: isActive ? activeColor : '#CBD5E1', width: isActive ? 28 : 8 },
                 ]}
               />
             );
           })}
         </View>
 
-        {/* Action Controls */}
-        <View style={styles.actionControls}>
-          {!isLastSlide ? (
-            <>
-              <TouchableOpacity
-                onPress={handleSkip}
-                style={styles.skipButton}
-                activeOpacity={0.7}
-                accessibilityLabel="Skip onboarding"
-                accessibilityRole="button"
-              >
-                <Text style={[styles.skipText, { color: isDark ? '#64748B' : '#94A3B8' }]}>
-                  Skip
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={handleNext}
-                style={styles.nextTextButton}
-                activeOpacity={0.8}
-                accessibilityLabel="Next slide"
-                accessibilityRole="button"
-              >
-                <Text style={styles.nextText}>Next</Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <>
-              <TouchableOpacity
-                onPress={handleSignIn}
-                style={styles.skipButton}
-                activeOpacity={0.7}
-                accessibilityLabel="Sign in"
-                accessibilityRole="button"
-              >
-                <Text style={[styles.skipText, { color: isDark ? '#94A3B8' : '#64748B' }]}>
-                  Sign In
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={handleGetStarted}
-                style={styles.getStartedPillBtn}
-                activeOpacity={0.85}
-                accessibilityLabel="Get started"
-                accessibilityRole="button"
-              >
-                <Text style={styles.getStartedPillText}>Get Started</Text>
-                <Ionicons name="arrow-forward" size={18} color="#FFFFFF" style={{ marginLeft: 6 }} />
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
+        {isLastSlide ? (
+          <View style={styles.finalActions}>
+            <TouchableOpacity
+              style={[styles.primaryButton, { backgroundColor: activeColor }]}
+              onPress={enterAsGuest}
+              activeOpacity={0.86}
+              accessibilityLabel="Explore the map without an account"
+              accessibilityRole="button"
+            >
+              <Text style={styles.primaryButtonText}>Explore without an account</Text>
+              <Ionicons name="map-outline" size={20} color="#FFFFFF" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={() => router.replace('/login')}
+              activeOpacity={0.75}
+              accessibilityLabel="Sign in or create an account"
+              accessibilityRole="button"
+            >
+              <Text style={styles.secondaryButtonText}>Sign in or create an account</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={[styles.primaryButton, { backgroundColor: activeColor }]}
+            onPress={() => goToSlide(currentIndex + 1)}
+            activeOpacity={0.86}
+            accessibilityLabel="Continue to next onboarding step"
+            accessibilityRole="button"
+          >
+            <Text style={styles.primaryButtonText}>Continue</Text>
+            <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    paddingHorizontal: 24,
-    paddingBottom: 8,
-    zIndex: 30,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  brandRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  logoGradient: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    padding: 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  logoInner: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 14,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  brandTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    letterSpacing: -0.3,
-  },
-  brandTitleAccent: {
-    color: '#FF5A36',
-  },
-  slideContainer: {
-    flex: 1,
-    justifyContent: 'space-between',
-  },
-  collageContainer: {
-    height: SCREEN_HEIGHT * 0.48,
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  masonryGrid: {
-    flex: 1,
-    flexDirection: 'row',
-    gap: 12,
-  },
-  column: {
-    flex: 1,
-    gap: 12,
-  },
-  leftColumn: {
-    paddingTop: 12,
-  },
-  rightColumn: {
-    marginTop: -8,
-  },
-  cardFrame: {
-    borderRadius: 22,
-    overflow: 'hidden',
-    backgroundColor: '#F1F5F9',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#0F172A',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.1,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 4,
-      },
-      web: {
-        boxShadow: '0 8px 24px -4px rgba(15, 23, 42, 0.08)',
-      },
-    }),
-  },
-  cardImage: {
-    width: '100%',
-    height: '100%',
-  },
-  badgePill: {
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  topBar: {
     position: 'absolute',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 9999,
-    borderWidth: 1,
-    zIndex: 25,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.12,
-        shadowRadius: 8,
-      },
-      android: {
-        elevation: 5,
-      },
-      web: {
-        boxShadow: '0 4px 14px 0 rgba(0, 0, 0, 0.08)',
-      },
-    }),
-  },
-  badgeEmoji: {
-    fontSize: 13,
-  },
-  badgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: -0.1,
-  },
-  gradientFade: {
-    position: 'absolute',
+    top: 0,
     left: 0,
     right: 0,
-    bottom: 0,
-    height: 90,
-    zIndex: 20,
-  },
-  bottomContent: {
-    paddingHorizontal: 28,
-    paddingTop: 16,
-    paddingBottom: 24,
-    justifyContent: 'center',
-  },
-  textContainer: {
-    gap: 12,
-  },
-  headline: {
-    fontSize: 28,
-    fontWeight: '800',
-    lineHeight: 34,
-    letterSpacing: -0.4,
-  },
-  subtitle: {
-    fontSize: 14,
-    fontWeight: '400',
-    lineHeight: 22,
-    letterSpacing: 0.1,
-  },
-  footer: {
-    paddingHorizontal: 28,
-    paddingTop: 12,
+    zIndex: 2,
+    paddingHorizontal: 24,
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    zIndex: 30,
-  },
-  paginationRow: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
   },
-  dot: {
-    height: 8,
-    borderRadius: 4,
+  progressLabel: { flexDirection: 'row', alignItems: 'baseline' },
+  progressText: { color: '#0F172A', fontSize: 14, fontWeight: '800', letterSpacing: 0.3 },
+  progressTotal: { color: '#94A3B8', fontSize: 12, fontWeight: '700' },
+  skipBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 10, paddingLeft: 12 },
+  skipText: { color: '#475569', fontSize: 14, fontWeight: '700' },
+  slide: { flex: 1, justifyContent: 'center', paddingHorizontal: 24 },
+  slideContent: { width: '100%', maxWidth: 520, alignSelf: 'center', alignItems: 'center', paddingTop: 52 },
+  illustration: {
+    width: 224,
+    height: 224,
+    borderRadius: 34,
+    borderWidth: 1,
+    overflow: 'hidden',
+    marginBottom: 34,
+    backgroundColor: '#FFFFFF',
   },
-  actionControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 20,
-  },
-  skipButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 6,
-  },
-  skipText: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  nextTextButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
-  nextText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#FF5A36',
-  },
-  getStartedPillBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FF5A36',
-    paddingHorizontal: 22,
-    paddingVertical: 14,
-    borderRadius: 9999,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#FF5A36',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 10,
-      },
-      android: {
-        elevation: 4,
-      },
-      web: {
-        boxShadow: '0 4px 14px 0 rgba(255, 90, 54, 0.35)',
-      },
-    }),
-  },
-  getStartedPillText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '800',
-  },
+  illustrationImage: { width: '100%', height: '100%' },
+  copy: { width: '100%', alignItems: 'center' },
+  eyebrow: { fontSize: 12, fontWeight: '900', letterSpacing: 1.2, textAlign: 'center', marginBottom: 10 },
+  title: { color: '#0F172A', fontSize: 30, fontWeight: '900', lineHeight: 37, letterSpacing: -0.7, textAlign: 'center', maxWidth: 460 },
+  description: { color: '#475569', fontSize: 16, fontWeight: '500', lineHeight: 24, textAlign: 'center', marginTop: 14, maxWidth: 430 },
+  guestPromise: { marginTop: 18, width: '100%', maxWidth: 410, padding: 13, borderRadius: 16, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 10, elevation: 1, shadowColor: '#334155', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4 },
+  guestPromiseIcon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  guestPromiseText: { flex: 1, color: '#1E293B', fontSize: 14, fontWeight: '800', lineHeight: 19 },
+  highlights: { width: '100%', maxWidth: 410, marginTop: 22, gap: 10 },
+  highlight: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+  highlightText: { color: '#334155', fontSize: 14, fontWeight: '700' },
+  bottomSection: { paddingHorizontal: 24, paddingTop: 14, gap: 18, backgroundColor: '#FFFFFF' },
+  pagination: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 7, height: 10 },
+  dot: { height: 8, borderRadius: 4 },
+  primaryButton: { width: '100%', minHeight: 56, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, paddingHorizontal: 20, elevation: 4, shadowColor: '#0F172A', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.18, shadowRadius: 8 },
+  primaryButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '900' },
+  finalActions: { gap: 8 },
+  secondaryButton: { minHeight: 42, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
+  secondaryButtonText: { color: '#475569', fontSize: 14, fontWeight: '800' },
 });

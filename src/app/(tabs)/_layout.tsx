@@ -1,20 +1,15 @@
 import { Tabs } from 'expo-router';
-import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '@/context/AppContext';
 import { useAppTheme } from '@/context/ThemeContext';
 
 export default function TabLayout() {
   const { authReady, notifications, reports } = useApp();
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
 
   if (!authReady) {
     return null;
   }
-
-  // Guests browse freely (Home / Map / search / place details). The screens
-  // that contribute — report, verify, AI assistant, profile — redirect to
-  // /login themselves, so router.push from Home is covered too.
 
   const unreadNotificationsCount = notifications.filter((n) => !n.read).length;
   const pendingReportsCount = reports.filter((r) => r.status === 'pending').length;
