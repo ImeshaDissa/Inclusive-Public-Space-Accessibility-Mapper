@@ -1,18 +1,14 @@
-import { Redirect, Tabs } from 'expo-router';
+import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '@/context/AppContext';
 import { useAppTheme } from '@/context/ThemeContext';
 
 export default function TabLayout() {
-  const { authReady, isAuthenticated, notifications, reports } = useApp();
+  const { authReady, notifications, reports } = useApp();
   const { colors } = useAppTheme();
 
   if (!authReady) {
     return null;
-  }
-
-  if (!isAuthenticated) {
-    return <Redirect href="/login" />;
   }
 
   const unreadNotificationsCount = notifications.filter((n) => !n.read).length;
