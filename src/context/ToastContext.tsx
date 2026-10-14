@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, Animated, TouchableOpacity, AccessibilityInfo } from 'react-native';
+import { View, Text, StyleSheet, Animated, TouchableOpacity, AccessibilityInfo, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+
+const USE_NATIVE_DRIVER = Platform.OS !== 'web';
 
 type ToastType = 'success' | 'error' | 'info' | 'warning';
 
@@ -72,8 +74,8 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const hideToast = useCallback(() => {
     Animated.parallel([
-      Animated.timing(slideAnim, { toValue: 100, useNativeDriver: true, duration: 250 }),
-      Animated.timing(opacityAnim, { toValue: 0, useNativeDriver: true, duration: 250 }),
+      Animated.timing(slideAnim, { toValue: 100, useNativeDriver: USE_NATIVE_DRIVER, duration: 250 }),
+      Animated.timing(opacityAnim, { toValue: 0, useNativeDriver: USE_NATIVE_DRIVER, duration: 250 }),
     ]).start(() => setToast(null));
   }, [slideAnim, opacityAnim]);
 
@@ -87,8 +89,8 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       progressAnim.setValue(1);
 
       Animated.parallel([
-        Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, tension: 50, friction: 8 }),
-        Animated.timing(opacityAnim, { toValue: 1, useNativeDriver: true, duration: 200 }),
+        Animated.spring(slideAnim, { toValue: 0, useNativeDriver: USE_NATIVE_DRIVER, tension: 50, friction: 8 }),
+        Animated.timing(opacityAnim, { toValue: 1, useNativeDriver: USE_NATIVE_DRIVER, duration: 200 }),
       ]).start();
 
       // Countdown bar: width only, so it must stay on the JS driver.
@@ -179,10 +181,7 @@ const styles = StyleSheet.create({
     right: 16,
     zIndex: 10000,
     elevation: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
+    boxShadow: '0px 6px 12px rgba(0, 0, 0, 0.35)',
   },
   toastCard: {
     flexDirection: 'row',

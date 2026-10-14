@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, Animated, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Animated, Platform, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '@/context/AppContext';
 import { useAppTheme } from '@/context/ThemeContext';
 import { AppNotification } from '@/types/accessibility';
+
+const USE_NATIVE_DRIVER = Platform.OS !== 'web';
 
 export const NotificationBanner: React.FC = () => {
   const { notifications, markNotificationsRead, isAuthenticated } = useApp();
@@ -19,7 +21,7 @@ export const NotificationBanner: React.FC = () => {
     slideAnim.setValue(-120);
     Animated.spring(slideAnim, {
       toValue: 0,
-      useNativeDriver: true,
+      useNativeDriver: USE_NATIVE_DRIVER,
       tension: 60,
       friction: 8,
     }).start();
@@ -27,7 +29,7 @@ export const NotificationBanner: React.FC = () => {
     setTimeout(() => {
       Animated.timing(slideAnim, {
         toValue: -120,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
         duration: 300,
       }).start(() => {
         setVisible(false);
@@ -53,7 +55,7 @@ export const NotificationBanner: React.FC = () => {
   const handleDismiss = () => {
     Animated.timing(slideAnim, {
       toValue: -120,
-      useNativeDriver: true,
+      useNativeDriver: USE_NATIVE_DRIVER,
       duration: 200,
     }).start(() => {
       setVisible(false);
@@ -106,10 +108,7 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 16,
     borderBottomRightRadius: 16,
     elevation: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.3)',
   },
   bannerContent: {
     flexDirection: 'row',
