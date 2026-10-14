@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useAppTheme } from '@/context/ThemeContext';
 
 interface OnboardingSlide {
   id: string;
@@ -84,6 +87,22 @@ export default function OnboardingScreen() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef<FlatList<OnboardingSlide>>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
+  // Live width/height so slides resize when the phone rotates (landscape mounts).
+  const { width, height } = useWindowDimensions();
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then(setReduceMotion)
+      .catch(() => undefined);
+  }, []);
+
+  // Tell screen-reader users which slide they are on.
+  useEffect(() => {
+    AccessibilityInfo.announceForAccessibility(
+      `Slide ${currentIndex + 1} of ${SLIDES.length}`
+    );
+  }, [currentIndex]);
 
   const goToSlide = (index: number) => {
     const nextIndex = Math.min(Math.max(index, 0), SLIDES.length - 1);
@@ -169,7 +188,6 @@ export default function OnboardingScreen() {
   };
 
   const isLastSlide = currentIndex === SLIDES.length - 1;
-  const activeColor = SLIDES[currentIndex].color;
 
   return (
     <View style={styles.container}>

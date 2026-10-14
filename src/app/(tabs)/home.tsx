@@ -1,176 +1,318 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  SafeAreaView,
   Image,
+  Modal,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { useApp } from '@/context/AppContext';
+import { useAppTheme } from '@/context/ThemeContext';
+import { Place, StatusType } from '@/types/accessibility';
+import { PlaceDetailsModal } from '@/components/PlaceDetailsModal';
+
+const LOCAL_FALLBACK_IMAGES = [
+  require('@/assets/images/train_station.jpg'),
+  require('@/assets/images/botanical_gardens.jpg'),
+  require('@/assets/images/public_restroom.jpg'),
+];
+
+const SafeActivityImage = ({ uri, seed, style }: { uri?: string; seed: string; style: any }) => {
+  const [failed, setFailed] = useState(false);
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = (hash << 5) - hash + seed.charCodeAt(i);
+    hash |= 0;
+  }
+  const fallback = LOCAL_FALLBACK_IMAGES[Math.abs(hash) % LOCAL_FALLBACK_IMAGES.length];
+
+    return (
+      <Image
+        source={!failed && uri ? { uri } : fallback}
+        style={style}
+        onError={() => setFailed(true)}
+        accessible={false}
+        importantForAccessibility="no"
+      />
+    );
+};
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { userProfile, places, reports } = useApp();
+  const { userProfile, places, reports, toggleSavePlace } = useApp();
+  const { colors, isDark, toggleTheme } = useAppTheme();
+
+  const [savedModalOpen, setSavedModalOpen] = useState(false);
+  const [detailPlace, setDetailPlace] = useState<Place | null>(null);
+
+  const savedPlaces = places.filter((p) => p.saved);
+
+  const statusDotColor = (status: StatusType) =>
+    status === 'verified'
+      ? colors.statusDotVerified
+      : status === 'disputed'
+      ? colors.statusDotDisputed
+      : colors.statusDotPending;
+
+  const statusLabel = (status: StatusType) =>
+    status === 'verified' ? 'Verified' : status === 'disputed' ? 'Disputed' : 'Pending';
 
   const verifiedCount = places.filter((p) => p.status === 'verified').length;
   const pendingCount = reports.filter((r) => r.status === 'pending').length;
-  const disputedCount = places.filter((p) => p.status === 'disputed').length;
   const totalConfirms = places.reduce((acc, p) => acc + p.confirmCount, 0);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+
       {/* App Top Header Bar */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: colors.headerBg, borderBottomColor: colors.headerBorder }]}>
         <View style={styles.userInfoRow}>
-          <Image source={{ uri: userProfile.avatar }} style={styles.avatar} />
+          <Image source={{ uri: userProfile.avatar }} style={[styles.avatar, { borderColor: colors.accent }]} />
           <View>
-            <Text style={styles.greetingText}>Welcome back 👋</Text>
-            <Text style={styles.userNameText}>{userProfile.name}</Text>
+            <Text style={[styles.greetingText, { color: colors.textMuted }]}>Welcome back 👋</Text>
+            <Text style={[styles.userNameText, { color: colors.textPrimary }]}>{userProfile.name}</Text>
           </View>
         </View>
 
-        <TouchableOpacity
-          style={styles.profileBadgeBtn}
-          onPress={() => router.push('/profile' as any)}
-        >
-          <Ionicons name="ribbon-outline" size={16} color="#818CF8" />
-          <Text style={styles.profileBadgeText}>Level 3 Auditor</Text>
-        </TouchableOpacity>
+        <View style={styles.headerRightActions}>
+          {/* Quick Theme Mode Toggle Button */}
+          <TouchableOpacity
+            style={[
+              styles.themeToggleBtn,
+              { backgroundColor: isDark ? '#1E293B' : '#F1F5F9', borderColor: colors.cardBorder },
+            ]}
+            onPress={toggleTheme}
+            activeOpacity={0.8}
+            hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
+            accessibilityRole="button"
+            accessibilityLabel={`Switch to ${isDark ? 'Light' : 'Dark'} theme`}
+          >
+            <Ionicons
+              name={isDark ? 'sunny' : 'moon'}
+              size={15}
+              color={isDark ? '#F59E0B' : '#0284C7'}
+            />
+            <Text style={[styles.themeToggleText, { color: colors.textPrimary }]}>
+              {isDark ? 'Light' : 'Dark'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.profileBadgeBtn, { backgroundColor: colors.accentBg, borderColor: colors.accent }]}
+            onPress={() => router.push('/profile' as any)}
+            accessibilityRole="button"
+            accessibilityLabel="Member — view your profile"
+          >
+            <Ionicons name="ribbon-outline" size={15} color={colors.accent} />
+            <Text style={[styles.profileBadgeText, { color: colors.accent }]}>Member</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
-      <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.scrollContainer}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Main Hero Card Banner */}
-        <View style={styles.heroCard}>
+        <View
+          style={[
+            styles.heroCard,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.cardBorder,
+            },
+          ]}
+        >
           <View style={styles.heroContent}>
-            <View style={styles.heroTag}>
-              <Ionicons name="accessibility" size={12} color="#10B981" />
-              <Text style={styles.heroTagText}>COMMUNITY ACCESSIBILITY PLATFORM</Text>
+            <View style={[styles.heroTag, { backgroundColor: colors.accentBg }]}>
+              <Ionicons name="sparkles" size={13} color={colors.accent} />
+              <Text style={[styles.heroTagText, { color: colors.accent }]}>WHERE ACCESSIBILITY MEETS FREEDOM</Text>
             </View>
-            <Text style={styles.heroTitle}>Mapping Step-Free & Inclusive Public Spaces</Text>
-            <Text style={styles.heroSubtitle}>
-              Together we audit ramps, elevators, and accessible amenities so everyone can navigate freely.
+
+            <Text style={[styles.heroTitle, { color: colors.textPrimary }]}>
+              Your easiest path, every day.
             </Text>
 
-            <TouchableOpacity
-              style={styles.heroCTA}
-              onPress={() => router.push('/map' as any)}
-            >
-              <Ionicons name="map" size={16} color="#FFF" />
-              <Text style={styles.heroCTAText}>Explore Interactive Map</Text>
-            </TouchableOpacity>
+            <Text style={[styles.heroSubtitle, { color: colors.textSecondary }]}>
+              Discover verified ramps, step-free entrances, and accessible restrooms so you can navigate every public space with total confidence.
+            </Text>
+
+            <View style={styles.heroButtonRow}>
+              <TouchableOpacity
+                style={[styles.heroCTA, { backgroundColor: colors.accent }]}
+                onPress={() => router.push('/map' as any)}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Explore Interactive Map"
+              >
+                <Text style={styles.heroCTAText}>Explore Map</Text>
+                <View style={styles.heroArrowCircle}>
+                  <Ionicons name="arrow-forward" size={13} color={colors.accent} />
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.heroSecondaryCTA, { backgroundColor: colors.secondaryButtonBg, borderColor: colors.secondaryButtonBorder }]}
+                onPress={() => router.push('/assistant' as any)}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Open AI Assistant"
+              >
+                <Ionicons name="sparkles" size={14} color={colors.accent} />
+                <Text style={[styles.heroSecondaryText, { color: colors.secondaryButtonText }]}>AI Assistant</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 
-        {/* Platform Overview Stats Grid */}
-        <Text style={styles.sectionTitle}>PLATFORM IMPACT & STATS</Text>
-        <View style={styles.statsGrid}>
-          {/* Card 1: Verified Venues */}
-          <View style={styles.statCard}>
-            <View style={[styles.statIconBox, { backgroundColor: '#064E3B' }]}>
-              <Ionicons name="checkmark-circle" size={20} color="#10B981" />
-            </View>
-            <Text style={styles.statNumber}>{verifiedCount}</Text>
-            <Text style={styles.statLabel}>Verified Places</Text>
+        {/* Triple Stat Card — Inspired by the Reference Design */}
+        <View
+          style={[
+            styles.tripleStatsCard,
+            { backgroundColor: colors.card, borderColor: colors.cardBorder },
+          ]}
+        >
+          <View style={styles.tripleStatCol}>
+            <Ionicons name="sparkles-outline" size={18} color="#C2A482" />
+            <Text style={[styles.tripleStatValue, { color: colors.textPrimary }]}>{verifiedCount}+</Text>
+            <Text style={[styles.tripleStatLabel, { color: colors.textMuted }]}>Verified Places</Text>
           </View>
 
-          {/* Card 2: Pending Audits */}
-          <View style={styles.statCard}>
-            <View style={[styles.statIconBox, { backgroundColor: '#78350F' }]}>
-              <Ionicons name="time" size={20} color="#F59E0B" />
-            </View>
-            <Text style={styles.statNumber}>{pendingCount}</Text>
-            <Text style={styles.statLabel}>Pending Queue</Text>
+          <View style={[styles.tripleStatDivider, { backgroundColor: colors.cardBorder }]} />
+
+          <View style={styles.tripleStatCol}>
+            <MaterialCommunityIcons name="wheelchair" size={20} color={colors.accent} />
+            <Text style={[styles.tripleStatValue, { color: colors.textPrimary }]}>{totalConfirms}+</Text>
+            <Text style={[styles.tripleStatLabel, { color: colors.textMuted }]}>Confirms</Text>
           </View>
 
-          {/* Card 3: Disputed Issues */}
-          <View style={styles.statCard}>
-            <View style={[styles.statIconBox, { backgroundColor: '#7F1D1D' }]}>
-              <Ionicons name="alert-circle" size={20} color="#EF4444" />
-            </View>
-            <Text style={styles.statNumber}>{disputedCount}</Text>
-            <Text style={styles.statLabel}>Disputed Venues</Text>
-          </View>
+          <View style={[styles.tripleStatDivider, { backgroundColor: colors.cardBorder }]} />
 
-          {/* Card 4: Total Confirmations */}
-          <View style={styles.statCard}>
-            <View style={[styles.statIconBox, { backgroundColor: '#312E81' }]}>
-              <Ionicons name="people" size={20} color="#818CF8" />
-            </View>
-            <Text style={styles.statNumber}>{totalConfirms}</Text>
-            <Text style={styles.statLabel}>Total Confirms</Text>
+          <View style={styles.tripleStatCol}>
+            <Ionicons name="shield-checkmark-outline" size={18} color={colors.statusDotVerified} />
+            <Text style={[styles.tripleStatValue, { color: colors.textPrimary }]}>{pendingCount > 0 ? pendingCount : places.length}</Text>
+            <Text style={[styles.tripleStatLabel, { color: colors.textMuted }]}>Audited Spots</Text>
           </View>
         </View>
 
         {/* Quick Action Shortcut Buttons */}
-        <Text style={styles.sectionTitle}>QUICK ACTIONS</Text>
+        <View style={styles.sectionHeaderRow}>
+          <Ionicons name="flash-outline" size={14} color={colors.accent} />
+          <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>
+            QUICK ACTIONS
+          </Text>
+        </View>
+
         <View style={styles.actionGrid}>
           <TouchableOpacity
-            style={styles.actionCard}
+            style={[
+              styles.actionCard,
+              { backgroundColor: colors.card, borderColor: colors.cardBorder },
+            ]}
             onPress={() => router.push('/map' as any)}
+            activeOpacity={0.82}
           >
-            <View style={[styles.actionIcon, { backgroundColor: '#312E81' }]}>
-              <Ionicons name="map-outline" size={24} color="#6366F1" />
+            <View style={[styles.actionIcon, { backgroundColor: colors.accentBg }]}>
+              <Ionicons name="map-outline" size={22} color={colors.accent} />
             </View>
-            <Text style={styles.actionTitle}>Discover Map</Text>
-            <Text style={styles.actionDesc}>Find step-free routes & color-coded pins</Text>
+            <Text style={[styles.actionTitle, { color: colors.textPrimary }]}>Discover Map</Text>
+            <Text style={[styles.actionDesc, { color: colors.textMuted }]}>
+              Find step-free routes & color-coded pins
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.actionCard}
+            style={[
+              styles.actionCard,
+              { backgroundColor: colors.card, borderColor: colors.cardBorder },
+            ]}
             onPress={() => router.push('/report' as any)}
+            activeOpacity={0.82}
           >
-            <View style={[styles.actionIcon, { backgroundColor: '#064E3B' }]}>
-              <Ionicons name="add-circle-outline" size={24} color="#10B981" />
+            <View style={[styles.actionIcon, { backgroundColor: isDark ? '#064E3B' : '#ECFDF5' }]}>
+              <Ionicons name="add-circle-outline" size={22} color="#059669" />
             </View>
-            <Text style={styles.actionTitle}>Submit Audit</Text>
-            <Text style={styles.actionDesc}>Log a venue ramp, elevator or restroom</Text>
+            <Text style={[styles.actionTitle, { color: colors.textPrimary }]}>Submit Audit</Text>
+            <Text style={[styles.actionDesc, { color: colors.textMuted }]}>
+              Log a venue ramp, elevator or restroom
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.actionCard}
+            style={[
+              styles.actionCard,
+              { backgroundColor: colors.card, borderColor: colors.cardBorder },
+            ]}
             onPress={() => router.push('/verify' as any)}
+            activeOpacity={0.82}
           >
-            <View style={[styles.actionIcon, { backgroundColor: '#78350F' }]}>
-              <Ionicons name="shield-checkmark-outline" size={24} color="#F59E0B" />
+            <View style={[styles.actionIcon, { backgroundColor: isDark ? '#78350F' : '#FFFBEB' }]}>
+              <Ionicons name="shield-checkmark-outline" size={22} color="#D97706" />
             </View>
-            <Text style={styles.actionTitle}>Verify Queue</Text>
-            <Text style={styles.actionDesc}>Audit reports and vote to confirm or dispute</Text>
+            <Text style={[styles.actionTitle, { color: colors.textPrimary }]}>Verify Queue</Text>
+            <Text style={[styles.actionDesc, { color: colors.textMuted }]}>
+              Confirm or dispute community reports
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.actionCard}
-            onPress={() => router.push('/profile' as any)}
+            style={[
+              styles.actionCard,
+              { backgroundColor: colors.card, borderColor: colors.cardBorder },
+            ]}
+            onPress={() => setSavedModalOpen(true)}
+            activeOpacity={0.82}
+            accessibilityRole="button"
+            accessibilityLabel={`Saved Places, ${savedPlaces.length} locations saved`}
           >
-            <View style={[styles.actionIcon, { backgroundColor: '#1E293B' }]}>
-              <Ionicons name="bookmark-outline" size={24} color="#CBD5E1" />
+            <View style={[styles.actionIcon, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9' }]}>
+              <Ionicons name="bookmark-outline" size={22} color={colors.textSecondary} />
             </View>
-            <Text style={styles.actionTitle}>Saved & Preferences</Text>
-            <Text style={styles.actionDesc}>Manage disability settings & saved places</Text>
+            <Text style={[styles.actionTitle, { color: colors.textPrimary }]}>Saved Places</Text>
+            <Text style={[styles.actionDesc, { color: colors.textMuted }]}>
+              {savedPlaces.length > 0
+                ? `${savedPlaces.length} place${savedPlaces.length === 1 ? '' : 's'} saved for quick access`
+                : 'Places you save appear here'}
+            </Text>
           </TouchableOpacity>
         </View>
 
         {/* Recent Community Activity Stream */}
-        <Text style={styles.sectionTitle}>RECENT COMMUNITY AUDITS</Text>
+        <View style={styles.sectionHeaderRow}>
+          <Ionicons name="time-outline" size={14} color={colors.accent} />
+          <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>
+            RECENT COMMUNITY AUDITS
+          </Text>
+        </View>
+
         <View style={styles.activityList}>
           {reports.slice(0, 3).map((item) => (
             <TouchableOpacity
               key={item.id}
-              style={styles.activityCard}
+              style={[
+                styles.activityCard,
+                { backgroundColor: colors.card, borderColor: colors.cardBorder },
+              ]}
               onPress={() => router.push('/verify' as any)}
+              activeOpacity={0.85}
             >
-              <Image source={{ uri: item.photos[0] }} style={styles.activityImage} />
+              <SafeActivityImage uri={item.photos[0]} seed={item.id} style={styles.activityImage} />
               <View style={styles.activityInfo}>
-                <Text style={styles.activityPlace}>{item.placeName}</Text>
-                <Text style={styles.activityNote} numberOfLines={2}>
-                  "{item.note}"
+                <Text style={[styles.activityPlace, { color: colors.textPrimary }]}>{item.placeName}</Text>
+                <Text style={[styles.activityNote, { color: colors.textSecondary }]} numberOfLines={2}>
+                  &ldquo;{item.note}&rdquo;
                 </Text>
                 <View style={styles.activityMetaRow}>
-                  <Text style={styles.activitySubmitter}>By {item.submitterName}</Text>
-                  <Text style={styles.activityTime}>• {item.timestamp}</Text>
+                  <Text style={[styles.activitySubmitter, { color: colors.textMuted }]}>By {item.submitterName}</Text>
+                  <Text style={[styles.activityTime, { color: colors.textMuted }]}>• {item.timestamp}</Text>
                 </View>
               </View>
             </TouchableOpacity>
@@ -178,16 +320,145 @@ export default function HomeScreen() {
         </View>
 
         {/* Community Tip Card */}
-        <View style={styles.tipCard}>
-          <MaterialCommunityIcons name="lightbulb-on" size={24} color="#F59E0B" />
+        <View
+          style={[
+            styles.tipCard,
+            {
+              backgroundColor: isDark ? '#1F2937' : '#FFFBEB',
+              borderColor: isDark ? '#374151' : '#FDE68A',
+            },
+          ]}
+        >
+          <MaterialCommunityIcons name="lightbulb-on" size={24} color="#D97706" />
           <View style={{ flex: 1 }}>
-            <Text style={styles.tipTitle}>Accessibility Pro-Tip</Text>
-            <Text style={styles.tipText}>
-              Ramp slopes should ideally not exceed 1:12 (8.3% grade) for safe manual wheelchair navigation. Always note automatic door status!
+            <Text style={[styles.tipTitle, { color: isDark ? '#FDE68A' : '#92400E' }]}>
+              Accessibility Pro-Tip
+            </Text>
+            <Text style={[styles.tipText, { color: isDark ? '#CBD5E1' : '#78350F' }]}>
+              Ramp slopes should ideally not exceed 1:12 (8.3% grade) for safe manual wheelchair navigation. Always note automatic door status when submitting an audit!
             </Text>
           </View>
         </View>
+
+        {/* Luxury Signature Accessibility Strip (Mirroring the Reference Image Bottom Strip) */}
+        <View
+          style={[
+            styles.featuresStrip,
+            { backgroundColor: colors.accentBg, borderColor: colors.ruleBannerBorder },
+          ]}
+        >
+          <View style={styles.stripItem}>
+            <MaterialCommunityIcons name="wheelchair" size={16} color={colors.accent} />
+            <Text style={[styles.stripItemText, { color: colors.textSecondary }]}>Step-Free</Text>
+          </View>
+          <View style={styles.stripItem}>
+            <MaterialCommunityIcons name="elevator-passenger" size={16} color={colors.accent} />
+            <Text style={[styles.stripItemText, { color: colors.textSecondary }]}>Elevators</Text>
+          </View>
+          <View style={styles.stripItem}>
+            <MaterialCommunityIcons name="human-handsdown" size={16} color={colors.accent} />
+            <Text style={[styles.stripItemText, { color: colors.textSecondary }]}>Restrooms</Text>
+          </View>
+          <View style={styles.stripItem}>
+            <MaterialCommunityIcons name="dots-grid" size={16} color={colors.accent} />
+            <Text style={[styles.stripItemText, { color: colors.textSecondary }]}>Tactile Paths</Text>
+          </View>
+        </View>
       </ScrollView>
+
+      {/* Saved Places — visible to everyone, no login required */}
+      <Modal
+        visible={savedModalOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setSavedModalOpen(false)}
+      >
+        <View style={styles.savedOverlay}>
+          <View style={[styles.savedPanel, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+            <View style={[styles.savedHeader, { borderBottomColor: colors.cardBorder }]}>
+              <Text style={[styles.savedTitle, { color: colors.textPrimary }]}>
+                Saved Places ({savedPlaces.length})
+              </Text>
+              <TouchableOpacity
+                onPress={() => setSavedModalOpen(false)}
+                style={[styles.savedCloseBtn, { backgroundColor: isDark ? '#1E293B' : '#F1F5F9' }]}
+                accessibilityRole="button"
+                accessibilityLabel="Close Saved Places"
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Ionicons name="close" size={18} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            {savedPlaces.length === 0 ? (
+              <View style={styles.savedEmpty}>
+                <Ionicons name="bookmark-outline" size={40} color={colors.textMuted} />
+                <Text style={[styles.savedEmptyTitle, { color: colors.textPrimary }]}>
+                  No Saved Places Yet
+                </Text>
+                <Text style={[styles.savedEmptyText, { color: colors.textMuted }]}>
+                  Tap the bookmark on any place and it will show up here.
+                </Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    setSavedModalOpen(false);
+                    router.push('/map' as any);
+                  }}
+                  style={[styles.savedBrowseBtn, { backgroundColor: colors.accent }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Browse places on the map"
+                >
+                  <Text style={styles.savedBrowseBtnText}>Browse Places</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <ScrollView contentContainerStyle={styles.savedList}>
+                {savedPlaces.map((place) => (
+                  <TouchableOpacity
+                    key={place.id}
+                    style={[styles.savedRow, { backgroundColor: colors.background, borderColor: colors.cardBorder }]}
+                    onPress={() => setDetailPlace(place)}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${place.name}, ${statusLabel(place.status)}`}
+                  >
+                    <SafeActivityImage
+                      uri={place.photos[0]}
+                      seed={place.id}
+                      style={styles.savedRowImage}
+                    />
+                    <View style={styles.savedRowInfo}>
+                      <Text style={[styles.savedRowName, { color: colors.textPrimary }]} numberOfLines={1}>
+                        {place.name}
+                      </Text>
+                      <Text style={[styles.savedRowAddress, { color: colors.textMuted }]} numberOfLines={1}>
+                        {place.address}
+                      </Text>
+                      <View style={styles.savedRowStatus}>
+                        <View
+                          style={[styles.savedStatusDot, { backgroundColor: statusDotColor(place.status) }]}
+                        />
+                        <Text style={[styles.savedStatusLabel, { color: statusDotColor(place.status) }]}>
+                          {statusLabel(place.status)}
+                        </Text>
+                      </View>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      <PlaceDetailsModal
+        place={detailPlace}
+        visible={!!detailPlace}
+        onClose={() => setDetailPlace(null)}
+        onToggleSave={toggleSavePlace}
+        onReportUpdate={() => setDetailPlace(null)}
+      />
     </SafeAreaView>
   );
 }
@@ -195,18 +466,15 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#090D16',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 14,
+    paddingTop: 12,
     paddingBottom: 12,
-    backgroundColor: '#0F172A',
     borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
   },
   userInfoRow: {
     flexDirection: 'row',
@@ -214,134 +482,205 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: '#6366F1',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 2,
   },
   greetingText: {
-    color: '#94A3B8',
     fontSize: 11,
+    fontWeight: '500',
   },
   userNameText: {
-    color: '#F8FAFC',
     fontSize: 15,
     fontWeight: '800',
+    marginTop: 1,
+  },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  themeToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  themeToggleText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
   profileBadgeBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#312E81',
-    paddingHorizontal: 10,
+    paddingHorizontal: 9,
     paddingVertical: 6,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#4338CA',
   },
   profileBadgeText: {
-    color: '#A5B4FC',
     fontSize: 11,
     fontWeight: '700',
   },
   scrollContainer: {
+    flex: 1,
+  },
+  scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 14,
-    paddingBottom: 30,
+    paddingBottom: 36,
   },
   heroCard: {
-    backgroundColor: '#0F172A',
-    borderRadius: 20,
-    padding: 18,
+    borderRadius: 24,
+    padding: 20,
     borderWidth: 1,
-    borderColor: '#1E293B',
     marginBottom: 16,
+    shadowColor: '#2D2327',
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
   },
   heroContent: {},
   heroTag: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
     alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    marginBottom: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    marginBottom: 12,
   },
   heroTagText: {
-    color: '#10B981',
-    fontSize: 10,
+    fontSize: 10.5,
     fontWeight: '800',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
   },
   heroTitle: {
-    color: '#F8FAFC',
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '800',
-    lineHeight: 26,
+    lineHeight: 28,
+    letterSpacing: 0.2,
   },
   heroSubtitle: {
-    color: '#94A3B8',
-    fontSize: 12,
-    lineHeight: 18,
-    marginTop: 6,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 8,
+  },
+  heroButtonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 18,
   },
   heroCTA: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#4F46E5',
     paddingVertical: 12,
-    borderRadius: 14,
-    marginTop: 16,
+    paddingHorizontal: 20,
+    borderRadius: 24,
   },
   heroCTAText: {
     color: '#FFF',
     fontSize: 13,
     fontWeight: '800',
   },
-  sectionTitle: {
-    color: '#64748B',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1,
-    marginTop: 8,
-    marginBottom: 10,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 16,
-  },
-  statCard: {
-    width: '48%',
-    backgroundColor: '#0F172A',
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#1E293B',
-  },
-  statIconBox: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    justifyContent: 'center',
+  heroArrowCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
-    marginBottom: 8,
+    justifyContent: 'center',
   },
-  statNumber: {
-    color: '#F8FAFC',
-    fontSize: 22,
+  heroSecondaryCTA: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 24,
+    borderWidth: 1,
+  },
+  heroSecondaryText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
+  tripleStatsCard: {
+    borderRadius: 22,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 10,
+    marginBottom: 18,
+    shadowColor: '#2D2327',
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  tripleStatCol: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tripleStatValue: {
+    fontSize: 18,
     fontWeight: '800',
+    marginTop: 4,
+  },
+  tripleStatLabel: {
+    fontSize: 10.5,
+    marginTop: 2,
+    fontWeight: '600',
+  },
+  tripleStatDivider: {
+    width: 1,
+    height: 36,
+  },
+  featuresStrip: {
+    borderRadius: 22,
+    borderWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    marginTop: 16,
+  },
+  stripItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  stripItemText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
   statLabel: {
-    color: '#94A3B8',
     fontSize: 11,
     marginTop: 2,
+    fontWeight: '500',
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 18,
+    marginBottom: 10,
+  },
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.6,
   },
   actionGrid: {
     flexDirection: 'row',
@@ -351,97 +690,193 @@ const styles = StyleSheet.create({
   },
   actionCard: {
     width: '48%',
-    backgroundColor: '#0F172A',
     borderRadius: 16,
-    padding: 14,
+    padding: 13,
     borderWidth: 1,
-    borderColor: '#1E293B',
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
   },
   actionIcon: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   actionTitle: {
-    color: '#F8FAFC',
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '700',
   },
   actionDesc: {
-    color: '#94A3B8',
-    fontSize: 11,
-    lineHeight: 15,
-    marginTop: 4,
+    fontSize: 10.5,
+    lineHeight: 14,
+    marginTop: 2,
   },
   activityList: {
     gap: 10,
     marginBottom: 16,
   },
   activityCard: {
-    flexDirection: 'row',
-    backgroundColor: '#0F172A',
     borderRadius: 14,
-    padding: 10,
-    gap: 12,
     borderWidth: 1,
-    borderColor: '#1E293B',
+    padding: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
   },
   activityImage: {
-    width: 60,
-    height: 60,
+    width: 62,
+    height: 62,
     borderRadius: 10,
   },
   activityInfo: {
     flex: 1,
   },
   activityPlace: {
-    color: '#F8FAFC',
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: '700',
   },
   activityNote: {
-    color: '#CBD5E1',
-    fontSize: 11,
+    fontSize: 11.5,
     lineHeight: 15,
     marginTop: 2,
   },
   activityMetaRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 4,
     marginTop: 4,
   },
   activitySubmitter: {
-    color: '#818CF8',
-    fontSize: 10,
+    fontSize: 10.5,
     fontWeight: '600',
   },
   activityTime: {
-    color: '#64748B',
-    fontSize: 10,
+    fontSize: 10.5,
   },
   tipCard: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 12,
-    backgroundColor: '#451A03',
-    borderColor: '#78350F',
+    borderRadius: 16,
     borderWidth: 1,
     padding: 14,
-    borderRadius: 16,
-    marginBottom: 24,
   },
   tipTitle: {
-    color: '#FDE68A',
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   tipText: {
-    color: '#FEF3C7',
-    fontSize: 11,
+    fontSize: 11.5,
     lineHeight: 16,
+    marginTop: 3,
+  },
+  savedOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  savedPanel: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderWidth: 1,
+    maxHeight: '80%',
+    paddingBottom: 24,
+  },
+  savedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+  },
+  savedTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  savedCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  savedList: {
+    padding: 16,
+    gap: 12,
+  },
+  savedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  savedRowImage: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+  },
+  savedRowInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  savedRowName: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  savedRowAddress: {
+    fontSize: 12,
+  },
+  savedRowStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     marginTop: 2,
+  },
+  savedStatusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  savedStatusLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  savedEmpty: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 24,
+    gap: 8,
+  },
+  savedEmptyTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    marginTop: 4,
+  },
+  savedEmptyText: {
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 19,
+  },
+  savedBrowseBtn: {
+    marginTop: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 9999,
+  },
+  savedBrowseBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
   },
 });

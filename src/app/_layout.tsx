@@ -1,3 +1,5 @@
+// Side-effect import: suppress known Expo Go push warnings before anything else loads.
+import '@/lib/expoGoWarnings';
 import { Stack } from 'expo-router';
 import { DarkTheme, DefaultTheme, ThemeProvider as NavThemeProvider } from '@react-navigation/native';
 import { StatusBar, View, StyleSheet } from 'react-native';
@@ -11,7 +13,10 @@ function RootLayoutInner() {
 
   return (
     <NavThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#090D16' : '#F8FAFC'} />
+      <StatusBar
+        barStyle={isDark ? 'light-content' : 'dark-content'}
+        backgroundColor={isDark ? colors.background : colors.headerBg}
+      />
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />

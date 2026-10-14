@@ -11,6 +11,7 @@
       "icon": "./assets/expo.icon"
     },
     "android": {
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -25,6 +26,30 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photoPermission": "Allow $(PRODUCT_NAME) to access your photo library to set a profile picture"
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#FF5A36"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to use your camera for QR code scanning"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location so the accessibility assistant can find accessible public spaces near you."
+        }
+      ],
       [
         "expo-splash-screen",
         {
