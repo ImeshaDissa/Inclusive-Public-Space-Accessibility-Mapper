@@ -18,6 +18,30 @@ import { PlaceDetailsModal } from '@/components/PlaceDetailsModal';
 import { Place, StatusType } from '@/types/accessibility';
 import { matchesQuery } from '@/lib/placeSearch';
 
+const BUNDLED_FALLBACK_IMAGES = [
+  require('@/assets/images/train_station.jpg'),
+  require('@/assets/images/botanical_gardens.jpg'),
+  require('@/assets/images/public_restroom.jpg'),
+];
+
+const SafePlaceImage = ({ uri, seed, style }: { uri?: string; seed: string; style: any }) => {
+  const [failed, setFailed] = useState(false);
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = (hash << 5) - hash + seed.charCodeAt(i);
+    hash |= 0;
+  }
+  const fallback = BUNDLED_FALLBACK_IMAGES[Math.abs(hash) % BUNDLED_FALLBACK_IMAGES.length];
+
+  return (
+    <Image
+      source={!failed && uri ? { uri } : fallback}
+      style={style}
+      onError={() => setFailed(true)}
+    />
+  );
+};
+
 type FilterCategory = 'all' | 'stepFree' | 'ramp' | 'elevator' | 'toilet' | 'parking' | 'tactilePaving';
 
 export default function ExploreSearchScreen() {
@@ -148,7 +172,7 @@ export default function ExploreSearchScreen() {
               }}
               activeOpacity={0.9}
             >
-              <Image source={{ uri: item.photos[0] }} style={styles.placeImage} />
+              <SafePlaceImage uri={item.photos[0]} seed={item.id} style={styles.placeImage} />
 
               <View style={styles.placeContent}>
                 <View style={styles.placeTitleRow}>

@@ -129,6 +129,12 @@ interface AppContextType {
   updateUserAvatar: (localUri: string) => Promise<AuthActionResult>;
   clearNotifications: () => void;
   markNotificationsRead: () => void;
+  /**
+   * Re-read the shared community data (places, reports, notifications).
+   * Used after the AI assistant writes to the map on the user's behalf, so the
+   * new place / report / verification shows up without an app restart.
+   */
+  refreshCommunityData: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -445,6 +451,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
     } else {
       targetPlaceId = existingPlace.id;
+      if (photos.length > 0) {
+        setPlaces((prev) =>
+          prev.map((p) => {
+            if (p.id === existingPlace.id) {
+              const mergedPhotos = Array.from(new Set([...photos, ...p.photos]));
+              return { ...p, photos: mergedPhotos };
+            }
+            return p;
+          })
+        );
+      }
     }
 
     // Call Supabase backend service (with automatic offline/local fallback)
@@ -597,6 +614,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return { success: true };
   };
 
+  const refreshCommunityData = async () => {
+    if (!isSupabaseConfigured) return;
+    try {
+      const [fetchedPlaces, fetchedReports, fetchedNotifs] = await Promise.all([
+        fetchPlacesFromSupabase(userId ?? undefined),
+        fetchReportsFromSupabase(),
+        userId ? fetchNotificationsFromSupabase(userId) : Promise.resolve([] as AppNotification[]),
+      ]);
+      // Same rule as the initial load: never blank out state with an empty read.
+      if (fetchedPlaces.length > 0) setPlaces(fetchedPlaces);
+      if (fetchedReports.length > 0) setReports(fetchedReports);
+      if (userId) setNotifications(fetchedNotifs);
+    } catch (err) {
+      console.error('Error refreshing community data:', err);
+    }
+  };
+
   const clearNotifications = () => {
     setNotifications([]);
     if (isSupabaseConfigured && userId) {
@@ -734,6 +768,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         updateUserAvatar,
         clearNotifications,
         markNotificationsRead,
+        refreshCommunityData,
       }}
     >
       {children}

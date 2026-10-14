@@ -8,6 +8,7 @@ export interface AccessibilityFeatures {
   stepFree: boolean;
   tactilePaving: boolean;
   automaticDoor: boolean;
+  brailleSignage?: boolean;
 }
 
 export interface Place {

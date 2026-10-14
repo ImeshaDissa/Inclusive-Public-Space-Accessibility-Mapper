@@ -7,29 +7,60 @@ import { useApp } from '@/context/AppContext';
 import { useAppTheme } from '@/context/ThemeContext';
 import { PlaceDetailsModal } from '@/components/PlaceDetailsModal';
 import { StatusType } from '@/types/accessibility';
+import { openDirections } from '@/lib/directions';
+import { useToast } from '@/context/ToastContext';
 
 /**
  * Place detail route: /place/[id]
  * Deep-linked place page, reachable from QR codes and from list/map cards.
- * Reuses PlaceDetailsModal in "page" mode so the design stays consistent.
  */
 export default function PlaceDetailsScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { places, toggleSavePlace } = useApp();
-  const { colors } = useAppTheme();
-  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const { colors, isDark } = useAppTheme();
+  const { showToast } = useToast();
+  const [modalVisible, setModalVisible] = React.useState(false);
 
   const place = useMemo(() => places.find((p) => p.id === id) ?? null, [places, id]);
 
-  const getStatusColor = (status: StatusType) => {
+  const getStatusConfig = (status: StatusType) => {
     switch (status) {
       case 'verified':
-        return '#10B981';
+        return {
+          label: 'FULLY ACCESSIBLE',
+          subLabel: 'Verified by Community Audits',
+          color: '#10B981',
+          bg: isDark ? '#064E3B' : '#ECFDF5',
+        };
       case 'disputed':
-        return '#EF4444';
+        return {
+          label: 'NOT ACCESSIBLE / DISPUTED',
+          subLabel: 'Barrier Reported by Community',
+          color: '#EF4444',
+          bg: isDark ? '#7F1D1D' : '#FEF2F2',
+        };
+      case 'pending':
       default:
-        return '#F59E0B';
+        return {
+          label: 'PARTIALLY ACCESSIBLE',
+          subLabel: 'Awaiting Full Community Verification',
+          color: '#F59E0B',
+          bg: isDark ? '#78350F' : '#FFFBEB',
+        };
+    }
+  };
+
+  const handleDirections = async () => {
+    if (!place) return;
+    const opened = await openDirections({
+      name: place.name,
+      address: place.address,
+      lat: place.lat,
+      lng: place.lng,
+    });
+    if (!opened) {
+      showToast('Could not open a maps app on this device.', 'warning');
     }
   };
 
@@ -52,23 +83,50 @@ export default function PlaceDetailsScreen() {
     );
   }
 
-  const statusColor = getStatusColor(place.status);
+  const statusConfig = getStatusConfig(place.status);
+
+  const featureItems = [
+    { key: 'ramp', label: 'Wheelchair Ramps', icon: 'wheelchair', active: !!place.features.ramp },
+    { key: 'elevator', label: 'Elevators', icon: 'elevator-passenger', active: !!place.features.elevator },
+    { key: 'toilet', label: 'Accessible Toilets', icon: 'human-handsdown', active: !!place.features.toilet },
+    { key: 'parking', label: 'Accessible Parking', icon: 'car', active: !!place.features.parking },
+    { key: 'stepFree', label: 'Step-Free Entrances', icon: 'walk', active: !!place.features.stepFree },
+    { key: 'tactilePaving', label: 'Tactile Paths / Paving', icon: 'dots-grid', active: !!place.features.tactilePaving },
+    { key: 'brailleSignage', label: 'Braille Signage', icon: 'braille', active: !!place.features.brailleSignage },
+    { key: 'automaticDoor', label: 'Automatic Doors', icon: 'door-open', active: !!place.features.automaticDoor },
+  ];
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={[styles.header, { backgroundColor: colors.headerBg, borderBottomColor: colors.headerBorder }]}>
-        <TouchableOpacity style={styles.backBtnPlain} onPress={() => router.back()}>
+        <TouchableOpacity
+          style={styles.backBtnPlain}
+          onPress={() => router.back()}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
           <Ionicons name="arrow-back" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.textPrimary }]} numberOfLines={1}>
           Place Details
         </Text>
-        <View style={{ width: 36 }} />
+        <TouchableOpacity
+          style={styles.backBtnPlain}
+          onPress={() => toggleSavePlace(place.id)}
+          accessibilityRole="button"
+          accessibilityLabel={place.saved ? 'Remove bookmark' : 'Bookmark place'}
+        >
+          <Ionicons
+            name={place.saved ? 'bookmark' : 'bookmark-outline'}
+            size={20}
+            color={place.saved ? colors.accent : colors.textPrimary}
+          />
+        </TouchableOpacity>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        {/* Banner */}
+        {/* Banner Photo */}
         {place.photos && place.photos.length > 0 ? (
           <Image source={{ uri: place.photos[0] }} style={styles.banner} />
         ) : (
@@ -77,30 +135,31 @@ export default function PlaceDetailsScreen() {
           </View>
         )}
 
-        {/* Info */}
+        {/* Place Info */}
         <Text style={[styles.category, { color: colors.accent }]}>{place.category.toUpperCase()}</Text>
         <Text style={[styles.title, { color: colors.textPrimary }]}>{place.name}</Text>
         <View style={styles.addressRow}>
-          <Ionicons name="location-outline" size={14} color={colors.textMuted} />
+          <Ionicons name="location-sharp" size={16} color={colors.accent} />
           <Text style={[styles.address, { color: colors.textSecondary }]}>{place.address}</Text>
         </View>
 
-        {/* Status badge */}
-        <View style={[styles.statusBadge, { backgroundColor: statusColor + '22', borderColor: statusColor + '55' }]}>
+        {/* Status Badge */}
+        <View style={[styles.statusBadge, { backgroundColor: statusConfig.bg, borderColor: statusConfig.color + '55' }]}>
           <Ionicons
             name={place.status === 'verified' ? 'checkmark-circle' : place.status === 'disputed' ? 'alert-circle' : 'time'}
-            size={16}
-            color={statusColor}
+            size={18}
+            color={statusConfig.color}
           />
-          <Text style={[styles.statusText, { color: statusColor }]}>
-            {place.status === 'verified'
-              ? 'VERIFIED ACCESSIBLE'
-              : place.status === 'disputed'
-                ? 'ACCESS DISPUTED'
-                : 'VERIFICATION PENDING'}
-          </Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.statusText, { color: statusConfig.color }]}>
+              {statusConfig.label}
+            </Text>
+            <Text style={[styles.statusSubText, { color: statusConfig.color }]}>
+              {statusConfig.subLabel}
+            </Text>
+          </View>
           <Text style={[styles.countText, { color: colors.textSecondary }]}>
-            ({place.confirmCount} Confirms · {place.disputeCount} Disputes)
+            {place.confirmCount} Confirms · {place.disputeCount} Disputes
           </Text>
         </View>
 
@@ -108,49 +167,72 @@ export default function PlaceDetailsScreen() {
           <Text style={[styles.description, { color: colors.textSecondary }]}>{place.description}</Text>
         ) : null}
 
-        {/* Accessibility features */}
-        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>ACCESSIBILITY CHECKLIST</Text>
+        {/* Accessibility Features Checklist */}
+        <Text style={[styles.sectionTitle, { color: colors.textSecondary }]}>
+          ACCESSIBILITY FEATURES CHECKLIST
+        </Text>
         <View style={styles.grid}>
-          {[
-            { key: 'ramp', label: 'Wheelchair Ramp', icon: 'wheelchair', active: place.features.ramp },
-            { key: 'elevator', label: 'Elevator Access', icon: 'elevator-passenger', active: place.features.elevator },
-            { key: 'toilet', label: 'Accessible Toilet', icon: 'human-handsdown', active: place.features.toilet },
-            { key: 'parking', label: 'Reserved Parking', icon: 'car', active: place.features.parking },
-            { key: 'stepFree', label: 'Step-Free Entrance', icon: 'walk', active: place.features.stepFree },
-            { key: 'tactilePaving', label: 'Tactile Paving', icon: 'dots-grid', active: place.features.tactilePaving },
-            { key: 'automaticDoor', label: 'Automatic Doors', icon: 'door-open', active: place.features.automaticDoor },
-          ].map((item) => (
+          {featureItems.map((item) => (
             <View
               key={item.key}
               style={[
                 styles.gridCard,
-                { borderColor: item.active ? 'rgba(16,185,129,0.4)' : colors.cardBorder },
-                { backgroundColor: item.active ? 'rgba(16,185,129,0.08)' : colors.card },
+                {
+                  borderColor: item.active ? 'rgba(16,185,129,0.4)' : colors.cardBorder,
+                  backgroundColor: item.active ? 'rgba(16,185,129,0.08)' : colors.card,
+                },
               ]}
+              accessible={true}
+              accessibilityLabel={`${item.label}: ${item.active ? 'Available' : 'Unavailable'}`}
             >
-              <MaterialCommunityIcons name={item.icon as any} size={18} color={item.active ? '#10B981' : colors.textMuted} />
-              <Text style={[styles.gridText, { color: item.active ? colors.textPrimary : colors.textMuted }]} numberOfLines={1}>
+              <MaterialCommunityIcons
+                name={item.icon as any}
+                size={18}
+                color={item.active ? '#10B981' : colors.textMuted}
+              />
+              <Text
+                style={[styles.gridText, { color: item.active ? colors.textPrimary : colors.textMuted }]}
+                numberOfLines={1}
+              >
                 {item.label}
               </Text>
-              <Ionicons name={item.active ? 'checkmark-circle' : 'close-circle'} size={13} color={item.active ? '#10B981' : colors.textMuted} />
+              <Ionicons
+                name={item.active ? 'checkmark-circle' : 'close-circle-outline'}
+                size={14}
+                color={item.active ? '#10B981' : colors.textMuted}
+              />
             </View>
           ))}
         </View>
 
-        {/* Open full details */}
+        {/* Action Buttons */}
         <TouchableOpacity
-          style={[styles.detailsBtn, { backgroundColor: colors.accent }]}
-          onPress={() => setSelectedId(place.id)}
+          style={[styles.directionsBtn, { backgroundColor: colors.accent }]}
+          onPress={handleDirections}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Get Step-Free Directions"
         >
-          <Ionicons name="information-circle-outline" size={18} color="#FFF" />
-          <Text style={styles.detailsBtnText}>Open Full Details</Text>
+          <Ionicons name="navigate" size={18} color="#FFF" />
+          <Text style={styles.directionsBtnText}>Get Step-Free Directions</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.detailsBtn, { borderColor: colors.cardBorder, backgroundColor: colors.card }]}
+          onPress={() => setModalVisible(true)}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Open Full Interactive Sheet"
+        >
+          <Ionicons name="information-circle-outline" size={18} color={colors.textPrimary} />
+          <Text style={[styles.detailsBtnText, { color: colors.textPrimary }]}>View Full Reliability Sheet</Text>
         </TouchableOpacity>
       </ScrollView>
 
       <PlaceDetailsModal
-        place={places.find((p) => p.id === selectedId) ?? null}
-        visible={!!selectedId}
-        onClose={() => setSelectedId(null)}
+        place={place}
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
         onToggleSave={toggleSavePlace}
       />
     </SafeAreaView>
@@ -182,26 +264,27 @@ const styles = StyleSheet.create({
   backBtnPlain: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 16, fontWeight: '800' },
   scroll: { padding: 16, paddingBottom: 32 },
-  banner: { width: '100%', height: 170, borderRadius: 16 },
+  banner: { width: '100%', height: 190, borderRadius: 18 },
   bannerPlaceholder: { alignItems: 'center', justifyContent: 'center' },
   category: { fontSize: 11, fontWeight: '800', letterSpacing: 1, marginTop: 16 },
-  title: { fontSize: 22, fontWeight: '800', marginTop: 4 },
-  addressRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
-  address: { fontSize: 13 },
+  title: { fontSize: 22, fontWeight: '800', marginTop: 4, lineHeight: 28 },
+  addressRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },
+  address: { fontSize: 13, flex: 1 },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
+    paddingVertical: 10,
+    borderRadius: 14,
     borderWidth: 1,
     marginTop: 14,
   },
   statusText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
+  statusSubText: { fontSize: 11, fontWeight: '500', marginTop: 1 },
   countText: { fontSize: 11, marginLeft: 'auto' },
   description: { fontSize: 13, lineHeight: 18, marginTop: 12 },
-  sectionTitle: { fontSize: 11, fontWeight: '800', letterSpacing: 1, marginTop: 20, marginBottom: 10 },
+  sectionTitle: { fontSize: 11, fontWeight: '800', letterSpacing: 0.8, marginTop: 20, marginBottom: 10 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   gridCard: {
     width: '48%',
@@ -214,14 +297,25 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   gridText: { fontSize: 11, fontWeight: '600', flex: 1 },
+  directionsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 16,
+    marginTop: 24,
+  },
   detailsBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 14,
-    borderRadius: 14,
-    marginTop: 24,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginTop: 10,
   },
-  detailsBtnText: { color: '#FFF', fontSize: 14, fontWeight: '700' },
+  directionsBtnText: { color: '#FFF', fontSize: 14, fontWeight: '800' },
+  detailsBtnText: { fontSize: 14, fontWeight: '700' },
 });
