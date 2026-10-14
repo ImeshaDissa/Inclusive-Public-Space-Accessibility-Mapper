@@ -24,6 +24,7 @@ export interface Place {
   status: StatusType;
   saved: boolean;
   description?: string;
+  confirmedBy?: string[];
 }
 
 export type PriorityType = 'High' | 'Medium' | 'Low';
@@ -43,6 +44,8 @@ export interface Report {
   disputeCount: number;
   status: StatusType;
   disputeReasons?: string[];
+  confirmedBy?: string[];
+  disputedBy?: string[];
 }
 
 /** Category of an in-app notification (drives icon + filter UI). */

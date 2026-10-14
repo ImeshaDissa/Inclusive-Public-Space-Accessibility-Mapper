@@ -65,7 +65,7 @@ const ReportCardImage = ({ photoUri, reportId, placeName }: { photoUri?: string;
 
 export default function VerificationQueueScreen() {
   const router = useRouter();
-  const { reports, confirmReport, disputeReport, userProfile, signOut } = useApp();
+  const { reports, confirmReport, disputeReport, userProfile, authEmail, userId, signOut } = useApp();
   const { colors, isDark, toggleTheme } = useAppTheme();
   const { showToast } = useToast();
   const insets = useSafeAreaInsets();
@@ -128,8 +128,12 @@ export default function VerificationQueueScreen() {
   const isFinalStatus = (status: StatusType) => status === 'verified' || status === 'disputed';
 
   const handleConfirm = (reportId: string, placeName: string) => {
-    confirmReport(reportId);
-    showToast(`Confirmed report for ${placeName}`, 'success', 'checkmark-circle');
+    const res = confirmReport(reportId);
+    if (res && !res.success) {
+      showToast(res.message, 'info', 'information-circle');
+      return;
+    }
+    showToast(res?.message || `Confirmed report for ${placeName}`, 'success', 'checkmark-circle');
   };
 
   const handleDisputeSubmit = (reason: string, note?: string) => {
@@ -217,7 +221,7 @@ export default function VerificationQueueScreen() {
             <View style={{ flex: 1 }}>
               <Text style={[styles.ruleTitle, { color: colors.ruleBannerTitle }]}>VERIFICATION THRESHOLD LOGIC:</Text>
               <Text style={[styles.ruleText, { color: colors.ruleBannerText }]}>
-                • <Text style={{ color: colors.statusDotVerified, fontWeight: '700' }}>3+ Confirmations</Text> → Status becomes Verified (Green Pin){'\n'}
+                • <Text style={{ color: colors.statusDotVerified, fontWeight: '700' }}>3 Unique User Confirmations</Text> → Status becomes Verified (Green Pin){'\n'}
                 • <Text style={{ color: colors.statusDotDisputed, fontWeight: '700' }}>2+ Disputes</Text> → Status becomes Disputed (Red Pin)
               </Text>
             </View>
@@ -237,6 +241,26 @@ export default function VerificationQueueScreen() {
           const priorityStyle = getPriorityStyle(item.priority);
           const locked = isFinalStatus(item.status);
           const photoUri = item.photos && item.photos.length > 0 ? item.photos[0] : undefined;
+
+          const currentUserId = (userId || authEmail || userProfile.email || userProfile.name || '').trim().toLowerCase();
+          const isUserConfirmed = Boolean(
+            item.confirmedBy?.some((u) => {
+              const norm = u.trim().toLowerCase();
+              return (
+                norm === currentUserId ||
+                (authEmail && norm === authEmail.trim().toLowerCase()) ||
+                (userProfile.email && norm === userProfile.email.trim().toLowerCase()) ||
+                (userProfile.name && norm === userProfile.name.trim().toLowerCase())
+              );
+            })
+          );
+          const isSubmitter = Boolean(
+            item.submitterName &&
+            userProfile.name &&
+            (item.submitterName.toLowerCase().includes(userProfile.name.toLowerCase()) ||
+             item.submitterName.includes('(You)'))
+          );
+          const hasConfirmed = isUserConfirmed || isSubmitter;
 
           return (
             <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
@@ -328,10 +352,32 @@ export default function VerificationQueueScreen() {
               {/* Card Footer: Counts & Equal-Width Outlined Action Buttons */}
               <View style={[styles.cardFooter, { borderTopColor: colors.divider }]}>
                 <View style={styles.countsContainer}>
-                  <Text style={[styles.countText, { color: colors.textSecondary }]}>
-                    <Text style={{ color: colors.statusDotVerified, fontWeight: '700' }}>{item.confirmCount}</Text> Confirms ·{' '}
-                    <Text style={{ color: colors.statusDotDisputed, fontWeight: '700' }}>{item.disputeCount}</Text> Disputes
-                  </Text>
+                  <View style={styles.uniqueConfirmRow}>
+                    <Text style={[styles.countText, { color: colors.textSecondary }]}>
+                      <Text style={{ color: colors.statusDotVerified, fontWeight: '700' }}>{item.confirmCount}/3</Text> Unique Confirms ·{' '}
+                      <Text style={{ color: colors.statusDotDisputed, fontWeight: '700' }}>{item.disputeCount}</Text> Disputes
+                    </Text>
+                    <View style={styles.progressDotsRow}>
+                      {[0, 1, 2].map((idx) => {
+                        const isFilled = idx < item.confirmCount;
+                        return (
+                          <View
+                            key={idx}
+                            style={[
+                              styles.progressDot,
+                              {
+                                backgroundColor: isFilled
+                                  ? colors.statusDotVerified
+                                  : isDark
+                                  ? 'rgba(255,255,255,0.2)'
+                                  : 'rgba(0,0,0,0.15)',
+                              },
+                            ]}
+                          />
+                        );
+                      })}
+                    </View>
+                  </View>
                 </View>
 
                 <View style={styles.buttonRow}>
@@ -343,19 +389,19 @@ export default function VerificationQueueScreen() {
                         borderColor: colors.statusDotVerified,
                         backgroundColor: isDark ? colors.chipBg : '#FFFFFF',
                       },
-                      locked && { borderColor: colors.cardBorder, backgroundColor: colors.chipBg },
+                      (locked || hasConfirmed) && { borderColor: colors.cardBorder, backgroundColor: colors.chipBg },
                     ]}
                     onPress={() => handleConfirm(item.id, item.placeName)}
-                    disabled={locked}
+                    disabled={locked || hasConfirmed}
                     activeOpacity={0.7}
                   >
                     <Ionicons
-                      name="checkmark-circle-outline"
+                      name={hasConfirmed ? 'checkmark-circle' : 'checkmark-circle-outline'}
                       size={18}
-                      color={locked ? colors.textMuted : colors.statusDotVerified}
+                      color={locked || hasConfirmed ? colors.textMuted : colors.statusDotVerified}
                     />
-                    <Text style={[styles.confirmBtnText, { color: locked ? colors.textMuted : colors.statusDotVerified }]}>
-                      {locked ? statusConfig.label : 'Confirm'}
+                    <Text style={[styles.confirmBtnText, { color: locked || hasConfirmed ? colors.textMuted : colors.statusDotVerified }]}>
+                      {locked ? statusConfig.label : hasConfirmed ? 'Confirmed (You)' : 'Confirm'}
                     </Text>
                   </TouchableOpacity>
 
@@ -703,6 +749,21 @@ const styles = StyleSheet.create({
   },
   countsContainer: {
     marginBottom: 10,
+  },
+  uniqueConfirmRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  progressDotsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  progressDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   countText: {
     fontSize: 12,

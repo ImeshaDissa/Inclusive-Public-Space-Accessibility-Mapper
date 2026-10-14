@@ -26,6 +26,13 @@ export const MOCK_PLACES: Place[] = [
     status: 'verified',
     saved: true,
     description: 'Fully accessible civic center with automated sliding doors, wide elevator corridors, and tactile audio floor guides.',
+    confirmedBy: [
+      'marcus.vance@access.org',
+      'taylor.brooks@accessibility.org',
+      'jordan.lee@accessibility.org',
+      'community.auditor1@example.com',
+      'community.auditor2@example.com',
+    ],
   },
   {
     id: 'place-2',
@@ -52,6 +59,7 @@ export const MOCK_PLACES: Place[] = [
     status: 'pending',
     saved: true,
     description: 'Busy transit station. Main floor ramp is active, but Platform 2 elevator is currently undergoing maintenance.',
+    confirmedBy: ['sarah.chen@mobility.org'],
   },
   {
     id: 'place-3',
@@ -77,6 +85,7 @@ export const MOCK_PLACES: Place[] = [
     status: 'disputed',
     saved: false,
     description: 'Historic entrance has steep cobblestone steps. Accessible side ramp route was claimed but reported blocked.',
+    confirmedBy: [],
   },
   {
     id: 'place-4',
@@ -102,6 +111,12 @@ export const MOCK_PLACES: Place[] = [
     status: 'verified',
     saved: false,
     description: 'Modern auditorium with designated wheelchair seating spaces, ramped entrance, and accessible braille signage.',
+    confirmedBy: [
+      'priya.patel@city.org',
+      'taylor.brooks@accessibility.org',
+      'jordan.lee@accessibility.org',
+      'community.auditor1@example.com',
+    ],
   },
   {
     id: 'place-5',
@@ -127,6 +142,7 @@ export const MOCK_PLACES: Place[] = [
     status: 'pending',
     saved: true,
     description: 'Standalone accessible family restroom on the waterfront boardwalk with grab bars and adult changing table.',
+    confirmedBy: ['elena.rostova@community.org', 'jordan.lee@accessibility.org'],
   },
 ];
 
@@ -151,6 +167,7 @@ export const MOCK_REPORTS: Report[] = [
     confirmCount: 1,
     disputeCount: 0,
     status: 'pending',
+    confirmedBy: ['sarah.chen@mobility.org'],
   },
   {
     id: 'report-2',
@@ -171,6 +188,8 @@ export const MOCK_REPORTS: Report[] = [
     confirmCount: 0,
     disputeCount: 2,
     status: 'disputed',
+    confirmedBy: [],
+    disputeReasons: ['Side ramp gated shut', 'No step-free alternative path'],
   },
   {
     id: 'report-3',
@@ -192,6 +211,7 @@ export const MOCK_REPORTS: Report[] = [
     confirmCount: 2,
     disputeCount: 0,
     status: 'pending',
+    confirmedBy: ['elena.rostova@community.org', 'jordan.lee@accessibility.org'],
   },
   {
     id: 'report-4',
@@ -216,6 +236,13 @@ export const MOCK_REPORTS: Report[] = [
     confirmCount: 5,
     disputeCount: 0,
     status: 'verified',
+    confirmedBy: [
+      'marcus.vance@access.org',
+      'taylor.brooks@accessibility.org',
+      'jordan.lee@accessibility.org',
+      'community.auditor1@example.com',
+      'community.auditor2@example.com',
+    ],
   },
   {
     id: 'report-5',
@@ -239,6 +266,12 @@ export const MOCK_REPORTS: Report[] = [
     confirmCount: 4,
     disputeCount: 0,
     status: 'verified',
+    confirmedBy: [
+      'priya.patel@city.org',
+      'taylor.brooks@accessibility.org',
+      'jordan.lee@accessibility.org',
+      'community.auditor1@example.com',
+    ],
   },
   {
     id: 'report-6',
@@ -259,6 +292,7 @@ export const MOCK_REPORTS: Report[] = [
     confirmCount: 2,
     disputeCount: 0,
     status: 'pending',
+    confirmedBy: ['leo.tanaka@commuter.org', 'taylor.brooks@accessibility.org'],
   },
 ];
 

@@ -40,6 +40,12 @@ export async function signUpWithSupabase({
     });
 
     if (error) {
+      if (error.message.toLowerCase().includes('rate limit')) {
+        return {
+          success: false,
+          message: 'Supabase email rate limit exceeded (max 3-4 signup emails/hour on default SMTP). In your Supabase Dashboard, disable "Confirm email" under Authentication -> Providers -> Email, or configure custom SMTP.',
+        };
+      }
       return { success: false, message: error.message };
     }
 

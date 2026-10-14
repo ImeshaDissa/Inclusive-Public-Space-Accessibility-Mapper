@@ -35,6 +35,9 @@ export async function fetchReportsFromSupabase(): Promise<Report[]> {
       disputeCount: r.dispute_count || 0,
       disputeReasons: r.dispute_reasons || [],
       status: (r.status as StatusType) || 'pending',
+      confirmedBy: Array.isArray(r.confirmed_by)
+        ? r.confirmed_by
+        : (r.confirm_count > 0 ? [r.submitter_id || r.submitter_name || 'initial_user'] : []),
     }));
   } catch (err) {
     console.error('Error fetching reports from Supabase:', err);
@@ -52,7 +55,7 @@ export async function insertReportToSupabase(
   if (!isSupabaseConfigured) return true;
 
   try {
-    const { error } = await supabase.from('reports').insert({
+    const payload: Record<string, any> = {
       id: report.id,
       place_id: report.placeId,
       place_name: report.placeName,
@@ -67,7 +70,12 @@ export async function insertReportToSupabase(
       dispute_count: report.disputeCount,
       dispute_reasons: report.disputeReasons || [],
       status: report.status,
-    });
+    };
+    if (report.confirmedBy) {
+      payload.confirmed_by = report.confirmedBy;
+    }
+
+    const { error } = await supabase.from('reports').insert(payload);
 
     if (error) {
       console.error('Error inserting report into Supabase:', error);
@@ -86,18 +94,32 @@ export async function insertReportToSupabase(
 export async function updateReportConfirmInSupabase(
   reportId: string,
   confirmCount: number,
-  status: StatusType
+  status: StatusType,
+  confirmedBy?: string[]
 ): Promise<boolean> {
   if (!isSupabaseConfigured) return true;
 
   try {
+    const payload: Record<string, any> = {
+      confirm_count: confirmCount,
+      status,
+    };
+    if (confirmedBy) {
+      payload.confirmed_by = confirmedBy;
+    }
+
     const { error } = await supabase
       .from('reports')
-      .update({
-        confirm_count: confirmCount,
-        status,
-      })
+      .update(payload)
       .eq('id', reportId);
+
+    if (error && confirmedBy) {
+      // In case confirmed_by column has not been added to Supabase table yet
+      await supabase
+        .from('reports')
+        .update({ confirm_count: confirmCount, status })
+        .eq('id', reportId);
+    }
 
     return !error;
   } catch {
