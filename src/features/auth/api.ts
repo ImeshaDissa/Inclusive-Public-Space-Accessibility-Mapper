@@ -40,6 +40,12 @@ export async function signUpWithSupabase({
     });
 
     if (error) {
+      if (error.message.toLowerCase().includes('rate limit')) {
+        return {
+          success: false,
+          message: 'Email rate limit exceeded. In your Supabase Dashboard, disable "Confirm email" (Authentication > Providers > Email) for development, or try again later.',
+        };
+      }
       return { success: false, message: error.message };
     }
 
