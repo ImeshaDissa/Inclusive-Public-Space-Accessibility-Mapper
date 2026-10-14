@@ -1,11 +1,12 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { StyleSheet, View } from 'react-native';
 import { useApp } from '@/context/AppContext';
 import { useAppTheme } from '@/context/ThemeContext';
 
 export default function TabLayout() {
   const { authReady, notifications, reports } = useApp();
-  const { colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
 
   if (!authReady) {
     return null;

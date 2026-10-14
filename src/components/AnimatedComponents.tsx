@@ -1,5 +1,7 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, ViewStyle } from 'react-native';
+import { Animated, Platform, StyleSheet, ViewStyle } from 'react-native';
+
+const USE_NATIVE_DRIVER = Platform.OS !== 'web';
 
 interface AnimatedCardProps {
   children: React.ReactNode;
@@ -23,14 +25,14 @@ export const AnimatedCard: React.FC<AnimatedCardProps> = ({
         toValue: 1,
         duration,
         delay,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.spring(slideAnim, {
         toValue: 0,
         delay,
         tension: 50,
         friction: 8,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
     ]).start();
   }, [fadeAnim, slideAnim, delay, duration]);
@@ -69,7 +71,7 @@ export const AnimatedFadeIn: React.FC<AnimatedFadeInProps> = ({
       toValue: 1,
       duration: 500,
       delay,
-      useNativeDriver: true,
+      useNativeDriver: USE_NATIVE_DRIVER,
     }).start();
   }, [opacity, delay]);
 
@@ -113,13 +115,13 @@ export const AnimatedSlideIn: React.FC<AnimatedSlideInProps> = ({
         delay,
         tension: 50,
         friction: 8,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.timing(opacityAnim, {
         toValue: 1,
         duration: 400,
         delay,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
     ]).start();
   }, [slideAnim, opacityAnim, delay]);

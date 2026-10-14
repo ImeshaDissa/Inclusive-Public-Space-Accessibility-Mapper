@@ -26,6 +26,8 @@ import { useToast } from '../context/ToastContext';
 import { hapticIcon, hapticInput, hapticSuccess } from '@/lib/haptics';
 import { ChatMessageText } from './ChatMessageText';
 
+const USE_NATIVE_DRIVER = Platform.OS !== 'web';
+
 /** One place row shown under an assistant answer (features + distance). */
 export interface ChatPlace {
   key: string;
@@ -212,13 +214,13 @@ const PulsingOnlineDot: React.FC = () => {
         Animated.timing(pulse, {
           toValue: 1.45,
           duration: 900,
-          useNativeDriver: true,
+          useNativeDriver: USE_NATIVE_DRIVER,
           easing: Easing.out(Easing.ease),
         }),
         Animated.timing(pulse, {
           toValue: 1,
           duration: 900,
-          useNativeDriver: true,
+          useNativeDriver: USE_NATIVE_DRIVER,
           easing: Easing.in(Easing.ease),
         }),
       ])
@@ -249,13 +251,13 @@ const WhatsAppTypingIndicator: React.FC<{ isDark: boolean }> = ({ isDark }) => {
           Animated.timing(dot, {
             toValue: -7,
             duration: 260,
-            useNativeDriver: true,
+            useNativeDriver: USE_NATIVE_DRIVER,
             easing: Easing.out(Easing.quad),
           }),
           Animated.timing(dot, {
             toValue: 0,
             duration: 260,
-            useNativeDriver: true,
+            useNativeDriver: USE_NATIVE_DRIVER,
             easing: Easing.in(Easing.quad),
           }),
           Animated.delay(350),
@@ -309,13 +311,13 @@ const AnimatedBubbleWrapper: React.FC<{ children: React.ReactNode }> = ({ childr
       Animated.timing(opacity, {
         toValue: 1,
         duration: 220,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
         easing: Easing.out(Easing.ease),
       }),
       Animated.timing(translateY, {
         toValue: 0,
         duration: 220,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
         easing: Easing.out(Easing.ease),
       }),
     ]).start();
@@ -462,8 +464,8 @@ export const AccessibilityAgentChat: React.FC<AccessibilityAgentChatProps> = ({
     if (!text || loading) return;
 
     Animated.sequence([
-      Animated.timing(sendScale, { toValue: 0.85, duration: 100, useNativeDriver: true }),
-      Animated.timing(sendScale, { toValue: 1, duration: 100, useNativeDriver: true }),
+      Animated.timing(sendScale, { toValue: 0.85, duration: 100, useNativeDriver: USE_NATIVE_DRIVER }),
+      Animated.timing(sendScale, { toValue: 1, duration: 100, useNativeDriver: USE_NATIVE_DRIVER }),
     ]).start();
 
     const userMsg: Message = {

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -14,10 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useAppTheme } from '@/context/ThemeContext';
 
 interface OnboardingSlide {
   id: string;
@@ -87,22 +84,6 @@ export default function OnboardingScreen() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef<FlatList<OnboardingSlide>>(null);
   const scrollX = useRef(new Animated.Value(0)).current;
-  // Live width/height so slides resize when the phone rotates (landscape mounts).
-  const { width, height } = useWindowDimensions();
-  const [reduceMotion, setReduceMotion] = useState(false);
-
-  useEffect(() => {
-    AccessibilityInfo.isReduceMotionEnabled()
-      .then(setReduceMotion)
-      .catch(() => undefined);
-  }, []);
-
-  // Tell screen-reader users which slide they are on.
-  useEffect(() => {
-    AccessibilityInfo.announceForAccessibility(
-      `Slide ${currentIndex + 1} of ${SLIDES.length}`
-    );
-  }, [currentIndex]);
 
   const goToSlide = (index: number) => {
     const nextIndex = Math.min(Math.max(index, 0), SLIDES.length - 1);
@@ -188,6 +169,7 @@ export default function OnboardingScreen() {
   };
 
   const isLastSlide = currentIndex === SLIDES.length - 1;
+  const activeColor = SLIDES[currentIndex].color;
 
   return (
     <View style={styles.container}>
@@ -315,7 +297,7 @@ const styles = StyleSheet.create({
   eyebrow: { fontSize: 12, fontWeight: '900', letterSpacing: 1.2, textAlign: 'center', marginBottom: 10 },
   title: { color: '#0F172A', fontSize: 30, fontWeight: '900', lineHeight: 37, letterSpacing: -0.7, textAlign: 'center', maxWidth: 460 },
   description: { color: '#475569', fontSize: 16, fontWeight: '500', lineHeight: 24, textAlign: 'center', marginTop: 14, maxWidth: 430 },
-  guestPromise: { marginTop: 18, width: '100%', maxWidth: 410, padding: 13, borderRadius: 16, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 10, elevation: 1, shadowColor: '#334155', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4 },
+  guestPromise: { marginTop: 18, width: '100%', maxWidth: 410, padding: 13, borderRadius: 16, borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 10, elevation: 1, boxShadow: '0px 2px 4px rgba(51, 65, 85, 0.05)' },
   guestPromiseIcon: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   guestPromiseText: { flex: 1, color: '#1E293B', fontSize: 14, fontWeight: '800', lineHeight: 19 },
   highlights: { width: '100%', maxWidth: 410, marginTop: 22, gap: 10 },
@@ -324,7 +306,7 @@ const styles = StyleSheet.create({
   bottomSection: { paddingHorizontal: 24, paddingTop: 14, gap: 18, backgroundColor: '#FFFFFF' },
   pagination: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 7, height: 10 },
   dot: { height: 8, borderRadius: 4 },
-  primaryButton: { width: '100%', minHeight: 56, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, paddingHorizontal: 20, elevation: 4, shadowColor: '#0F172A', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.18, shadowRadius: 8 },
+  primaryButton: { width: '100%', minHeight: 56, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, paddingHorizontal: 20, elevation: 4, boxShadow: '0px 5px 8px rgba(15, 23, 42, 0.18)' },
   primaryButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '900' },
   finalActions: { gap: 8 },
   secondaryButton: { minHeight: 42, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
