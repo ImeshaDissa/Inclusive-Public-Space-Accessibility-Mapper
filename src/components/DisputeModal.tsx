@@ -6,6 +6,8 @@ import {
   StyleSheet,
   TouchableOpacity,
   TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '@/context/ThemeContext';
@@ -30,7 +32,7 @@ export const DisputeModal: React.FC<DisputeModalProps> = ({
   onClose,
   onSubmitDispute,
 }) => {
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const [selectedReason, setSelectedReason] = useState<string>(PRESET_REASONS[0].label);
   const [note, setNote] = useState<string>('');
 
@@ -42,7 +44,10 @@ export const DisputeModal: React.FC<DisputeModalProps> = ({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={[styles.backdrop, { backgroundColor: colors.overlay || 'rgba(0, 0, 0, 0.65)' }]}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={[styles.backdrop, { backgroundColor: colors.overlay || 'rgba(0, 0, 0, 0.65)' }]}
+      >
         <TouchableOpacity style={styles.backdropDismiss} activeOpacity={1} onPress={onClose} />
         
         {/* Bottom Sheet Container */}
@@ -77,8 +82,8 @@ export const DisputeModal: React.FC<DisputeModalProps> = ({
                   style={[
                     styles.chip,
                     {
-                      backgroundColor: isSelected ? (isDark ? colors.accent : '#1B2A4A') : colors.chipBg,
-                      borderColor: isSelected ? (isDark ? colors.accent : '#1B2A4A') : colors.chipBorder,
+                      backgroundColor: isSelected ? colors.accent : colors.chipBg,
+                      borderColor: isSelected ? colors.accent : colors.chipBorder,
                     },
                   ]}
                   onPress={() => setSelectedReason(item.label)}
@@ -129,7 +134,7 @@ export const DisputeModal: React.FC<DisputeModalProps> = ({
             <Text style={[styles.submitBtnText, { color: colors.modalSubmitText || '#FFFFFF' }]}>Submit Dispute</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };

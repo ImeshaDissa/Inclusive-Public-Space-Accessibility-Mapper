@@ -13,6 +13,7 @@ import {
 
 type Segment =
   | { kind: 'text'; value: string }
+  | { kind: 'bold'; value: string }
   | { kind: 'url'; value: string; label: string }
   | { kind: 'phone'; value: string; label: string }
   | { kind: 'email'; value: string; label: string };
@@ -73,6 +74,28 @@ const isPhoneCandidate = (raw: string, source: string, start: number): boolean =
   return /[\s()-]/.test(raw.trim());
 };
 
+/** Split text on markdown bold tokens (**text**). */
+const splitBold = (text: string): Segment[] => {
+  const parts: Segment[] = [];
+  const boldRegex = /\*\*([^*]+)\*\*/g;
+  let lastIdx = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = boldRegex.exec(text)) !== null) {
+    if (match.index > lastIdx) {
+      parts.push({ kind: 'text', value: text.slice(lastIdx, match.index) });
+    }
+    parts.push({ kind: 'bold', value: match[1] });
+    lastIdx = match.index + match[0].length;
+  }
+
+  if (lastIdx < text.length) {
+    parts.push({ kind: 'text', value: text.slice(lastIdx) });
+  }
+
+  return parts;
+};
+
 const parse = (rawText: string): Segment[] => {
   const text = decodeEntities(rawText ?? '');
   const segments: Segment[] = [];
@@ -84,7 +107,7 @@ const parse = (rawText: string): Segment[] => {
     const token = match[0];
     const start = match.index;
 
-    let kind: Segment['kind'] = 'text';
+    let kind: 'url' | 'email' | 'phone' | null = null;
     if (/^https?:\/\//i.test(token) || /^www\./i.test(token)) {
       kind = 'url';
     } else if (token.includes('@')) {
@@ -93,12 +116,14 @@ const parse = (rawText: string): Segment[] => {
       kind = 'phone';
     }
 
-    if (kind === 'text') continue;
+    if (!kind) continue;
 
     const trimmed = kind === 'url' ? token.replace(TRAILING_PUNCTUATION, '') : token;
     const end = start + trimmed.length;
     if (end > last) {
-      if (start > last) segments.push({ kind: 'text', value: text.slice(last, start) });
+      if (start > last) {
+        segments.push(...splitBold(text.slice(last, start)));
+      }
       if (kind === 'url') {
         segments.push({ kind, value: trimmed, label: urlLabel(trimmed) });
       } else if (kind === 'phone') {
@@ -111,7 +136,9 @@ const parse = (rawText: string): Segment[] => {
     }
   }
 
-  if (last < text.length) segments.push({ kind: 'text', value: text.slice(last) });
+  if (last < text.length) {
+    segments.push(...splitBold(text.slice(last)));
+  }
   return segments;
 };
 
@@ -147,12 +174,12 @@ export interface ChatMessageTextProps {
 
 /**
  * Chat bubble text where URLs, phone numbers and emails become tappable.
- * Long links are shown shortened but always open the full address.
+ * Supports bold markdown (**text**).
  */
 export const ChatMessageText: React.FC<ChatMessageTextProps> = ({
   text,
   style,
-  linkColor = '#FF5A36',
+  linkColor = '#00A884',
 }) => {
   const segments = parse(text);
 
@@ -161,6 +188,14 @@ export const ChatMessageText: React.FC<ChatMessageTextProps> = ({
       {segments.map((segment, index) => {
         if (segment.kind === 'text') {
           return <Text key={`t${index}`}>{segment.value}</Text>;
+        }
+
+        if (segment.kind === 'bold') {
+          return (
+            <Text key={`b${index}`} style={{ fontWeight: '700' }}>
+              {segment.value}
+            </Text>
+          );
         }
 
         const linkStyle: StyleProp<TextStyle> = {

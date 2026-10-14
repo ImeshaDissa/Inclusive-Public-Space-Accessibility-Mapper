@@ -85,7 +85,8 @@ export const TOOLS = [
     type: "function",
     function: {
       name: "addAccessiblePlace",
-      description: "Add a new accessible place entry with accessibility features.",
+      description:
+        "Add a NEW place to the community accessibility map. Call findPlaceInDatabase first so you do not create a duplicate. Only call it after the user has explicitly confirmed the details in this conversation.",
       parameters: {
         type: "object",
         properties: {
@@ -95,7 +96,8 @@ export const TOOLS = [
           features: {
             type: "array",
             items: { type: "string" },
-            description: "List of accessibility features",
+            description:
+              "Accessibility features the user says the place has. Use these keys only: ramp, elevator, toilet, parking, stepFree, tactilePaving, automaticDoor",
           },
           address: {
             type: "string",
@@ -105,12 +107,158 @@ export const TOOLS = [
             type: "string",
             description: "Category of the place, e.g. 'Public Transit Hub', 'Park', 'Public Facility'",
           },
+          user_confirmed: {
+            type: "boolean",
+            description:
+              "Set true ONLY when the user has explicitly agreed (e.g. answered yes) to adding this place with the details you summarised. Never assume consent.",
+          },
         },
-        required: ["name", "lat", "lng", "features"],
+        required: ["name", "lat", "lng", "features", "user_confirmed"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "reportPlaceIssue",
+      description:
+        "File a community accessibility REPORT about a place: a barrier or issue (broken lift, blocked ramp, locked accessible toilet) or a positive accessibility update. Use this whenever the user describes what they found at a place. Call findPlaceInDatabase first to reuse the existing place_id. Only call after the user confirmed.",
+      parameters: {
+        type: "object",
+        properties: {
+          place_name: {
+            type: "string",
+            description: "Name of the place the report is about",
+          },
+          place_id: {
+            type: "string",
+            description:
+              "Existing place id from findPlaceInDatabase when the place is already on the map. Omit for a place we do not have yet.",
+          },
+          note: {
+            type: "string",
+            description:
+              "What the user reported, in their own words — the accessibility problem or update",
+          },
+          priority: {
+            type: "string",
+            enum: ["High", "Medium", "Low"],
+            description: "High when someone could be blocked or stranded (e.g. only lift out of service)",
+          },
+          features: {
+            type: "array",
+            items: { type: "string" },
+            description:
+              "What the user actually observed. Keys only: ramp, elevator, toilet, parking, stepFree, tactilePaving, automaticDoor",
+          },
+          lat: { type: "number", description: "Latitude of the place" },
+          lng: { type: "number", description: "Longitude of the place" },
+          address: { type: "string", description: "Address or landmark for the place" },
+          user_confirmed: {
+            type: "boolean",
+            description:
+              "Set true ONLY after the user explicitly agreed to file this report. Never assume consent.",
+          },
+        },
+        required: ["place_name", "note", "user_confirmed"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "verifyPlace",
+      description:
+        "Record a community verification for a place: confirm that it IS accessible, or dispute it because it is NOT. Use this INSTEAD OF a search whenever the user judges an existing place's accuracy (\"verify\", \"confirm\", \"that is correct\", \"that is wrong\"). Do not answer such a request with searchAccessiblePlaces. Call findPlaceInDatabase to resolve the place id first when it is not already known. Only call after the user confirmed.",
+      parameters: {
+        type: "object",
+        properties: {
+          place_id: {
+            type: "string",
+            description: "Existing place id from findPlaceInDatabase",
+          },
+          place_name: {
+            type: "string",
+            description: "Name of the place, used to resolve it when place_id is unknown",
+          },
+          verdict: {
+            type: "string",
+            enum: ["confirm", "dispute"],
+            description: "confirm = the accessibility details are correct; dispute = they are wrong",
+          },
+          reason: {
+            type: "string",
+            description: "Why the user disputes it, in their own words (only for dispute)",
+          },
+          user_confirmed: {
+            type: "boolean",
+            description:
+              "Set true ONLY after the user explicitly agreed to record this verification. Never assume consent.",
+          },
+        },
+        required: ["verdict", "user_confirmed"],
       },
     },
   },
 ];
+
+/**
+ * Map the friendly feature words a model may emit onto the boolean keys that
+ * public.places.features and public.reports.features_reported actually use.
+ */
+const FEATURE_KEY_ALIASES: Record<string, string> = {
+  ramp: "ramp",
+  wheelchairramp: "ramp",
+  "wheelchair ramp": "ramp",
+  elevator: "elevator",
+  lift: "elevator",
+  "elevator/lift": "elevator",
+  toilet: "toilet",
+  restroom: "toilet",
+  accessibletoilet: "toilet",
+  "accessible toilet": "toilet",
+  parking: "parking",
+  "accessible parking": "parking",
+  stepfree: "stepFree",
+  "step-free entrance": "stepFree",
+  "step free entrance": "stepFree",
+  stepfreeentrance: "stepFree",
+  tactilepaving: "tactilePaving",
+  "tactile paving": "tactilePaving",
+  automaticdoor: "automaticDoor",
+  automaticdoors: "automaticDoor",
+  "automatic doors": "automaticDoor",
+  autodoor: "automaticDoor",
+};
+
+/** Turn ["Wheelchair ramp", "Lift"] into { ramp: true, elevator: true }. */
+function toFeatureDict(features: unknown): Record<string, boolean> {
+  if (Array.isArray(features)) {
+    const dict: Record<string, boolean> = {};
+    for (const raw of features) {
+      const key = FEATURE_KEY_ALIASES[String(raw).toLowerCase().replace(/[_-]/g, " ").trim()];
+      if (key) dict[key] = true;
+    }
+    return dict;
+  }
+  if (features && typeof features === "object") {
+    // Already a { ramp: true } map — keep only the known boolean keys.
+    const dict: Record<string, boolean> = {};
+    for (const [k, v] of Object.entries(features as Record<string, unknown>)) {
+      const key = FEATURE_KEY_ALIASES[String(k).toLowerCase().trim()] ?? k;
+      if (v === true || v === "true") dict[key] = true;
+    }
+    return dict;
+  }
+  return {};
+}
+
+/** Shared by the write tools: a model must never write without consent. */
+const NEEDS_CONFIRMATION = {
+  status: "needs_confirmation",
+  message:
+    "Not saved. Summarise the details for the user and ask them to confirm first, then call this tool again with user_confirmed = true.",
+};
 
 // ── Place-type keyword matching ────────────────────────────────────────────
 
@@ -196,7 +344,49 @@ function distanceMetres(lat1: number, lng1: number, lat2: number, lng2: number):
 }
 
 // 2. Real Supabase Database Interactions + web lookups
-export async function executeTool(name: string, args: Record<string, unknown>) {
+/** Who is talking, so community writes are attributed to a real account. */
+export interface ToolContext {
+  userId?: string;
+  userName?: string;
+}
+
+/**
+ * Find the place a write should attach to: by id when we have it, otherwise a
+ * name match across the whole database (no distance limit — the user may be
+ * adding a place they are not standing next to).
+ */
+async function resolveExistingPlace(opts: {
+  placeId?: string;
+  placeName?: string;
+}): Promise<Record<string, unknown> | null> {
+  if (opts.placeId) {
+    const { data } = await supabaseAdmin
+      .from("places")
+      .select("*")
+      .eq("id", opts.placeId)
+      .maybeSingle();
+    if (data) return data as Record<string, unknown>;
+  }
+
+  const name = String(opts.placeName ?? "").trim();
+  if (name.length < 3) return null;
+
+  const safe = name.replace(/[(),%_'"`]/g, " ").replace(/\s+/g, " ").trim();
+  if (!safe) return null;
+
+  const { data } = await supabaseAdmin
+    .from("places")
+    .select("*")
+    .ilike("name", `%${safe}%`)
+    .limit(1);
+  return Array.isArray(data) && data.length > 0 ? (data[0] as Record<string, unknown>) : null;
+}
+
+export async function executeTool(
+  name: string,
+  args: Record<string, unknown>,
+  context?: ToolContext
+) {
   if (name === "searchAccessiblePlaces") {
     const lat = Number(args.lat);
     const lng = Number(args.lng);
@@ -339,15 +529,41 @@ export async function executeTool(name: string, args: Record<string, unknown>) {
   }
 
   if (name === "addAccessiblePlace") {
+    // Agentic write #1 — a model must never create community data on its own
+    // initiative. It has to have asked, and the user has to have said yes.
+    if (args.user_confirmed !== true) return NEEDS_CONFIRMATION;
+
     const { name: placeName, lat, lng, features, address, category } = args;
+    const placeLat = Number(lat);
+    const placeLng = Number(lng);
+    if (!String(placeName ?? "").trim()) {
+      return { status: "invalid", message: "A place name is required." };
+    }
+    if (!Number.isFinite(placeLat) || !Number.isFinite(placeLng)) {
+      return {
+        status: "invalid",
+        message:
+          "Valid coordinates are required. Ask the user to share their GPS location or give an address you can place.",
+      };
+    }
 
     // public.places.features is a JSONB dictionary of booleans
     // (e.g. { "ramp": true, "stepFree": true }), not an array.
-    const featureDict: Record<string, boolean> = Array.isArray(features)
-      ? Object.fromEntries(features.map((f: unknown) => [String(f), true] as const))
-      : features && typeof features === "object"
-        ? { ...(features as Record<string, boolean>) }
-        : {};
+    const featureDict = toFeatureDict(features);
+
+    // Do not silently create a duplicate of a place that is already mapped.
+    const existing = await resolveExistingPlace({
+      placeId: undefined,
+      placeName: String(placeName),
+    });
+    if (existing) {
+      return {
+        status: "already_exists",
+        place: existing,
+        message:
+          "A place with a very similar name is already on the map. Tell the user and ask whether they meant that one — if they did, use reportPlaceIssue or verifyPlace instead of adding a duplicate.",
+      };
+    }
 
     const { data, error } = await supabaseAdmin
       .from("places")
@@ -355,25 +571,181 @@ export async function executeTool(name: string, args: Record<string, unknown>) {
         {
           // public.places.id is TEXT — generate a unique, readable id.
           id: `place-${crypto.randomUUID()}`,
-          name: placeName,
-          lat: Number(lat),
-          lng: Number(lng),
+          name: String(placeName).trim(),
+          lat: placeLat,
+          lng: placeLng,
           features: featureDict,
           // category/address are NOT NULL columns with no defaults.
           category:
             typeof category === "string" && category.trim()
-              ? category
+              ? category.trim()
               : "Public Facility",
           address:
             typeof address === "string" && address.trim()
-              ? address
-              : `${lat}, ${lng}`,
+              ? address.trim()
+              : `${placeLat}, ${placeLng}`,
         },
       ])
       .select();
 
     if (error) throw new Error(`Database insert error: ${error.message}`);
     return { status: "created", place: data?.[0] };
+  }
+
+  // ==========================================================================
+  // Agentic write #2 — file a community accessibility report (Tier-1 skill)
+  // ==========================================================================
+  if (name === "reportPlaceIssue") {
+    if (args.user_confirmed !== true) return NEEDS_CONFIRMATION;
+
+    const placeName = String(args.place_name ?? "").trim();
+    const note = String(args.note ?? "").trim();
+    if (!placeName) return { status: "invalid", message: "Which place is the report about?" };
+    if (!note) {
+      return {
+        status: "invalid",
+        message: "Ask the user what they found at the place before filing the report.",
+      };
+    }
+
+    const priority = ["High", "Medium", "Low"].includes(String(args.priority))
+      ? String(args.priority)
+      : "Medium";
+
+    // Attach to an existing place when we can, so the report shows up on that
+    // place's card as well as in the reporter's own list.
+    const existing = await resolveExistingPlace({
+      placeId: typeof args.place_id === "string" ? args.place_id : undefined,
+      placeName,
+    });
+    const placeId = existing?.id ? String(existing.id) : `place-${crypto.randomUUID()}`;
+
+    // A report for a place we do not have yet needs a place row to hang off
+    // (reports.place_id is a real foreign key).
+    if (!existing) {
+      const reportLat = Number(args.lat);
+      const reportLng = Number(args.lng);
+      const { error: placeError } = await supabaseAdmin.from("places").insert([
+        {
+          id: placeId,
+          name: placeName,
+          category: "Community Reported Venue",
+          address:
+            typeof args.address === "string" && args.address.trim()
+              ? args.address.trim()
+              : Number.isFinite(reportLat) && Number.isFinite(reportLng)
+                ? `${reportLat}, ${reportLng}`
+                : "User Submitted Location",
+          lat: Number.isFinite(reportLat) ? reportLat : 0,
+          lng: Number.isFinite(reportLng) ? reportLng : 0,
+          features: toFeatureDict(args.features),
+          description: note,
+          status: "pending",
+        },
+      ]);
+      if (placeError) throw new Error(`Database insert error: ${placeError.message}`);
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from("reports")
+      .insert([
+        {
+          id: `report-${crypto.randomUUID()}`,
+          place_id: placeId,
+          place_name: placeName,
+          submitter_id: context?.userId ?? null,
+          submitter_name: context?.userName ?? "Community Member",
+          note,
+          features_reported: toFeatureDict(args.features),
+          photos: [],
+          priority,
+          confirm_count: 1,
+          dispute_count: 0,
+          status: "pending",
+          latitude: Number.isFinite(Number(args.lat)) ? Number(args.lat) : null,
+          longitude: Number.isFinite(Number(args.lng)) ? Number(args.lng) : null,
+          address: typeof args.address === "string" ? args.address.trim() : null,
+        },
+      ])
+      .select();
+
+    if (error) throw new Error(`Database insert error: ${error.message}`);
+
+    // A high-priority report fires the push trigger; make sure the place it
+    // points at is flagged so savers see it on the map too.
+    return {
+      status: "created",
+      report: data?.[0],
+      place_id: placeId,
+      place_was_new: !existing,
+      message: existing
+        ? "Report filed against the existing place."
+        : "Report filed and a new pending place was created for it.",
+    };
+  }
+
+  // ==========================================================================
+  // Agentic write #3 — community verification of a place
+  // ==========================================================================
+  if (name === "verifyPlace") {
+    if (args.user_confirmed !== true) return NEEDS_CONFIRMATION;
+
+    const verdict = String(args.verdict ?? "");
+    if (verdict !== "confirm" && verdict !== "dispute") {
+      return { status: "invalid", message: "verdict must be 'confirm' or 'dispute'." };
+    }
+
+    const place = await resolveExistingPlace({
+      placeId: typeof args.place_id === "string" ? args.place_id : undefined,
+      placeName: typeof args.place_name === "string" ? args.place_name : undefined,
+    });
+    if (!place) {
+      return {
+        status: "not_found",
+        message:
+          "That place is not on the map yet, so there is nothing to verify. Offer to add it instead.",
+      };
+    }
+
+    const confirmCount = Number(place.confirm_count ?? 0) + (verdict === "confirm" ? 1 : 0);
+    const disputeCount = Number(place.dispute_count ?? 0) + (verdict === "dispute" ? 1 : 0);
+
+    // Status is recomputed by the on_place_verification_update trigger, so we
+    // only send the counts.
+    const { data, error } = await supabaseAdmin
+      .from("places")
+      .update({ confirm_count: confirmCount, dispute_count: disputeCount })
+      .eq("id", String(place.id))
+      .select();
+    if (error) throw new Error(`Database update error: ${error.message}`);
+
+    // Keep the written reason for a dispute so reviewers can see why.
+    if (verdict === "dispute" && typeof args.reason === "string" && args.reason.trim()) {
+      const { error: reasonError } = await supabaseAdmin.from("dispute_reasons").insert([
+        {
+          report_id: null,
+          place_id: String(place.id),
+          user_id: context?.userId ?? null,
+          user_name: context?.userName ?? "Community Member",
+          reason: args.reason.trim(),
+        },
+      ]);
+      // A missing audit row must not fail the verification itself.
+      if (reasonError) console.error("dispute_reasons insert failed:", reasonError.message);
+    }
+
+    const updated = data?.[0] ?? {};
+    return {
+      status: "recorded",
+      verdict,
+      place_id: String(place.id),
+      place_name: String(place.name ?? place.place_name ?? ""),
+      confirm_count: updated.confirm_count ?? confirmCount,
+      dispute_count: updated.dispute_count ?? disputeCount,
+      place_status: updated.status ?? place.status,
+      // Full updated row so the client can refresh its map/list immediately.
+      place: updated,
+    };
   }
 
   throw new Error(`Unknown tool: ${name}`);
@@ -1067,7 +1439,22 @@ export async function callOpenRouter(
   }
 
   const data = await res.json();
-  return data.choices[0].message;
+
+  // OpenRouter can answer HTTP 200 with an error body and no `choices` (a
+  // provider hiccup or a moderation refusal). Without this guard the old code
+  // threw "Cannot read properties of undefined (reading '0')", which reached
+  // the user as a raw 500 in the middle of a conversation. Treat it as
+  // upstream trouble so the caller degrades gracefully instead.
+  const choice = data?.choices?.[0];
+  if (!choice?.message) {
+    const detail =
+      data?.error?.message ?? data?.error ?? "response contained no choices";
+    throw new AiUpstreamError(
+      `OpenRouter returned no completion: ${JSON.stringify(detail).slice(0, 300)}`,
+      "upstream"
+    );
+  }
+  return choice.message;
 }
 
 /** Extract the first JSON object/array from possibly chatty model output. */
@@ -1167,6 +1554,14 @@ function buildSystemPrompt(location?: ChatLocation) {
     "You are the Accessibility Assistant for InclusiveMapper, an app that maps accessible public spaces.",
     "Your goal is to give accessibility information, but you MUST strictly follow the user's specific request.",
     "",
+    "INTENT ROUTING — decide this FIRST, before any other rule below:",
+    "  1) The user wants to put a NEW place on the map (\"add a place\", \"add my shop\") -> SKILL A (addAccessiblePlace).",
+    "  2) The user describes a barrier, problem or change AT a place (\"the lift is broken\", \"the ramp is blocked\", \"the toilet is locked\") -> SKILL B (reportPlaceIssue).",
+    "  3) The user judges whether an existing place's accessibility is right or wrong (\"verify\", \"confirm it is accessible\", \"that is correct\", \"that is wrong\", \"the ramp is not there anymore\") -> SKILL C (verifyPlace).",
+    "     This is NOT a search request. Even if the message also names a place, do NOT answer with searchAccessiblePlaces — resolve the place and use verifyPlace.",
+    "  4) Anything else -> answer the question normally using the search/web rules below.",
+    "Only one of these applies per message. When skills A, B or C apply, they take priority over every search rule below.",
+    "",
     "Your primary focus is accessibility:",
     "- Always give accessibility details first: wheelchair ramps, step-free entrances, elevators, accessible restrooms, tactile paving, accessible parking, automatic doors.",
     "- Answer in a clear, practical way for people who need accessible spaces.",
@@ -1208,6 +1603,40 @@ function buildSystemPrompt(location?: ChatLocation) {
     "- which accessibility features it has (ramp, step-free entrance, accessible toilet, elevator, parking, tactile paving, automatic door),",
     "- its distance from the searched point, in metres under 1000 and kilometres otherwise (for example '350 m' or '1.4 km').",
     "Read those values from the tool result: 'features' is a boolean map and 'distance' is in metres. Never invent a distance.",
+    "",
+    "RULE 4 — the three community skills you can actually perform (not just describe):",
+    "You are not only an answer machine: you can write to the community map on the user's behalf.",
+    "",
+    "SKILL A — addAccessiblePlace (add a NEW place):",
+    '  - Trigger: the user wants to put a place on the map ("I want to add a new place", "add my shop").',
+    "  - Collect what you need CONVERSATIONALLY, one step at a time — do not paste a long numbered questionnaire. Ask for the name first, then the location, then which accessibility features it has.",
+    "  - Name: ask for it. Location: use the user's GPS block below when they say 'here'/'my location'; otherwise ask for an address or landmark.",
+    "  - Features: ask which apply, and accept their own words ('there is a ramp', 'no lift'). Map them to: ramp, elevator, toilet, parking, stepFree, tactilePaving, automaticDoor.",
+    "  - Before calling the tool, call findPlaceInDatabase to be sure the place is not already on the map. If it exists, say so and offer to add a report or verify it instead.",
+    "  - Call the tool ONLY after the user explicitly confirms. So the last turn before the call must be the user agreeing.",
+    "  - After it succeeds, tell the user the place was added and that it will show as 'pending' until other people confirm it.",
+    "",
+    "SKILL B — reportPlaceIssue (file a REPORT / report a barrier):",
+    '  - Trigger: the user describes a problem or an update at a place ("the lift at the station is broken", "that ramp is blocked", "I went there, the toilet was locked").',
+    "  - Reuse the existing place: call findPlaceInDatabase first and pass its id as place_id. If it is not on the map, still file the report — a pending place will be created for it.",
+    "  - Ask one short question if the problem is unclear. Use the user's own words as the note.",
+    "  - Set priority 'High' when someone could be blocked or stranded (broken lift, blocked only ramp, locked accessible toilet), otherwise 'Medium'.",
+    "  - Confirm before filing, then call the tool with user_confirmed = true.",
+    "  - After it succeeds, thank them and say the report is now visible to the community.",
+    "",
+    "SKILL C — verifyPlace (VERIFY a place: confirm or dispute):",
+    '  - Trigger: the user reports on the accuracy of an existing place ("yes that place is accessible", "the ramp is not there anymore", "that is wrong").',
+    "  - Resolve the place with findPlaceInDatabase (or reuse an id already in this conversation), then confirm which place and which verdict before calling.",
+    '  - verdict "confirm" = the accessibility details are correct; verdict "dispute" = they are wrong (ask briefly why and pass it as reason).',
+    "  - Confirm before recording, then call the tool with user_confirmed = true.",
+    "  - After it succeeds, report the new counts and explain that places become VERIFIED at 3 confirmations and DISPUTED at 2 disputes.",
+    "",
+    "Rules that apply to all three skills:",
+    "- NEVER call addAccessiblePlace, reportPlaceIssue or verifyPlace with user_confirmed = true unless the user clearly agreed in the conversation above. Guessing consent is a serious error.",
+    "- NEVER invent a place, an address, coordinates, or accessibility features. Use only what the user told you, or what the tools returned.",
+    "- If a write tool replies with status 'needs_confirmation', summarise the details and ask the user to confirm — do not call it again until they answer.",
+    "- If it replies with status 'already_exists' or 'not_found', tell the user plainly and offer the sensible alternative skill.",
+    "- Keep each step short: one or two sentences, then either the next question or the confirmation.",
     "",
     "Language and tone:",
     "- Match the language of the user's message. If they write in Sinhala, reply in Sinhala. If they write in Singlish (romanized Sinhala), reply in Singlish. Otherwise reply in English.",
@@ -1280,6 +1709,33 @@ Deno.serve(async (req: Request) => {
 
     location = parseClientLocation(body.location ?? body.userLocation ?? body.coords);
 
+    // Identify the caller so community writes (add place / report / verify) are
+    // attributed to a real account instead of an anonymous row.
+    let toolContext: ToolContext | undefined;
+    try {
+      const bearer = (req.headers.get("Authorization") ?? "")
+        .replace(/^Bearer\s+/i, "")
+        .trim();
+      // Only a user JWT is a 3-part token; the publishable/anon key is not.
+      if (bearer.split(".").length === 3) {
+        const { data } = await supabaseAdmin.auth.getUser(bearer);
+        const user = data?.user;
+        if (user) {
+          const { data: profile } = await supabaseAdmin
+            .from("profiles")
+            .select("name")
+            .eq("id", user.id)
+            .maybeSingle();
+          toolContext = {
+            userId: user.id,
+            userName: profile?.name ?? user.email ?? undefined,
+          };
+        }
+      }
+    } catch {
+      // Anonymous chat still works; writes are just not attributed.
+    }
+
     // Client history (oldest first), then the current message.
     const history: Array<{ role: string; content: string }> = Array.isArray(body.messages)
       ? body.messages
@@ -1346,7 +1802,7 @@ Deno.serve(async (req: Request) => {
         // A failing tool must not kill the whole chat — feed the error back.
         let toolResult: unknown;
         try {
-          toolResult = await executeTool(fnName, fnArgs);
+          toolResult = await executeTool(fnName, fnArgs, toolContext);
         } catch (toolErr: unknown) {
           toolResult = {
             status: "error",

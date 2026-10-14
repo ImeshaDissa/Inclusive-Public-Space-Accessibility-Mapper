@@ -29,7 +29,8 @@ export function AuthTopBar({
     if (router.canGoBack()) {
       router.back();
     } else {
-      router.replace('/onboarding');
+      // Root decides: first launch -> onboarding, otherwise -> map (guests browse).
+      router.replace('/');
     }
   };
 
@@ -185,7 +186,7 @@ export function AuthCheckbox({
       activeOpacity={0.7}
       accessibilityRole="checkbox"
       accessibilityState={{ checked }}
-      hitSlop={8}
+      hitSlop={12}
     >
       {checked && <Ionicons name="checkmark" size={16} color="#FFFFFF" />}
     </TouchableOpacity>

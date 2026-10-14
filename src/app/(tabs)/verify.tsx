@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { useApp } from '@/context/AppContext';
 import { useAppTheme } from '@/context/ThemeContext';
 import { useToast } from '@/context/ToastContext';
@@ -65,7 +65,7 @@ const ReportCardImage = ({ photoUri, reportId, placeName }: { photoUri?: string;
 
 export default function VerificationQueueScreen() {
   const router = useRouter();
-  const { reports, confirmReport, disputeReport, userProfile, signOut } = useApp();
+  const { reports, confirmReport, disputeReport, userProfile, signOut, authReady, isAuthenticated } = useApp();
   const { colors, isDark, toggleTheme } = useAppTheme();
   const { showToast } = useToast();
   const insets = useSafeAreaInsets();
@@ -150,6 +150,10 @@ export default function VerificationQueueScreen() {
     router.replace('/login');
   };
 
+  // Verifying places is a contribution feature — sign up / log in first.
+  if (!authReady) return null;
+  if (!isAuthenticated) return <Redirect href="/login" />;
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Top App Bar */}
@@ -228,7 +232,7 @@ export default function VerificationQueueScreen() {
             <Ionicons name="search-outline" size={36} color={colors.emptyIcon} />
             <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>No Matching Reports</Text>
             <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>
-              No verification entries found matching "{searchQuery}". Try a different location or keyword.
+              No verification entries found matching &ldquo;{searchQuery}&rdquo;. Try a different location or keyword.
             </Text>
           </View>
         }
@@ -348,6 +352,9 @@ export default function VerificationQueueScreen() {
                     onPress={() => handleConfirm(item.id, item.placeName)}
                     disabled={locked}
                     activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Confirm report for ${item.placeName}`}
+                    accessibilityState={{ disabled: locked }}
                   >
                     <Ionicons
                       name="checkmark-circle-outline"
@@ -372,6 +379,9 @@ export default function VerificationQueueScreen() {
                     onPress={() => setActiveDisputeReport(item)}
                     disabled={locked}
                     activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Dispute report for ${item.placeName}`}
+                    accessibilityState={{ disabled: locked }}
                   >
                     <Ionicons
                       name="flag-outline"

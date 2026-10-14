@@ -1,19 +1,15 @@
-import { Redirect, Tabs } from 'expo-router';
-import { View, StyleSheet } from 'react-native';
+import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { StyleSheet, View } from 'react-native';
 import { useApp } from '@/context/AppContext';
 import { useAppTheme } from '@/context/ThemeContext';
 
 export default function TabLayout() {
-  const { authReady, isAuthenticated, notifications, reports } = useApp();
+  const { authReady, notifications, reports } = useApp();
   const { colors, isDark } = useAppTheme();
 
   if (!authReady) {
     return null;
-  }
-
-  if (!isAuthenticated) {
-    return <Redirect href="/login" />;
   }
 
   const unreadNotificationsCount = notifications.filter((n) => !n.read).length;
@@ -29,11 +25,14 @@ export default function TabLayout() {
           backgroundColor: colors.tabBarBg,
           borderTopColor: colors.tabBarBorder,
           borderTopWidth: 1,
-          height: 64,
+          height: 66,
           paddingBottom: 8,
           paddingTop: 6,
-          elevation: 0,
-          shadowOpacity: 0,
+          elevation: isDark ? 0 : 2,
+          shadowColor: '#000',
+          shadowOpacity: isDark ? 0.3 : 0.05,
+          shadowRadius: 4,
+          shadowOffset: { width: 0, height: -2 },
         },
         tabBarLabelStyle: {
           fontSize: 11,
@@ -45,6 +44,7 @@ export default function TabLayout() {
         name="home"
         options={{
           title: 'Home',
+          tabBarAccessibilityLabel: 'Home',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={focused ? 'home' : 'home-outline'} size={22} color={color} />
           ),
@@ -54,6 +54,7 @@ export default function TabLayout() {
         name="map"
         options={{
           title: 'Map',
+          tabBarAccessibilityLabel: 'Map — find accessible places',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={focused ? 'map' : 'map-outline'} size={22} color={color} />
           ),
@@ -63,6 +64,7 @@ export default function TabLayout() {
         name="assistant"
         options={{
           title: 'AI',
+          tabBarAccessibilityLabel: 'AI assistant',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={focused ? 'sparkles' : 'sparkles-outline'} size={22} color={color} />
           ),
@@ -72,6 +74,7 @@ export default function TabLayout() {
         name="report"
         options={{
           title: 'Submit',
+          tabBarAccessibilityLabel: 'Submit a new report',
           tabBarIcon: () => (
             <View style={[styles.elevatedSubmitBtn, { backgroundColor: colors.accent }]}>
               <Ionicons name="add" size={26} color="#FFFFFF" />
@@ -83,6 +86,7 @@ export default function TabLayout() {
         name="verify"
         options={{
           title: 'Verify',
+          tabBarAccessibilityLabel: `Verify places, ${pendingReportsCount} pending reports`,
           tabBarBadge: pendingReportsCount > 0 ? pendingReportsCount : undefined,
           tabBarBadgeStyle: {
             backgroundColor: colors.badgePendingBg || '#78350F',
@@ -99,6 +103,7 @@ export default function TabLayout() {
         name="inbox"
         options={{
           title: 'Inbox',
+          tabBarAccessibilityLabel: `Inbox, ${unreadNotificationsCount} unread notifications`,
           tabBarBadge: unreadNotificationsCount > 0 ? unreadNotificationsCount : undefined,
           tabBarBadgeStyle: {
             backgroundColor: colors.accent,
@@ -115,6 +120,7 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: 'Profile',
+          tabBarAccessibilityLabel: 'Your profile',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={focused ? 'person' : 'person-outline'} size={22} color={color} />
           ),

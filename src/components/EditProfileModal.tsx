@@ -25,6 +25,8 @@ interface EditProfileModalProps {
   onClose: () => void;
 }
 
+type BoolPrefKey = 'requireRamp' | 'requireElevator' | 'requireAccessibleToilet' | 'requireStepFree';
+
 /**
  * Full profile editor — every field maps to a column in the Supabase
  * `public.profiles` table (or auth metadata):
@@ -35,7 +37,8 @@ interface EditProfileModalProps {
  *   hasDisability    -> profiles.has_disability
  *   disabilityType   -> profiles.disability_type
  *   preferences      -> profiles.preferences (jsonb: requireRamp / requireElevator /
- *                       requireAccessibleToilet / requireStepFree)
+ *                       requireAccessibleToilet / requireStepFree, plus
+ *                       trustedContacts — friend/family emails for the SOS sheet)
  *
  * Styled with the Login/Signup auth theme (brand #FF5A36).
  */
@@ -49,9 +52,10 @@ export function EditProfileModal({ visible, onClose }: EditProfileModalProps) {
   const [hasDisability, setHasDisability] = useState(userProfile.hasDisability);
   const [disabilityType, setDisabilityType] = useState(userProfile.disabilityType);
   const [preferences, setPreferences] = useState(userProfile.preferences);
+  const [contactEmail, setContactEmail] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [focusedInput, setFocusedInput] = useState<'name' | null>(null);
+  const [focusedInput, setFocusedInput] = useState<'name' | 'contact' | null>(null);
 
   useEffect(() => {
     if (visible) {
@@ -60,6 +64,7 @@ export function EditProfileModal({ visible, onClose }: EditProfileModalProps) {
       setHasDisability(userProfile.hasDisability);
       setDisabilityType(userProfile.disabilityType);
       setPreferences(userProfile.preferences);
+      setContactEmail('');
       setError(null);
       setFocusedInput(null);
     }
@@ -133,15 +138,39 @@ export function EditProfileModal({ visible, onClose }: EditProfileModalProps) {
 
   const previewAvatar = pickedUri || userProfile.avatar;
 
-  const togglePref = (key: keyof typeof preferences) => {
+  const contacts = preferences.trustedContacts ?? [];
+
+  const addContact = () => {
+    const value = contactEmail.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+      setError('Enter a valid email address for the contact.');
+      return;
+    }
+    if (contacts.includes(value)) {
+      setError('That contact is already on your list.');
+      return;
+    }
+    setPreferences((prev) => ({ ...prev, trustedContacts: [...(prev.trustedContacts ?? []), value] }));
+    setContactEmail('');
+    setError(null);
+  };
+
+  const removeContact = (email: string) => {
+    setPreferences((prev) => ({
+      ...prev,
+      trustedContacts: (prev.trustedContacts ?? []).filter((entry) => entry !== email),
+    }));
+  };
+
+  const togglePref = (key: BoolPrefKey) => {
     setPreferences((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const prefRows: Array<{
-    key: keyof typeof preferences;
+  const prefRows: {
+    key: BoolPrefKey;
     label: string;
     icon: keyof typeof Ionicons.glyphMap;
-  }> = [
+  }[] = [
     { key: 'requireRamp', label: 'Require Wheelchair Ramp', icon: 'water-outline' },
     { key: 'requireElevator', label: 'Require Elevator Access', icon: 'arrow-up-circle-outline' },
     { key: 'requireAccessibleToilet', label: 'Require Accessible Restroom', icon: 'home-outline' },
@@ -235,6 +264,78 @@ export function EditProfileModal({ visible, onClose }: EditProfileModalProps) {
                   />
                   <Ionicons name="lock-closed-outline" size={16} color={c.textMuted} />
                 </View>
+              </View>
+
+              {/* Trusted contacts — friend/family emails used by the SOS help sheet */}
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: c.textSecondary }]}>
+                  Trusted Contacts (Email)
+                </Text>
+                <Text style={[styles.contactsHint, { color: c.textMuted }]}>
+                  Add a friend, client or family member so the SOS help sheet can point to them.
+                </Text>
+                <View
+                  style={[
+                    styles.inputRow,
+                    {
+                      backgroundColor: c.inputBg,
+                      borderColor: focusedInput === 'contact' ? '#FF5A36' : c.inputBorder,
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name="people-outline"
+                    size={20}
+                    color={focusedInput === 'contact' ? '#FF5A36' : c.textMuted}
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={[styles.inputField, { color: c.textPrimary }]}
+                    value={contactEmail}
+                    onChangeText={setContactEmail}
+                    placeholder="friend@example.com"
+                    placeholderTextColor={c.textMuted}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="email-address"
+                    onSubmitEditing={addContact}
+                    onFocus={() => setFocusedInput('contact')}
+                    onBlur={() => setFocusedInput(null)}
+                  />
+                  <TouchableOpacity
+                    style={styles.contactAddBtn}
+                    onPress={addContact}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Add trusted contact"
+                  >
+                    <Ionicons name="add" size={18} color="#FFFFFF" />
+                  </TouchableOpacity>
+                </View>
+
+                {contacts.length > 0 && (
+                  <View style={styles.contactChips}>
+                    {contacts.map((email) => (
+                      <View
+                        key={email}
+                        style={[styles.contactChip, { backgroundColor: c.inputBg, borderColor: c.inputBorder }]}
+                      >
+                        <Ionicons name="mail-outline" size={13} color="#FF5A36" />
+                        <Text style={[styles.contactChipText, { color: c.textPrimary }]} numberOfLines={1}>
+                          {email}
+                        </Text>
+                        <TouchableOpacity
+                          onPress={() => removeContact(email)}
+                          hitSlop={8}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Remove contact ${email}`}
+                        >
+                          <Ionicons name="close-circle" size={16} color={c.textMuted} />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                )}
               </View>
 
               {/* Disability Status toggle */}
@@ -411,6 +512,41 @@ const styles = StyleSheet.create({
   },
   inputRowDisabled: { opacity: 0.65 },
   inputIcon: { marginRight: 10 },
+  contactsHint: {
+    fontSize: 11,
+    marginLeft: 2,
+    marginBottom: 2,
+    lineHeight: 15,
+  },
+  contactAddBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#FF5A36',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  contactChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+  contactChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingVertical: 7,
+    paddingHorizontal: 11,
+    maxWidth: '100%',
+  },
+  contactChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    flexShrink: 1,
+  },
   inputField: {
     flex: 1,
     fontSize: 15,

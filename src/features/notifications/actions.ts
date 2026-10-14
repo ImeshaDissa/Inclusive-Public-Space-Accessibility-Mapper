@@ -67,12 +67,19 @@ const invokeEdge = async (name: string): Promise<NotificationActionResult> => {
  *   3. Email notification request -> queues an email alert through Supabase
  *      so the user receives a direct alert in their inbox
  *   4. Remote Expo push           -> best-effort to registered devices
+ *
+ * The message names who triggered the SOS (name + email) and carries their
+ * trusted contacts so the email template can repeat them back.
  */
 export async function sendSavedPlaceAlert(
   userId: string,
-  email?: string
+  email?: string,
+  name?: string,
+  trustedContacts: string[] = []
 ): Promise<NotificationActionResult> {
-  const message = 'Emergency alert: check your saved places for newly reported barriers.';
+  const who = name?.trim() || 'An InclusiveMapper user';
+  const message = `SOS triggered by ${who}${email ? ` (${email})` : ''} — get help now: open InclusiveMapper for safety guidance and check your saved places for new barriers.`;
+  const title = '🚨 SOS Triggered — Get Help';
   let delivered = false;
   let emailOk: boolean | undefined;
   let emailDetail: string | undefined;
@@ -81,7 +88,7 @@ export async function sendSavedPlaceAlert(
   try {
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: '🚨 Emergency Alert',
+        title,
         body: message,
         sound: true,
         data: { type: 'self_alert' },
@@ -106,7 +113,7 @@ export async function sendSavedPlaceAlert(
     const notif: AppNotification = {
       id: `notif-${Date.now()}`,
       placeId: '',
-      placeName: 'Emergency Alert',
+      placeName: 'SOS — Get Help',
       oldStatus: null,
       newStatus: 'pending',
       message,
@@ -136,12 +143,15 @@ export async function sendSavedPlaceAlert(
         payload: {
           type: 'emergency_alert',
           message,
+          user_name: who,
+          email,
+          trusted_contacts: trustedContacts,
           triggered_at: new Date().toISOString(),
         },
       });
       if (error) {
         emailOk = false;
-        emailDetail = `Could not queue alert email: ${error.message}`;
+        emailDetail = `Email queue failed: ${error.message}`;
       } else {
         const res = await invokeEdge('send-email');
         emailOk = res.ok;
@@ -231,6 +241,60 @@ export async function sendWelcomeEmail(userId: string, email: string): Promise<N
       kind: 'welcome',
       to_email: email,
       payload: { triggered_at: new Date().toISOString() },
+    });
+    if (error) return { ok: false, emailOk: false, detail: error.message };
+    const res = await invokeEdge('send-email');
+    return { ...res, emailOk: res.ok };
+  } catch (err) {
+    return { ok: false, emailOk: false, detail: String(err) };
+  }
+}
+
+/**
+ * Welcome email, at most once per account. The check reads the caller's own
+ * queue rows (RLS: auth.uid() = user_id), so it also covers sign-ups where
+ * the original attempt ran before the email was confirmed and had no session.
+ * On a failed check we send anyway — a rare duplicate beats a missing welcome.
+ */
+export async function sendWelcomeEmailOnce(userId: string, email: string): Promise<NotificationActionResult> {
+  if (!isSupabaseConfigured) return { ok: false, detail: 'Supabase is not configured.' };
+  try {
+    const { data, error } = await supabase
+      .from('email_requests')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('kind', 'welcome')
+      .eq('status', 'sent')
+      .limit(1);
+    if (!error && data && data.length > 0) return { ok: true };
+    return await sendWelcomeEmail(userId, email);
+  } catch (err) {
+    return { ok: false, emailOk: false, detail: String(err) };
+  }
+}
+
+export type PlaceAddedEmailPayload = {
+  place_name: string;
+  address?: string;
+  category?: string;
+};
+
+/**
+ * Confirmation email sent when the user adds a new place to the map
+ * (Submit wizard or the AI assistant's addAccessiblePlace tool).
+ */
+export async function sendPlaceAddedEmail(
+  userId: string,
+  email: string,
+  payload: PlaceAddedEmailPayload
+): Promise<NotificationActionResult> {
+  if (!isSupabaseConfigured) return { ok: false, detail: 'Supabase is not configured.' };
+  try {
+    const { error } = await supabase.from('email_requests').insert({
+      user_id: userId,
+      kind: 'place_added',
+      to_email: email,
+      payload: { ...payload, triggered_at: new Date().toISOString() },
     });
     if (error) return { ok: false, emailOk: false, detail: error.message };
     const res = await invokeEdge('send-email');

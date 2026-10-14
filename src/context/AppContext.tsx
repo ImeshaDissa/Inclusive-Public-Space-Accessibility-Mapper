@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { hapticIcon, setHapticsEnabled } from '@/lib/haptics';
 import { Place, Report, AppNotification, UserProfile, StatusType, NotificationCategory } from '@/types/accessibility';
 import { MOCK_PLACES, MOCK_REPORTS, INITIAL_USER_PROFILE, INITIAL_NOTIFICATIONS } from '@/constants/mockData';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
@@ -30,7 +31,11 @@ import {
   clearNotificationsInSupabase,
 } from '@/features/notifications/api';
 import { registerPushToken } from '@/lib/pushNotifications';
-import { sendPlaceUpdateEmail, sendWelcomeEmail } from '@/features/notifications/actions';
+import {
+  sendPlaceAddedEmail,
+  sendPlaceUpdateEmail,
+  sendWelcomeEmailOnce,
+} from '@/features/notifications/actions';
 import { createReportInBackend } from '@/features/reports/api';
 import { CreateReportResult } from '@/features/reports/types';
 
@@ -52,6 +57,7 @@ const STORAGE_KEYS = {
   places: '@inclusive-mapper/places',
   reports: '@inclusive-mapper/reports',
   notifications: '@inclusive-mapper/notifications',
+  guestSaved: '@inclusive-mapper/guest-saved',
 };
 
 const DEFAULT_AVATAR = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80';
@@ -129,6 +135,12 @@ interface AppContextType {
   updateUserAvatar: (localUri: string) => Promise<AuthActionResult>;
   clearNotifications: () => void;
   markNotificationsRead: () => void;
+  /**
+   * Re-read the shared community data (places, reports, notifications).
+   * Used after the AI assistant writes to the map on the user's behalf, so the
+   * new place / report / verification shows up without an app restart.
+   */
+  refreshCommunityData: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -149,12 +161,41 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [notifications, setNotifications] = useState<AppNotification[]>(INITIAL_NOTIFICATIONS);
   const [userProfile, setUserProfile] = useState<UserProfile>(INITIAL_USER_PROFILE);
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
+
+  // Profile → Accessibility Preferences master switch for all haptic feedback.
+  useEffect(() => {
+    setHapticsEnabled(userProfile.preferences.hapticsEnabled ?? true);
+  }, [userProfile.preferences.hapticsEnabled]);
   // AI assistant results live here so the Map tab can show them even though
   // the chat itself now runs on its own tab.
   const [aiMarkers, setAiMarkers] = useState<Place[]>([]);
 
   const addAiMarker = (place: Place) => {
     setAiMarkers((prev) => (prev.some((m) => m.id === place.id) ? prev : [...prev, place]));
+  };
+
+  // Welcome email fires at most once per account: this in-memory guard
+  // dedupes sign-up + SIGNED_IN within a session, and sendWelcomeEmailOnce
+  // checks the queue so relaunches never repeat it.
+  const welcomeSentFor = useRef<string | null>(null);
+  const sendWelcomeOnce = (uid: string, email?: string | null) => {
+    if (!email || welcomeSentFor.current === uid) return;
+    welcomeSentFor.current = uid;
+    sendWelcomeEmailOnce(uid, email).catch(() => undefined);
+  };
+
+  // Guests have no account, so their bookmark toggles live on this device.
+  // Only adds saves (never clears) so a signed-in user's own list is untouched.
+  const applyGuestSaved = async (list: Place[]): Promise<Place[]> => {
+    try {
+      const raw = await AsyncStorage.getItem(STORAGE_KEYS.guestSaved);
+      if (!raw) return list;
+      const ids = new Set<string>(JSON.parse(raw));
+      if (ids.size === 0) return list;
+      return list.map((p) => (ids.has(p.id) ? { ...p, saved: true } : p));
+    } catch {
+      return list;
+    }
   };
 
   // Initialize Data & Load Supabase or Storage state
@@ -170,6 +211,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             const user = data.session.user;
             setUserId(user.id);
             setAuthEmail(user.email || null);
+            sendWelcomeOnce(user.id, user.email);
 
             const [profile, userNotifs] = await Promise.all([
               fetchSupabaseProfile(user.id, user.email || ''),
@@ -189,7 +231,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           ]);
 
           if (isActive) {
-            if (fetchedPlaces.length > 0) setPlaces(fetchedPlaces);
+            const placeList = data.session?.user
+              ? fetchedPlaces
+              : await applyGuestSaved(fetchedPlaces);
+            if (placeList.length > 0) setPlaces(placeList);
             if (fetchedReports.length > 0) setReports(fetchedReports);
           }
         } else {
@@ -235,6 +280,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (session?.user) {
           setUserId(session.user.id);
           setAuthEmail(session.user.email || null);
+          sendWelcomeOnce(session.user.id, session.user.email);
           const [profile, userNotifs] = await Promise.all([
             fetchSupabaseProfile(session.user.id, session.user.email || ''),
             fetchNotificationsFromSupabase(session.user.id),
@@ -339,8 +385,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [notifications, authReady]);
 
   const toggleSavePlace = (placeId: string) => {
-    setPlaces((prevPlaces) =>
-      prevPlaces.map((p) => {
+    // Light tick so save/unsave is felt (and works without sight).
+    hapticIcon();
+    setPlaces((prevPlaces) => {
+      const next = prevPlaces.map((p) => {
         if (p.id === placeId) {
           const newSaved = !p.saved;
           if (isSupabaseConfigured && userId) {
@@ -349,8 +397,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           return { ...p, saved: newSaved };
         }
         return p;
-      })
-    );
+      });
+      if (isSupabaseConfigured && !userId) {
+        const ids = next.filter((p) => p.saved).map((p) => p.id);
+        AsyncStorage.setItem(STORAGE_KEYS.guestSaved, JSON.stringify(ids)).catch(() => undefined);
+      }
+      return next;
+    });
   };
 
   const addNotificationIfSaved = (
@@ -442,6 +495,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setPlaces((prev) => [newPlace, ...prev]);
       if (isSupabaseConfigured) {
         insertPlaceToSupabase(newPlace);
+      }
+      // "New place added" confirmation email — best-effort, never blocks the report.
+      if (isSupabaseConfigured && userId && userProfile.email) {
+        sendPlaceAddedEmail(userId, userProfile.email, {
+          place_name: newPlace.name,
+          address: newPlace.address,
+          category: newPlace.category,
+        }).catch(() => undefined);
       }
     } else {
       targetPlaceId = existingPlace.id;
@@ -608,6 +669,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return { success: true };
   };
 
+  const refreshCommunityData = async () => {
+    if (!isSupabaseConfigured) return;
+    try {
+      const [fetchedPlaces, fetchedReports, fetchedNotifs] = await Promise.all([
+        fetchPlacesFromSupabase(userId ?? undefined),
+        fetchReportsFromSupabase(),
+        userId ? fetchNotificationsFromSupabase(userId) : Promise.resolve([] as AppNotification[]),
+      ]);
+      // Same rule as the initial load: never blank out state with an empty read.
+      const placeList = userId ? fetchedPlaces : await applyGuestSaved(fetchedPlaces);
+      if (placeList.length > 0) setPlaces(placeList);
+      if (fetchedReports.length > 0) setReports(fetchedReports);
+      if (userId) setNotifications(fetchedNotifs);
+    } catch (err) {
+      console.error('Error refreshing community data:', err);
+    }
+  };
+
   const clearNotifications = () => {
     setNotifications([]);
     if (isSupabaseConfigured && userId) {
@@ -676,7 +755,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setUserId(res.user.id);
         setAuthEmail(res.user.email);
         if (res.profile) setUserProfile(res.profile);
-        sendWelcomeEmail(res.user.id, res.user.email).catch(() => undefined);
+        sendWelcomeOnce(res.user.id, res.user.email);
         return { success: true };
       }
       return { success: false, message: res.message || 'Supabase account creation failed.' };
@@ -745,6 +824,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         updateUserAvatar,
         clearNotifications,
         markNotificationsRead,
+        refreshCommunityData,
       }}
     >
       {children}

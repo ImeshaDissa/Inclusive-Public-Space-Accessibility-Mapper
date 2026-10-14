@@ -6,10 +6,11 @@ import { DEFAULT_ROLE_LABEL, ROLE_LABELS } from '@/constants/profile';
 import { useApp } from '@/context/AppContext';
 import { useAppTheme } from '@/context/ThemeContext';
 import { useToast } from '@/context/ToastContext';
-import { requestAccountExport, sendSavedPlaceAlert } from '@/features/notifications/actions';
+import { requestAccountExport, sendSavedPlaceAlert, sendTestEmail } from '@/features/notifications/actions';
+import { hapticSuccess, hapticIcon } from '@/lib/haptics';
 import { Place, StatusType } from '@/types/accessibility';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
   Alert,
@@ -65,7 +66,10 @@ export function ProfileMenuItem({
         pressed && styles.menuItemPressed,
       ]}
       onPress={onPress}
-      onPressIn={() => setPressed(true)}
+      onPressIn={() => {
+        setPressed(true);
+        hapticIcon();
+      }}
       onPressOut={() => setPressed(false)}
       activeOpacity={0.72}
       accessible
@@ -106,6 +110,20 @@ export function ProfileMenuItem({
   );
 }
 
+/** Shown in the SOS help sheet so the outcome of the alert is never a surprise. */
+const SOS_STEPS = [
+  'A loud alert notification appears on this device.',
+  'A message is added to your Inbox in real time.',
+  'An emergency email is sent to your registered address.',
+  'A push goes out to your other signed-in devices.',
+];
+
+const SOS_TIPS = [
+  'Move to a step-free, safe spot if you can.',
+  'Keep your phone unlocked and within reach.',
+  'Call your local emergency number if you are in immediate danger.',
+];
+
 export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -117,16 +135,19 @@ export default function ProfileScreen() {
     toggleSavePlace,
     signOut,
     userId,
+    authReady,
+    isAuthenticated,
   } = useApp();
   const { colors, isDark, toggleTheme } = useAppTheme();
 
-  const [activeModal, setActiveModal] = useState<'saved' | 'preferences' | 'help' | null>(null);
+  const [activeModal, setActiveModal] = useState<'saved' | 'preferences' | 'help' | 'sos' | null>(null);
   const [selectedPlaceModal, setSelectedPlaceModal] = useState<Place | null>(null);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [sosPressed, setSosPressed] = useState(false);
   const [signOutPressed, setSignOutPressed] = useState(false);
 
   const savedPlaces = places.filter((p) => p.saved);
+  const trustedContacts = userProfile.preferences.trustedContacts ?? [];
 
   const getStatusColor = (status: StatusType) => {
     switch (status) {
@@ -173,10 +194,16 @@ export default function ProfileScreen() {
       showToast('Sign in to send an alert.', 'warning');
       return;
     }
-    const result = await sendSavedPlaceAlert(userId, userProfile.email);
+    const result = await sendSavedPlaceAlert(
+      userId,
+      userProfile.email,
+      userProfile.name,
+      userProfile.preferences.trustedContacts ?? []
+    );
     const emailAttempted = result.emailOk !== undefined;
     if (result.ok && (!emailAttempted || result.emailOk)) {
       showToast('Emergency alert sent to your devices and email.', 'success');
+    hapticSuccess();
     } else if (result.ok && emailAttempted) {
       showToast(`Alert on device, but email failed: ${result.detail ?? 'unknown error'}`, 'error');
     } else if (result.detail) {
@@ -199,7 +226,25 @@ export default function ProfileScreen() {
     }
   };
 
+  /** End-to-end check of the Brevo / send-email setup from inside the app. */
+  const handleTestEmail = async () => {
+    if (!userId) {
+      showToast('Sign in to send a test email.', 'warning');
+      return;
+    }
+    const result = await sendTestEmail(userId, userProfile.email);
+    if (result.ok) {
+      showToast('Test email sent — check your inbox.', 'success');
+    } else {
+      showToast(`Test email failed: ${result.detail ?? 'unknown error'}`, 'error');
+    }
+  };
+
   const roleLabel = ROLE_LABELS[userProfile.role || ''] || DEFAULT_ROLE_LABEL;
+
+  // The profile is an account screen — sign up / log in first.
+  if (!authReady) return null;
+  if (!isAuthenticated) return <Redirect href="/login" />;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -353,7 +398,7 @@ export default function ProfileScreen() {
                 shadowColor: colors.error,
               },
             ]}
-            onPress={handleEmergencyAlert}
+            onPress={() => setActiveModal('sos')}
             onPressIn={() => setSosPressed(true)}
             onPressOut={() => setSosPressed(false)}
             activeOpacity={0.8}
@@ -420,6 +465,7 @@ export default function ProfileScreen() {
               activeOpacity={0.7}
               accessibilityRole="button"
               accessibilityLabel="Close Saved Places"
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Ionicons name="close" size={22} color={colors.textPrimary} />
             </TouchableOpacity>
@@ -497,6 +543,7 @@ export default function ProfileScreen() {
               activeOpacity={0.7}
               accessibilityRole="button"
               accessibilityLabel="Close Accessibility Preferences"
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Ionicons name="close" size={22} color={colors.textPrimary} />
             </TouchableOpacity>
@@ -566,6 +613,28 @@ export default function ProfileScreen() {
                 </View>
               ))}
             </View>
+
+            <View style={[styles.preferenceCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+              <Text style={[styles.prefCardHeader, { color: colors.textMuted }]}>FEEDBACK</Text>
+              <View style={[styles.prefRow, { borderBottomWidth: 0 }]}>
+                <View style={styles.prefLeft}>
+                  <Ionicons name="phone-portrait-outline" size={20} color={colors.accent} />
+                  <Text style={[styles.prefText, { color: colors.textPrimary }]}>Haptic Feedback</Text>
+                </View>
+                <Switch
+                  value={userProfile.preferences.hapticsEnabled ?? true}
+                  onValueChange={(val) => {
+                    updateUserProfile({
+                      preferences: { ...userProfile.preferences, hapticsEnabled: val },
+                    });
+                    if (val) hapticIcon();
+                  }}
+                  trackColor={{ false: colors.toggleTrack, true: colors.success }}
+                  thumbColor={colors.toggleThumb}
+                  accessibilityLabel="Haptic feedback — vibration on button and input touches"
+                />
+              </View>
+            </View>
           </ScrollView>
         </SafeAreaView>
       </Modal>
@@ -586,12 +655,34 @@ export default function ProfileScreen() {
               activeOpacity={0.7}
               accessibilityRole="button"
               accessibilityLabel="Close Help and Support"
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
             >
               <Ionicons name="close" size={22} color={colors.textPrimary} />
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.modalContent} showsVerticalScrollIndicator={false}>
+            <TouchableOpacity
+              style={[styles.actionCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+              onPress={handleTestEmail}
+              activeOpacity={0.72}
+              accessibilityRole="button"
+              accessibilityLabel="Send Test Email"
+            >
+              <View style={[styles.actionIconBox, { backgroundColor: colors.accentBg }]}>
+                <Ionicons name="paper-plane-outline" size={24} color={colors.accent} />
+              </View>
+              <View style={styles.actionTextWrap}>
+                <Text style={[styles.actionTitle, { color: colors.textPrimary }]}>Send Test Email</Text>
+                <Text style={[styles.actionSubtext, { color: colors.textSecondary }]}>
+                  Checks that email delivery is configured correctly.
+                </Text>
+              </View>
+              <View style={[styles.chevronChip, { backgroundColor: colors.chipBg }]}>
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              </View>
+            </TouchableOpacity>
+
             <TouchableOpacity
               style={[styles.actionCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
               onPress={handleExportData}
@@ -620,6 +711,99 @@ export default function ProfileScreen() {
                 Version 1.0.0 — Community-verified accessibility for public spaces (SDG 10 & SDG 11).
               </Text>
             </View>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      {/* MODAL: SOS help — what the alert does, safety tips & trusted contacts */}
+      <Modal
+        visible={activeModal === 'sos'}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setActiveModal(null)}
+      >
+        <SafeAreaView style={[styles.modalSafeArea, { backgroundColor: colors.background }]}>
+          <View style={[styles.modalHeader, { backgroundColor: colors.card, borderBottomColor: colors.cardBorder }]}>
+            <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Emergency Help</Text>
+            <TouchableOpacity
+              style={[styles.closeBtn, { backgroundColor: colors.chipBg }]}
+              onPress={() => setActiveModal(null)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Close Emergency Help"
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Ionicons name="close" size={22} color={colors.textPrimary} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.modalContent} contentContainerStyle={styles.sosBody} showsVerticalScrollIndicator={false}>
+            <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+              <Ionicons name="alert-circle-outline" size={24} color={colors.error} />
+              <Text style={[styles.infoTitle, { color: colors.textPrimary }]}>How SOS helps you</Text>
+              <Text style={[styles.infoText, { color: colors.textSecondary }]}>
+                One tap sends an emergency alert so someone knows you need help — even when you
+                cannot type a message.
+              </Text>
+            </View>
+
+            <View style={[styles.sosCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+              <Text style={[styles.sosCardHeader, { color: colors.textMuted }]}>WHAT HAPPENS WHEN YOU SEND</Text>
+              {SOS_STEPS.map((step, index) => (
+                <View key={step} style={styles.sosStepRow}>
+                  <View style={[styles.sosStepNum, { backgroundColor: colors.errorBg, borderColor: colors.errorBorder }]}>
+                    <Text style={[styles.sosStepNumText, { color: colors.error }]}>{index + 1}</Text>
+                  </View>
+                  <Text style={[styles.sosStepText, { color: colors.textPrimary }]}>{step}</Text>
+                </View>
+              ))}
+            </View>
+
+            <View style={[styles.sosCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+              <Text style={[styles.sosCardHeader, { color: colors.textMuted }]}>STAY SAFE WHILE YOU WAIT</Text>
+              {SOS_TIPS.map((tip) => (
+                <View key={tip} style={styles.sosStepRow}>
+                  <Ionicons name="shield-checkmark-outline" size={18} color={colors.success} style={styles.sosTipIcon} />
+                  <Text style={[styles.sosStepText, { color: colors.textPrimary }]}>{tip}</Text>
+                </View>
+              ))}
+            </View>
+
+            <View style={[styles.sosCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+              <Text style={[styles.sosCardHeader, { color: colors.textMuted }]}>YOUR TRUSTED CONTACTS</Text>
+              {trustedContacts.length > 0 ? (
+                trustedContacts.map((email) => (
+                  <View key={email} style={styles.sosContactRow}>
+                    <Ionicons name="mail-outline" size={16} color={colors.accent} />
+                    <Text style={[styles.sosContactText, { color: colors.textPrimary }]} numberOfLines={1}>
+                      {email}
+                    </Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={[styles.sosContactEmpty, { color: colors.textSecondary }]}>
+                  No trusted contacts yet — tap Edit Profile and add the email of a friend or
+                  family member so someone can be reached on your behalf.
+                </Text>
+              )}
+            </View>
+
+            <TouchableOpacity
+              style={[styles.sendSosBtn, { backgroundColor: colors.error, borderColor: colors.error }]}
+              onPress={() => {
+                setActiveModal(null);
+                handleEmergencyAlert();
+              }}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Send Emergency Alert Now"
+            >
+              <Ionicons name="warning" size={18} color="#FFFFFF" />
+              <Text style={styles.sendSosText}>Send Emergency Alert Now</Text>
+            </TouchableOpacity>
+            <Text style={[styles.sendSosNote, { color: colors.textMuted }]}>
+              Sends a device notification, an Inbox message and an email to {userProfile.email}.
+            </Text>
           </ScrollView>
         </SafeAreaView>
       </Modal>
@@ -1126,5 +1310,82 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
     lineHeight: 17,
+  },
+
+  /* SOS help sheet */
+  sosBody: {
+    gap: 14,
+    paddingBottom: 32,
+  },
+  sosCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 16,
+    gap: 12,
+  },
+  sosCardHeader: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  sosStepRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  sosStepNum: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sosStepNumText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  sosStepText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  sosTipIcon: {
+    marginTop: 1,
+  },
+  sosContactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  sosContactText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  sosContactEmpty: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  sendSosBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 52,
+    borderRadius: 9999,
+    borderWidth: 1,
+    marginTop: 4,
+  },
+  sendSosText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+  sendSosNote: {
+    fontSize: 11,
+    textAlign: 'center',
+    lineHeight: 16,
   },
 });

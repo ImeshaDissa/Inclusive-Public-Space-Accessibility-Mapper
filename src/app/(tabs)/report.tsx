@@ -17,11 +17,14 @@ import {
   Platform,
   ActivityIndicator,
   Keyboard,
+  AccessibilityInfo,
+  KeyboardAvoidingView,
 } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
+import { hapticSuccess } from '@/lib/haptics';
 import * as ImagePicker from 'expo-image-picker';
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
 
@@ -194,6 +197,8 @@ export default function SubmitReportScreen() {
   const {
     places,
     addReport,
+    authReady,
+    isAuthenticated,
   } = useApp();
 
   const {
@@ -235,6 +240,13 @@ export default function SubmitReportScreen() {
 
   const [step, setStep] =
     useState<1 | 2>(1);
+
+  // Tell screen-reader users which wizard step they are on.
+  useEffect(() => {
+    AccessibilityInfo.announceForAccessibility(
+      `Step ${step} of 2, ${step === 1 ? 'Location' : 'Details'}`
+    );
+  }, [step]);
 
   // ============================================================
   // STEP 1 - LOCATION
@@ -1204,6 +1216,8 @@ export default function SubmitReportScreen() {
           );
         }
 
+        hapticSuccess();
+
         setShowSuccessToast(
           true
         );
@@ -1229,7 +1243,7 @@ export default function SubmitReportScreen() {
         );
 
         showToast(
-          `Failed to submit report for ${finalPlaceName}`,
+          `We couldn't send your report for ${finalPlaceName}. Check your connection and try again — your answers are still here.`,
           'error',
           'alert-circle'
         );
@@ -1242,7 +1256,17 @@ export default function SubmitReportScreen() {
   // UI
   // ============================================================
 
+  // Adding a place or filing a report is a contribution feature —
+  // sign up / log in first.
+  if (!authReady) return null;
+  if (!isAuthenticated) return <Redirect href="/login" />;
+
   return (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+      style={{ flex: 1 }}
+    >
     <SafeAreaView
       style={[
         styles.container,
@@ -1961,7 +1985,7 @@ export default function SubmitReportScreen() {
               location. This text also
               confirms your selection
               for screen-reader users
-              who can't see the map.
+              who can&apos;t see the map.
             </Text>
           </View>
 
@@ -2158,6 +2182,7 @@ export default function SubmitReportScreen() {
         )}
       </View>
     </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 }
 

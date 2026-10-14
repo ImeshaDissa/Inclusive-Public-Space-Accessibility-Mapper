@@ -1,10 +1,12 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { StyleSheet, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Redirect, useRouter } from 'expo-router';
 import { useApp } from '@/context/AppContext';
 import { useAppTheme } from '@/context/ThemeContext';
+import { useToast } from '@/context/ToastContext';
 import { AccessibilityAgentChat } from '@/components/AccessibilityAgentChat';
+import { sendPlaceAddedEmail } from '@/features/notifications/actions';
 import { Place, StatusType, AccessibilityFeatures } from '@/types/accessibility';
 
 /** Extract numeric coordinates from an AI tool result (lat/lng fields or PostGIS WKT). */
@@ -87,79 +89,87 @@ const normalizeMarker = (raw: any): Place => {
  * tab still renders those pins.
  */
 export default function AssistantScreen() {
-  const { colors } = useAppTheme();
-  const { addAiMarker, setAiMarkers } = useApp();
+  const router = useRouter();
+  const { isDark } = useAppTheme();
+  const { showToast } = useToast();
+  const { addAiMarker, setAiMarkers, refreshCommunityData, userId, userProfile, authReady, isAuthenticated } =
+    useApp();
+
+  // The AI agent is a contribution feature — sign up / log in to use it.
+  if (!authReady) return null;
+  if (!isAuthenticated) return <Redirect href="/login" />;
 
   // Mirror the assistant's tool results into shared state for the Map tab.
-  const handlePlaceAdded = (placeData: any) => addAiMarker(normalizeMarker(placeData));
+  const handlePlaceAdded = (placeData: any) => {
+    addAiMarker(normalizeMarker(placeData));
+    // "New place added" confirmation email — best-effort, never blocks the chat.
+    const src = placeData?.place ?? placeData;
+    if (userId && userProfile.email) {
+      sendPlaceAddedEmail(userId, userProfile.email, {
+        place_name: String(src?.name ?? src?.place_name ?? 'New accessible place'),
+        address: typeof src?.address === 'string' ? src.address : undefined,
+        category: typeof src?.category === 'string' ? src.category : undefined,
+      }).catch(() => undefined);
+    }
+  };
+
+  /**
+   * Hand a customer who wants to add a place over to the Submit wizard, which
+   * already pins a spot and writes the new place row (see CategoryPlacesSection's
+   * "+ Add New" card). A toast tells them what to do once they arrive.
+   */
+  const handleAddPlace = () => {
+    showToast('Add Place form opened — pin the spot, then tap "+ Add New".', 'info');
+    router.push('/report' as any);
+  };
+
+  /** Same wizard, second step: pick the place, Continue, describe the issue. */
+  const handleAddReport = () => {
+    showToast('Report form opened — pick the place, tap Continue, describe the issue.', 'info');
+    router.push('/report' as any);
+  };
+
+  const handleVerifyPlace = () => {
+    showToast('Verification queue opened — confirm or dispute the places listed.', 'info');
+    router.push('/verify' as any);
+  };
 
   const handlePlacesFound = (placesData: any[]) =>
     setAiMarkers(
       (Array.isArray(placesData) ? placesData : []).map(normalizeMarker).filter((m) => m.lat !== 0 || m.lng !== 0)
     );
 
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View
-        style={[
-          styles.header,
-          { backgroundColor: colors.headerBg, borderBottomColor: colors.headerBorder },
-        ]}
-      >
-        <View style={[styles.headerIcon, { backgroundColor: colors.accentBg }]}>
-          <Ionicons name="sparkles" size={20} color={colors.accent} />
-        </View>
-        <View style={styles.headerText}>
-          <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>
-            Accessibility Assistant
-          </Text>
-          <Text style={[styles.headerSubtitle, { color: colors.textMuted }]}>
-            Ask about accessible places near you
-          </Text>
-        </View>
-      </View>
+  const statusBarBg = isDark ? '#1A1215' : '#610C27';
 
-      <View style={styles.chatBody}>
-        <AccessibilityAgentChat
-          onPlaceAdded={handlePlaceAdded}
-          onPlacesFound={handlePlacesFound}
-        />
-      </View>
+  return (
+    <SafeAreaView
+      style={[
+        styles.container,
+        { backgroundColor: statusBarBg },
+      ]}
+      edges={['top', 'left', 'right']}
+    >
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor={statusBarBg}
+        animated
+      />
+      <AccessibilityAgentChat
+        onPlaceAdded={handlePlaceAdded}
+        onPlacesFound={handlePlacesFound}
+        onAddPlace={handleAddPlace}
+        onAddReport={handleAddReport}
+        onVerifyPlace={handleVerifyPlace}
+        onDataChanged={() => {
+          refreshCommunityData().catch(() => undefined);
+        }}
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-  headerIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerText: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  headerSubtitle: {
-    fontSize: 11,
-    marginTop: 2,
-  },
-  chatBody: {
     flex: 1,
   },
 });

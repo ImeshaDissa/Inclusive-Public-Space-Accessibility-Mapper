@@ -9,6 +9,7 @@ import {
   ScrollView,
   Image,
   ActivityIndicator,
+  AccessibilityInfo,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -22,6 +23,7 @@ import { PlaceDetailsModal } from '@/components/PlaceDetailsModal';
 import { Place, StatusType } from '@/types/accessibility';
 import { PlaceSearchResult, matchesQuery, searchPlaces } from '@/lib/placeSearch';
 import { searchPlacesWithAi } from '@/lib/aiSearch';
+import { VoiceTypingButton } from '@/components/VoiceTypingButton';
 
 type FilterType = 'all' | 'verified' | 'ramp' | 'stepFree' | 'toilet';
 
@@ -54,7 +56,7 @@ export default function MapScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { places, selectedPlaceId, setSelectedPlaceId, toggleSavePlace, aiMarkers } = useApp();
-  const { colors } = useAppTheme();
+  const { colors, isDark, toggleTheme } = useAppTheme();
   const { showToast } = useToast();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -119,6 +121,11 @@ export default function MapScreen() {
         if (worldSearchRequestId.current !== requestId) return;
         setWorldResults(outcome.results);
         setAiHint(outcome.hint);
+        AccessibilityInfo.announceForAccessibility(
+          outcome.results.length > 0
+            ? `${outcome.results.length} places found worldwide`
+            : 'No matching places found'
+        );
       } catch {
         if (worldSearchRequestId.current === requestId) {
           setWorldResults([]);
@@ -202,19 +209,32 @@ export default function MapScreen() {
           </View>
         </View>
 
-        <TouchableOpacity
-          style={[styles.viewToggleBtn, { backgroundColor: colors.accentBg, borderColor: colors.ruleBannerBorder }]}
-          onPress={() => setViewMode((prev) => (prev === 'map' ? 'list' : 'map'))}
-        >
-          <Ionicons
-            name={viewMode === 'map' ? 'list' : 'map-outline'}
-            size={18}
-            color={colors.accent}
-          />
-          <Text style={[styles.viewToggleText, { color: colors.accent }]}>
-            {viewMode === 'map' ? 'List View' : 'Map View'}
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.headerRightActions}>
+          <TouchableOpacity
+            style={[styles.themeToggleBtn, { backgroundColor: colors.chipBg, borderColor: colors.chipBorder }]}
+            onPress={toggleTheme}
+            accessibilityRole="button"
+            accessibilityLabel={`Switch to ${isDark ? 'light' : 'dark'} mode`}
+          >
+            <Ionicons name={isDark ? 'sunny' : 'moon'} size={17} color={colors.accent} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.viewToggleBtn, { backgroundColor: colors.accentBg, borderColor: colors.ruleBannerBorder }]}
+            onPress={() => setViewMode((prev) => (prev === 'map' ? 'list' : 'map'))}
+            accessibilityRole="button"
+            accessibilityLabel={viewMode === 'map' ? 'Switch to list view' : 'Switch to map view'}
+          >
+            <Ionicons
+              name={viewMode === 'map' ? 'list' : 'map-outline'}
+              size={17}
+              color={colors.accent}
+            />
+            <Text style={[styles.viewToggleText, { color: colors.accent }]}>
+              {viewMode === 'map' ? 'List' : 'Map'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={[styles.searchSection, { backgroundColor: colors.headerBg }]}>
@@ -236,10 +256,19 @@ export default function MapScreen() {
             }}
           />
           {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={clearSearch}>
+            <TouchableOpacity
+              onPress={clearSearch}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              accessibilityRole="button"
+              accessibilityLabel="Clear search"
+            >
               <Ionicons name="close-circle" size={16} color={colors.textMuted} />
             </TouchableOpacity>
           )}
+          <VoiceTypingButton
+            onResult={(text) => setSearchQuery((prev) => (prev ? `${prev} ${text}` : text))}
+            accessibilityLabel="Dictate search — speak to type"
+          />
           <TouchableOpacity
             onPress={() => setAiSearchMode((prev) => !prev)}
             accessibilityRole="button"
@@ -368,8 +397,11 @@ export default function MapScreen() {
                 style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
                 activeOpacity={0.85}
                 onPress={() => handleSelectPlace(item)}
+                accessibilityRole="button"
+                accessibilityLabel={`${item.name}, ${item.status}, ${item.address}`}
+                accessibilityHint="Opens place details"
               >
-                <Image source={{ uri: item.photos[0] }} style={styles.cardImage} />
+                <Image source={{ uri: item.photos[0] }} style={styles.cardImage} accessible={false} importantForAccessibility="no" />
                 <View style={styles.cardInfo}>
                   <View style={styles.cardTitleRow}>
                     <Text style={[styles.cardTitle, { color: colors.textPrimary }]} numberOfLines={1}>
@@ -378,6 +410,9 @@ export default function MapScreen() {
                     <TouchableOpacity
                       onPress={() => handleToggleSave(item.id)}
                       style={styles.cardSaveBtn}
+                      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={item.saved ? `Remove ${item.name} from saved` : `Save ${item.name}`}
                     >
                       <Ionicons
                         name={item.saved ? 'bookmark' : 'bookmark-outline'}
@@ -439,12 +474,20 @@ export default function MapScreen() {
                 style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
                 activeOpacity={0.85}
                 onPress={() => handleSelectPlace(item)}
+                accessibilityRole="button"
+                accessibilityLabel={`${item.name}, ${item.status}, ${item.address}`}
+                accessibilityHint="Opens place details"
               >
-                <Image source={{ uri: item.photos[0] }} style={styles.cardImage} />
+                <Image source={{ uri: item.photos[0] }} style={styles.cardImage} accessible={false} importantForAccessibility="no" />
                 <View style={styles.cardInfo}>
                   <View style={styles.cardTitleRow}>
                     <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{item.name}</Text>
-                    <TouchableOpacity onPress={() => handleToggleSave(item.id)}>
+                    <TouchableOpacity
+                      onPress={() => handleToggleSave(item.id)}
+                      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={item.saved ? `Remove ${item.name} from saved` : `Save ${item.name}`}
+                    >
                       <Ionicons
                         name={item.saved ? 'bookmark' : 'bookmark-outline'}
                         size={20}
@@ -524,6 +567,19 @@ const styles = StyleSheet.create({
   appSubtitle: {
     fontSize: 10,
     fontWeight: '600',
+  },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  themeToggleBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   viewToggleBtn: {
     flexDirection: 'row',
