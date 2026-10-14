@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,12 +7,13 @@ import {
   TouchableOpacity,
   FlatList,
   ScrollView,
-  SafeAreaView,
   Image,
+  ActivityIndicator,
+  AccessibilityInfo,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '@/context/AppContext';
 import { useAppTheme } from '@/context/ThemeContext';
 import { useToast } from '@/context/ToastContext';
@@ -20,14 +21,42 @@ import { AnimatedCard } from '@/components/AnimatedComponents';
 import { InteractiveMap } from '@/components/InteractiveMap';
 import { PlaceDetailsModal } from '@/components/PlaceDetailsModal';
 import { Place, StatusType } from '@/types/accessibility';
+import { PlaceSearchResult, matchesQuery, searchPlaces } from '@/lib/placeSearch';
+import { searchPlacesWithAi } from '@/lib/aiSearch';
+import { VoiceTypingButton } from '@/components/VoiceTypingButton';
 
 type FilterType = 'all' | 'verified' | 'ramp' | 'stepFree' | 'toilet';
+
+const EMPTY_FEATURES = {
+  ramp: false,
+  elevator: false,
+  toilet: false,
+  parking: false,
+  stepFree: false,
+  tactilePaving: false,
+  automaticDoor: false,
+};
+
+const geoResultToPlace = (result: PlaceSearchResult): Place => ({
+  id: `geo-${result.place_id}`,
+  name: result.name || result.display_name.split(',')[0] || 'Search Result',
+  category: 'Map Search',
+  address: result.display_name,
+  lat: result.lat,
+  lng: result.lon,
+  features: { ...EMPTY_FEATURES },
+  photos: [],
+  confirmCount: 0,
+  disputeCount: 0,
+  status: 'pending',
+  saved: false,
+});
 
 export default function MapScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { places, selectedPlaceId, setSelectedPlaceId, toggleSavePlace } = useApp();
-  const { colors } = useAppTheme();
+  const { places, selectedPlaceId, setSelectedPlaceId, toggleSavePlace, aiMarkers } = useApp();
+  const { colors, isDark, toggleTheme } = useAppTheme();
   const { showToast } = useToast();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -35,12 +64,22 @@ export default function MapScreen() {
   const [viewMode, setViewMode] = useState<'map' | 'list'>('map');
   const [activeModalPlace, setActiveModalPlace] = useState<Place | null>(null);
 
+  // Worldwide geocoding results (used when no saved place matches the query)
+  const [worldResults, setWorldResults] = useState<PlaceSearchResult[]>([]);
+  const [isWorldSearching, setIsWorldSearching] = useState(false);
+  const [searchedPlace, setSearchedPlace] = useState<Place | null>(null);
+  // false = normal search, true = AI-assisted search (✨)
+  const [aiSearchMode, setAiSearchMode] = useState(false);
+  const [aiHint, setAiHint] = useState<string | undefined>(undefined);
+  const worldSearchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const worldSearchRequestId = useRef(0);
+
   const filteredPlaces = useMemo(() => {
     return places.filter((place) => {
-      const matchesSearch =
-        place.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        place.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        place.address.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesSearch = matchesQuery(
+        `${place.name} ${place.category} ${place.address}`,
+        searchQuery
+      );
 
       if (!matchesSearch) return false;
 
@@ -60,8 +99,78 @@ export default function MapScreen() {
     });
   }, [places, searchQuery, activeFilter]);
 
+  // No saved place matched? Search the whole world (Nominatim + Photon) so any
+  // query — any order, any spelling, any country — still shows on the map.
+  useEffect(() => {
+    if (worldSearchDebounce.current) clearTimeout(worldSearchDebounce.current);
+    const requestId = ++worldSearchRequestId.current;
+    const trimmed = searchQuery.trim();
+
+    if (trimmed.length < 2 || filteredPlaces.length > 0) {
+      setWorldResults([]);
+      setIsWorldSearching(false);
+      return;
+    }
+
+    setIsWorldSearching(true);
+    worldSearchDebounce.current = setTimeout(async () => {
+      try {
+        const outcome = aiSearchMode
+          ? await searchPlacesWithAi(trimmed, { limit: 6 })
+          : { results: await searchPlaces(trimmed, { limit: 6 }), hint: undefined };
+        if (worldSearchRequestId.current !== requestId) return;
+        setWorldResults(outcome.results);
+        setAiHint(outcome.hint);
+        AccessibilityInfo.announceForAccessibility(
+          outcome.results.length > 0
+            ? `${outcome.results.length} places found worldwide`
+            : 'No matching places found'
+        );
+      } catch {
+        if (worldSearchRequestId.current === requestId) {
+          setWorldResults([]);
+          setAiHint(undefined);
+        }
+      } finally {
+        if (worldSearchRequestId.current === requestId) setIsWorldSearching(false);
+      }
+    }, 450);
+
+    return () => {
+      if (worldSearchDebounce.current) clearTimeout(worldSearchDebounce.current);
+    };
+  }, [searchQuery, filteredPlaces.length, aiSearchMode]);
+
+  const clearSearch = () => {
+    setSearchQuery('');
+    setWorldResults([]);
+    setAiHint(undefined);
+    setSearchedPlace(null);
+    setIsWorldSearching(false);
+    if (worldSearchDebounce.current) clearTimeout(worldSearchDebounce.current);
+  };
+
+  const handleSelectWorldResult = (result: PlaceSearchResult) => {
+    setSearchedPlace(geoResultToPlace(result));
+    setWorldResults([]);
+    setViewMode('map');
+    showToast(`Showing ${result.name || result.display_name.split(',')[0]} on map`, 'success');
+  };
+
+  // Base places + AI assistant markers (set on the assistant tab), deduped by id.
+  const mapPlaces = useMemo(() => {
+    const seen = new Set<string>();
+    return [...filteredPlaces, ...aiMarkers, ...(searchedPlace ? [searchedPlace] : [])].filter((p) => {
+      if (seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
+    });
+  }, [filteredPlaces, aiMarkers, searchedPlace]);
+
   const handleSelectPlace = (place: Place) => {
     setSelectedPlaceId(place.id);
+    // World-search markers are not saved places, so only highlight them.
+    if (place.id.startsWith('geo-')) return;
     setActiveModalPlace(place);
   };
 
@@ -100,37 +209,119 @@ export default function MapScreen() {
           </View>
         </View>
 
-        <TouchableOpacity
-          style={[styles.viewToggleBtn, { backgroundColor: colors.accentBg, borderColor: colors.ruleBannerBorder }]}
-          onPress={() => setViewMode((prev) => (prev === 'map' ? 'list' : 'map'))}
-        >
-          <Ionicons
-            name={viewMode === 'map' ? 'list' : 'map-outline'}
-            size={18}
-            color={colors.accent}
-          />
-          <Text style={[styles.viewToggleText, { color: colors.accent }]}>
-            {viewMode === 'map' ? 'List View' : 'Map View'}
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.headerRightActions}>
+          <TouchableOpacity
+            style={[styles.themeToggleBtn, { backgroundColor: colors.chipBg, borderColor: colors.chipBorder }]}
+            onPress={toggleTheme}
+            accessibilityRole="button"
+            accessibilityLabel={`Switch to ${isDark ? 'light' : 'dark'} mode`}
+          >
+            <Ionicons name={isDark ? 'sunny' : 'moon'} size={17} color={colors.accent} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.viewToggleBtn, { backgroundColor: colors.accentBg, borderColor: colors.ruleBannerBorder }]}
+            onPress={() => setViewMode((prev) => (prev === 'map' ? 'list' : 'map'))}
+            accessibilityRole="button"
+            accessibilityLabel={viewMode === 'map' ? 'Switch to list view' : 'Switch to map view'}
+          >
+            <Ionicons
+              name={viewMode === 'map' ? 'list' : 'map-outline'}
+              size={17}
+              color={colors.accent}
+            />
+            <Text style={[styles.viewToggleText, { color: colors.accent }]}>
+              {viewMode === 'map' ? 'List' : 'Map'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={[styles.searchSection, { backgroundColor: colors.headerBg }]}>
         <View style={[styles.searchBar, { backgroundColor: colors.chipBg, borderColor: colors.chipBorder }]}>
-          <Ionicons name="search" size={18} color={colors.textMuted} />
+          <Ionicons
+            name={aiSearchMode ? 'sparkles' : 'search'}
+            size={18}
+            color={aiSearchMode ? colors.accent : colors.textMuted}
+          />
           <TextInput
             style={[styles.searchInput, { color: colors.textPrimary }]}
-            placeholder="Search venue, transit, park..."
+            placeholder={aiSearchMode ? 'Ask AI: “parks near Colombo”...' : 'Search venue, transit, park...'}
             placeholderTextColor={colors.textMuted}
             value={searchQuery}
-            onChangeText={setSearchQuery}
+            onChangeText={(text) => {
+              setSearchQuery(text);
+              // Typing a new query invalidates the previously picked marker.
+              if (searchedPlace) setSearchedPlace(null);
+            }}
           />
           {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
+            <TouchableOpacity
+              onPress={clearSearch}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              accessibilityRole="button"
+              accessibilityLabel="Clear search"
+            >
               <Ionicons name="close-circle" size={16} color={colors.textMuted} />
             </TouchableOpacity>
           )}
+          <VoiceTypingButton
+            onResult={(text) => setSearchQuery((prev) => (prev ? `${prev} ${text}` : text))}
+            accessibilityLabel="Dictate search — speak to type"
+          />
+          <TouchableOpacity
+            onPress={() => setAiSearchMode((prev) => !prev)}
+            accessibilityRole="button"
+            accessibilityLabel={aiSearchMode ? 'Turn off AI search' : 'Turn on AI search'}
+            style={[
+              styles.aiSearchBtn,
+              { backgroundColor: aiSearchMode ? colors.accentBg : colors.chipBorder },
+            ]}
+          >
+            <Ionicons
+              name="sparkles"
+              size={14}
+              color={aiSearchMode ? colors.accent : colors.textMuted}
+            />
+          </TouchableOpacity>
         </View>
+
+        {searchQuery.trim().length >= 2 && filteredPlaces.length === 0 && !searchedPlace && (
+          <View style={[styles.searchBar, { marginTop: 8, height: 'auto', paddingVertical: 6 }]}>
+            {isWorldSearching ? (
+              <ActivityIndicator size="small" color={colors.accent} />
+            ) : worldResults.length === 0 ? (
+              <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+                {`No places found for “${searchQuery.trim()}”`}
+              </Text>
+            ) : (
+              <View style={{ width: '100%' }}>
+                <Text style={{ color: colors.textMuted, fontSize: 11, fontWeight: '700', marginBottom: 4 }}>
+                  {aiSearchMode ? 'AI SEARCH RESULTS' : 'SEARCH EVERYWHERE'}
+                </Text>
+                {!!aiHint && (
+                  <Text style={{ color: colors.textMuted, fontSize: 11, marginBottom: 6, fontStyle: 'italic' }}>
+                    {aiHint}
+                  </Text>
+                )}
+                {worldResults.map((r) => (
+                  <TouchableOpacity
+                    key={r.place_id}
+                    onPress={() => handleSelectWorldResult(r)}
+                    style={{ paddingVertical: 8, flexDirection: 'row', alignItems: 'flex-start' }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Show on map: ${r.display_name}`}
+                  >
+                    <Ionicons name="location-outline" size={16} color={colors.accent} style={{ marginTop: 2, marginRight: 8 }} />
+                    <Text numberOfLines={2} style={{ color: colors.textPrimary, fontSize: 13, flex: 1 }}>
+                      {r.display_name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
 
         <ScrollView
           horizontal
@@ -192,8 +383,8 @@ export default function MapScreen() {
       {viewMode === 'map' ? (
         <ScrollView style={styles.scrollWrapper} showsVerticalScrollIndicator={false}>
           <InteractiveMap
-            places={filteredPlaces}
-            selectedPlaceId={selectedPlaceId}
+            places={mapPlaces}
+            selectedPlaceId={selectedPlaceId || searchedPlace?.id || null}
             onSelectPlace={handleSelectPlace}
           />
 
@@ -206,8 +397,11 @@ export default function MapScreen() {
                 style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
                 activeOpacity={0.85}
                 onPress={() => handleSelectPlace(item)}
+                accessibilityRole="button"
+                accessibilityLabel={`${item.name}, ${item.status}, ${item.address}`}
+                accessibilityHint="Opens place details"
               >
-                <Image source={{ uri: item.photos[0] }} style={styles.cardImage} />
+                <Image source={{ uri: item.photos[0] }} style={styles.cardImage} accessible={false} importantForAccessibility="no" />
                 <View style={styles.cardInfo}>
                   <View style={styles.cardTitleRow}>
                     <Text style={[styles.cardTitle, { color: colors.textPrimary }]} numberOfLines={1}>
@@ -216,6 +410,9 @@ export default function MapScreen() {
                     <TouchableOpacity
                       onPress={() => handleToggleSave(item.id)}
                       style={styles.cardSaveBtn}
+                      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={item.saved ? `Remove ${item.name} from saved` : `Save ${item.name}`}
                     >
                       <Ionicons
                         name={item.saved ? 'bookmark' : 'bookmark-outline'}
@@ -277,12 +474,20 @@ export default function MapScreen() {
                 style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
                 activeOpacity={0.85}
                 onPress={() => handleSelectPlace(item)}
+                accessibilityRole="button"
+                accessibilityLabel={`${item.name}, ${item.status}, ${item.address}`}
+                accessibilityHint="Opens place details"
               >
-                <Image source={{ uri: item.photos[0] }} style={styles.cardImage} />
+                <Image source={{ uri: item.photos[0] }} style={styles.cardImage} accessible={false} importantForAccessibility="no" />
                 <View style={styles.cardInfo}>
                   <View style={styles.cardTitleRow}>
                     <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{item.name}</Text>
-                    <TouchableOpacity onPress={() => handleToggleSave(item.id)}>
+                    <TouchableOpacity
+                      onPress={() => handleToggleSave(item.id)}
+                      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={item.saved ? `Remove ${item.name} from saved` : `Save ${item.name}`}
+                    >
                       <Ionicons
                         name={item.saved ? 'bookmark' : 'bookmark-outline'}
                         size={20}
@@ -363,6 +568,19 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
   },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  themeToggleBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   viewToggleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -393,6 +611,13 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 13,
+  },
+  aiSearchBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   filterScroll: {
     marginTop: 10,

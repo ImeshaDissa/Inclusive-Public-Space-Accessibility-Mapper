@@ -45,21 +45,31 @@ export interface Report {
   disputeReasons?: string[];
 }
 
+/** Category of an in-app notification (drives icon + filter UI). */
+export type NotificationCategory =
+  | 'verification'
+  | 'saved_place'
+  | 'badge'
+  | 'dispute'
+  | 'system';
+
 export interface AppNotification {
   id: string;
   placeId: string;
   placeName: string;
-  oldStatus: StatusType;
+  oldStatus: StatusType | null;
   newStatus: StatusType;
   message: string;
   timestamp: string;
   read: boolean;
+  category: NotificationCategory;
 }
 
 export interface UserProfile {
   name: string;
   email: string;
   avatar: string;
+  role?: string;
   hasDisability: boolean;
   disabilityType: string;
   preferences: {
@@ -67,5 +77,12 @@ export interface UserProfile {
     requireElevator: boolean;
     requireAccessibleToilet: boolean;
     requireStepFree: boolean;
+    /**
+     * Friends / family emails shown in the SOS help sheet. Stored inside the
+     * existing `profiles.preferences` jsonb so no migration is needed.
+     */
+    trustedContacts?: string[];
+    /** Master switch for touch feedback; default true. */
+    hapticsEnabled?: boolean;
   };
 }

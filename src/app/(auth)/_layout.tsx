@@ -7,8 +7,8 @@ export default function AuthLayout() {
 
 	if (!authReady) {
 		return (
-			<View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#090D16' }}>
-				<ActivityIndicator color="#818CF8" />
+			<View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0B0F19' }}>
+				<ActivityIndicator color="#FF5A36" />
 			</View>
 		);
 	}
@@ -17,5 +17,5 @@ export default function AuthLayout() {
 		return <Redirect href="/map" />;
 	}
 
-	return <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#090D16' } }} />;
+	return <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#0B0F19' } }} />;
 }

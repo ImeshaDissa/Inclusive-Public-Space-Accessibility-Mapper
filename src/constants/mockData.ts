@@ -1,4 +1,4 @@
-import { Place, Report, UserProfile, AppNotification } from '@/types/accessibility';
+import { Place, Report, UserProfile, AppNotification, NotificationCategory } from '@/types/accessibility';
 
 export const MOCK_PLACES: Place[] = [
   {
@@ -193,12 +193,80 @@ export const MOCK_REPORTS: Report[] = [
     disputeCount: 0,
     status: 'pending',
   },
+  {
+    id: 'report-4',
+    placeId: 'place-1',
+    placeName: 'Central Community Library',
+    submitterName: 'Marcus Vance (Access Auditor)',
+    submitterAvatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80',
+    timestamp: '3 hours ago',
+    note: 'Main entrance automatic sliding doors operational. Low-gradient step-free ramp and wide elevator corridors fully accessible.',
+    featuresReported: {
+      ramp: true,
+      elevator: true,
+      toilet: true,
+      stepFree: true,
+      automaticDoor: true,
+      tactilePaving: true,
+    },
+    photos: [
+      'https://images.unsplash.com/photo-1521587760476-6c12a4b040da?auto=format&fit=crop&w=800&q=80',
+    ],
+    priority: 'Low',
+    confirmCount: 5,
+    disputeCount: 0,
+    status: 'verified',
+  },
+  {
+    id: 'report-5',
+    placeId: 'place-4',
+    placeName: 'Civic Arts Center',
+    submitterName: 'Priya Patel',
+    submitterAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
+    timestamp: '5 hours ago',
+    note: 'Auditorium wheelchair seating area is clean with clear sightlines and adjacent accessible restrooms.',
+    featuresReported: {
+      ramp: true,
+      elevator: true,
+      toilet: true,
+      parking: true,
+      stepFree: true,
+    },
+    photos: [
+      'https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?auto=format&fit=crop&w=800&q=80',
+    ],
+    priority: 'Medium',
+    confirmCount: 4,
+    disputeCount: 0,
+    status: 'verified',
+  },
+  {
+    id: 'report-6',
+    placeId: 'place-2',
+    placeName: 'Metropolitan Train Station',
+    submitterName: 'Leo Tanaka',
+    submitterAvatar: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&w=200&q=80',
+    timestamp: 'Yesterday',
+    note: 'Tactile ground paving guide lines added near ticket counters to assist visually impaired travelers.',
+    featuresReported: {
+      tactilePaving: true,
+      ramp: true,
+    },
+    photos: [
+      'https://images.unsplash.com/photo-1474487548417-781cb71495f3?auto=format&fit=crop&w=800&q=80',
+    ],
+    priority: 'Medium',
+    confirmCount: 2,
+    disputeCount: 0,
+    status: 'pending',
+  },
 ];
 
 export const INITIAL_USER_PROFILE: UserProfile = {
   name: 'Alex Morgan',
   email: 'alex.morgan@accessibility.org',
   avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80',
+  role: 'user',
   hasDisability: true,
   disabilityType: 'Manual Wheelchair User',
   preferences: {
@@ -219,6 +287,7 @@ export const INITIAL_NOTIFICATIONS: AppNotification[] = [
     message: 'Central Community Library verified ramp & elevator access (5 community confirmations).',
     timestamp: 'Yesterday at 4:30 PM',
     read: false,
+    category: 'verification' as NotificationCategory,
   },
   {
     id: 'notif-2',
@@ -229,5 +298,6 @@ export const INITIAL_NOTIFICATIONS: AppNotification[] = [
     message: 'New report submitted for Metropolitan Train Station: Platform 2 elevator offline.',
     timestamp: '2 hours ago',
     read: false,
+    category: 'saved_place' as NotificationCategory,
   },
 ];
