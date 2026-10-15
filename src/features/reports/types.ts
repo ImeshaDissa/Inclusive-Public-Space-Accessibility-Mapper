@@ -35,6 +35,8 @@ export interface ReportDbRow {
   longitude?: number | null;
   address?: string | null;
   dispute_reasons?: string[];
+  confirmed_users?: string[];
+  disputed_users?: string[];
   created_at: string;
   updated_at?: string;
 }
