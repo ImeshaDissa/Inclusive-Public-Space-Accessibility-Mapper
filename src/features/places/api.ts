@@ -55,6 +55,8 @@ export async function fetchPlacesFromSupabase(userId?: string): Promise<Place[]>
       status: (p.status as StatusType) || 'pending',
       saved: savedPlaceIds.has(p.id),
       description: p.description || '',
+      confirmedUsers: Array.isArray((p as any).confirmed_users) ? (p as any).confirmed_users : [],
+      disputedUsers: Array.isArray((p as any).disputed_users) ? (p as any).disputed_users : [],
     }));
   } catch (err) {
     console.error('Error fetching places from Supabase:', err);
@@ -102,19 +104,42 @@ export async function updatePlaceStatusInSupabase(
   placeId: string,
   confirmCount: number,
   disputeCount: number,
-  status: StatusType
+  status: StatusType,
+  confirmedUsers?: string[],
+  disputedUsers?: string[]
 ): Promise<boolean> {
   if (!isSupabaseConfigured) return true;
 
   try {
+    const payload: Record<string, any> = {
+      confirm_count: confirmCount,
+      dispute_count: disputeCount,
+      status,
+    };
+    if (confirmedUsers && confirmedUsers.length > 0) {
+      payload.confirmed_users = confirmedUsers;
+    }
+    if (disputedUsers && disputedUsers.length > 0) {
+      payload.disputed_users = disputedUsers;
+    }
+
     const { error } = await supabase
       .from('places')
-      .update({
-        confirm_count: confirmCount,
-        dispute_count: disputeCount,
-        status,
-      })
+      .update(payload)
       .eq('id', placeId);
+
+    // Fallback if confirmed_users / disputed_users columns don't exist yet on remote Supabase
+    if (error && (error.message?.includes('confirmed_users') || error.message?.includes('disputed_users'))) {
+      const { error: fallbackError } = await supabase
+        .from('places')
+        .update({
+          confirm_count: confirmCount,
+          dispute_count: disputeCount,
+          status,
+        })
+        .eq('id', placeId);
+      return !fallbackError;
+    }
 
     return !error;
   } catch {

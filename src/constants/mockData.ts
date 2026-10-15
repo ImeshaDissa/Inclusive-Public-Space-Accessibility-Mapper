@@ -26,6 +26,8 @@ export const MOCK_PLACES: Place[] = [
     status: 'verified',
     saved: true,
     description: 'Fully accessible civic center with automated sliding doors, wide elevator corridors, and tactile audio floor guides.',
+    confirmedUsers: ['mock-user-1', 'mock-user-2', 'mock-user-3', 'mock-user-4', 'mock-user-5'],
+    disputedUsers: [],
   },
   {
     id: 'place-2',
@@ -52,6 +54,8 @@ export const MOCK_PLACES: Place[] = [
     status: 'pending',
     saved: true,
     description: 'Busy transit station. Main floor ramp is active, but Platform 2 elevator is currently undergoing maintenance.',
+    confirmedUsers: ['mock-user-1'],
+    disputedUsers: [],
   },
   {
     id: 'place-3',
@@ -77,6 +81,8 @@ export const MOCK_PLACES: Place[] = [
     status: 'disputed',
     saved: false,
     description: 'Historic entrance has steep cobblestone steps. Accessible side ramp route was claimed but reported blocked.',
+    confirmedUsers: [],
+    disputedUsers: ['mock-user-1', 'mock-user-2'],
   },
   {
     id: 'place-4',
@@ -102,6 +108,8 @@ export const MOCK_PLACES: Place[] = [
     status: 'verified',
     saved: false,
     description: 'Modern auditorium with designated wheelchair seating spaces, ramped entrance, and accessible braille signage.',
+    confirmedUsers: ['mock-user-1', 'mock-user-2', 'mock-user-3', 'mock-user-4'],
+    disputedUsers: [],
   },
   {
     id: 'place-5',
@@ -127,6 +135,8 @@ export const MOCK_PLACES: Place[] = [
     status: 'pending',
     saved: true,
     description: 'Standalone accessible family restroom on the waterfront boardwalk with grab bars and adult changing table.',
+    confirmedUsers: ['mock-user-1', 'mock-user-2'],
+    disputedUsers: [],
   },
 ];
 
@@ -151,6 +161,8 @@ export const MOCK_REPORTS: Report[] = [
     confirmCount: 1,
     disputeCount: 0,
     status: 'pending',
+    confirmedUsers: ['mock-auditor-1'],
+    disputedUsers: [],
   },
   {
     id: 'report-2',
@@ -171,6 +183,8 @@ export const MOCK_REPORTS: Report[] = [
     confirmCount: 0,
     disputeCount: 2,
     status: 'disputed',
+    confirmedUsers: [],
+    disputedUsers: ['mock-auditor-1', 'mock-auditor-2'],
   },
   {
     id: 'report-3',
@@ -192,6 +206,8 @@ export const MOCK_REPORTS: Report[] = [
     confirmCount: 2,
     disputeCount: 0,
     status: 'pending',
+    confirmedUsers: ['mock-auditor-1', 'mock-auditor-2'],
+    disputedUsers: [],
   },
   {
     id: 'report-4',
@@ -216,6 +232,8 @@ export const MOCK_REPORTS: Report[] = [
     confirmCount: 5,
     disputeCount: 0,
     status: 'verified',
+    confirmedUsers: ['mock-auditor-1', 'mock-auditor-2', 'mock-auditor-3', 'mock-auditor-4', 'mock-auditor-5'],
+    disputedUsers: [],
   },
   {
     id: 'report-5',
@@ -239,6 +257,8 @@ export const MOCK_REPORTS: Report[] = [
     confirmCount: 4,
     disputeCount: 0,
     status: 'verified',
+    confirmedUsers: ['mock-auditor-1', 'mock-auditor-2', 'mock-auditor-3', 'mock-auditor-4'],
+    disputedUsers: [],
   },
   {
     id: 'report-6',
@@ -259,6 +279,8 @@ export const MOCK_REPORTS: Report[] = [
     confirmCount: 2,
     disputeCount: 0,
     status: 'pending',
+    confirmedUsers: ['mock-auditor-2', 'mock-auditor-3'],
+    disputedUsers: [],
   },
 ];
 
