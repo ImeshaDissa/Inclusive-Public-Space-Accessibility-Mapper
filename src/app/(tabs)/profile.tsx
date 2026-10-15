@@ -484,32 +484,36 @@ export default function ProfileScreen() {
               savedPlaces.map((place) => {
                 const statusColor = getStatusColor(place.status);
                 return (
-                  <TouchableOpacity
+                  <View
                     key={place.id}
                     style={[styles.savedCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
-                    onPress={() => setSelectedPlaceModal(place)}
-                    activeOpacity={0.72}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${place.name}, status ${place.status}`}
                   >
-                    <Image source={{ uri: place.photos[0] }} style={styles.savedImage} />
-                    <View style={styles.savedCardInfo}>
-                      <Text style={[styles.savedName, { color: colors.textPrimary }]} numberOfLines={1}>
-                        {place.name}
-                      </Text>
-                      <Text style={[styles.savedAddress, { color: colors.textSecondary }]} numberOfLines={1}>
-                        {place.address}
-                      </Text>
-                      <View style={styles.savedStatusRow}>
-                        <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-                        <Text style={[styles.statusTagText, { color: statusColor }]}>
-                          {place.status.toUpperCase()}
+                    <TouchableOpacity
+                      style={styles.savedCardMain}
+                      onPress={() => setSelectedPlaceModal(place)}
+                      activeOpacity={0.72}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${place.name}, status ${place.status}`}
+                    >
+                      <Image source={{ uri: place.photos[0] }} style={styles.savedImage} />
+                      <View style={styles.savedCardInfo}>
+                        <Text style={[styles.savedName, { color: colors.textPrimary }]} numberOfLines={1}>
+                          {place.name}
                         </Text>
-                        <Text style={[styles.savedConfirms, { color: colors.textMuted }]}>
-                          ({place.confirmCount} ✓ · {place.disputeCount} ✕)
+                        <Text style={[styles.savedAddress, { color: colors.textSecondary }]} numberOfLines={1}>
+                          {place.address}
                         </Text>
+                        <View style={styles.savedStatusRow}>
+                          <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+                          <Text style={[styles.statusTagText, { color: statusColor }]}>
+                            {place.status.toUpperCase()}
+                          </Text>
+                          <Text style={[styles.savedConfirms, { color: colors.textMuted }]}>
+                            ({place.confirmCount} ✓ · {place.disputeCount} ✕)
+                          </Text>
+                        </View>
                       </View>
-                    </View>
+                    </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.removeSavedBtn, { backgroundColor: colors.errorBg }]}
                       onPress={() => toggleSavePlace(place.id)}
@@ -519,7 +523,7 @@ export default function ProfileScreen() {
                     >
                       <Ionicons name="trash-outline" size={18} color={colors.error} />
                     </TouchableOpacity>
-                  </TouchableOpacity>
+                  </View>
                 );
               })
             )}
@@ -1144,6 +1148,13 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 12,
+  },
+  savedCardMain: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   savedCardInfo: {
     flex: 1,

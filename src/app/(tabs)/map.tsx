@@ -393,34 +393,24 @@ export default function MapScreen() {
             const statusColor = getStatusColor(item.status);
             return (
               <AnimatedCard key={item.id} delay={index * 80}>
-              <TouchableOpacity
+              <View
                 style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
-                activeOpacity={0.85}
-                onPress={() => handleSelectPlace(item)}
-                accessibilityRole="button"
-                accessibilityLabel={`${item.name}, ${item.status}, ${item.address}`}
-                accessibilityHint="Opens place details"
               >
-                <Image source={{ uri: item.photos[0] }} style={styles.cardImage} accessible={false} importantForAccessibility="no" />
-                <View style={styles.cardInfo}>
-                  <View style={styles.cardTitleRow}>
-                    <Text style={[styles.cardTitle, { color: colors.textPrimary }]} numberOfLines={1}>
-                      {item.name}
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() => handleToggleSave(item.id)}
-                      style={styles.cardSaveBtn}
-                      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                      accessibilityRole="button"
-                      accessibilityLabel={item.saved ? `Remove ${item.name} from saved` : `Save ${item.name}`}
-                    >
-                      <Ionicons
-                        name={item.saved ? 'bookmark' : 'bookmark-outline'}
-                        size={18}
-                        color={item.saved ? colors.accent : colors.textMuted}
-                      />
-                    </TouchableOpacity>
-                  </View>
+                <TouchableOpacity
+                  style={styles.cardMain}
+                  activeOpacity={0.85}
+                  onPress={() => handleSelectPlace(item)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${item.name}, ${item.status}, ${item.address}`}
+                  accessibilityHint="Opens place details"
+                >
+                  <Image source={{ uri: item.photos[0] }} style={styles.cardImage} accessible={false} importantForAccessibility="no" />
+                  <View style={styles.cardInfo}>
+                    <View style={styles.cardTitleRow}>
+                      <Text style={[styles.cardTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                        {item.name}
+                      </Text>
+                    </View>
 
                   <Text style={[styles.cardAddress, { color: colors.textSecondary }]} numberOfLines={1}>
                     {item.address}
@@ -456,8 +446,22 @@ export default function MapScreen() {
                       • {item.confirmCount} Confirms ({item.disputeCount} Disputes)
                     </Text>
                   </View>
-                </View>
-              </TouchableOpacity>
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => handleToggleSave(item.id)}
+                  style={styles.cardSaveBtn}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={item.saved ? `Remove ${item.name} from saved` : `Save ${item.name}`}
+                >
+                  <Ionicons
+                    name={item.saved ? 'bookmark' : 'bookmark-outline'}
+                    size={18}
+                    color={item.saved ? colors.accent : colors.textMuted}
+                  />
+                </TouchableOpacity>
+              </View>
               </AnimatedCard>
             );
           })}
@@ -470,31 +474,22 @@ export default function MapScreen() {
           renderItem={({ item }) => {
             const statusColor = getStatusColor(item.status);
             return (
-              <TouchableOpacity
+              <View
                 style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
-                activeOpacity={0.85}
-                onPress={() => handleSelectPlace(item)}
-                accessibilityRole="button"
-                accessibilityLabel={`${item.name}, ${item.status}, ${item.address}`}
-                accessibilityHint="Opens place details"
               >
-                <Image source={{ uri: item.photos[0] }} style={styles.cardImage} accessible={false} importantForAccessibility="no" />
-                <View style={styles.cardInfo}>
-                  <View style={styles.cardTitleRow}>
-                    <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{item.name}</Text>
-                    <TouchableOpacity
-                      onPress={() => handleToggleSave(item.id)}
-                      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                      accessibilityRole="button"
-                      accessibilityLabel={item.saved ? `Remove ${item.name} from saved` : `Save ${item.name}`}
-                    >
-                      <Ionicons
-                        name={item.saved ? 'bookmark' : 'bookmark-outline'}
-                        size={20}
-                        color={item.saved ? colors.accent : colors.textMuted}
-                      />
-                    </TouchableOpacity>
-                  </View>
+                <TouchableOpacity
+                  style={styles.cardMain}
+                  activeOpacity={0.85}
+                  onPress={() => handleSelectPlace(item)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${item.name}, ${item.status}, ${item.address}`}
+                  accessibilityHint="Opens place details"
+                >
+                  <Image source={{ uri: item.photos[0] }} style={styles.cardImage} accessible={false} importantForAccessibility="no" />
+                  <View style={styles.cardInfo}>
+                    <View style={styles.cardTitleRow}>
+                      <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{item.name}</Text>
+                    </View>
                   <Text style={[styles.cardAddress, { color: colors.textSecondary }]}>{item.address}</Text>
                   <View style={styles.featureRow}>
                     {item.features.ramp && (
@@ -521,8 +516,22 @@ export default function MapScreen() {
                       {item.confirmCount} confirmations
                     </Text>
                   </View>
-                </View>
-              </TouchableOpacity>
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => handleToggleSave(item.id)}
+                  style={styles.cardSaveBtn}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={item.saved ? `Remove ${item.name} from saved` : `Save ${item.name}`}
+                >
+                  <Ionicons
+                    name={item.saved ? 'bookmark' : 'bookmark-outline'}
+                    size={20}
+                    color={item.saved ? colors.accent : colors.textMuted}
+                  />
+                </TouchableOpacity>
+              </View>
             );
           }}
         />
@@ -663,6 +672,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
   },
+  cardMain: {
+    flex: 1,
+    flexDirection: 'row',
+  },
   cardImage: {
     width: 100,
     height: '100%',
@@ -676,6 +689,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingRight: 28,
   },
   cardTitle: {
     fontSize: 14,
@@ -685,6 +699,9 @@ const styles = StyleSheet.create({
   },
   cardSaveBtn: {
     padding: 2,
+    position: 'absolute',
+    top: 12,
+    right: 12,
   },
   cardAddress: {
     fontSize: 11,
