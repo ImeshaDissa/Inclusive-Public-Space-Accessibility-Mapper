@@ -35,6 +35,8 @@ export async function fetchReportsFromSupabase(): Promise<Report[]> {
       disputeCount: r.dispute_count || 0,
       disputeReasons: r.dispute_reasons || [],
       status: (r.status as StatusType) || 'pending',
+      confirmedUsers: Array.isArray((r as any).confirmed_users) ? (r as any).confirmed_users : [],
+      disputedUsers: Array.isArray((r as any).disputed_users) ? (r as any).disputed_users : [],
     }));
   } catch (err) {
     console.error('Error fetching reports from Supabase:', err);
@@ -86,18 +88,36 @@ export async function insertReportToSupabase(
 export async function updateReportConfirmInSupabase(
   reportId: string,
   confirmCount: number,
-  status: StatusType
+  status: StatusType,
+  confirmedUsers?: string[]
 ): Promise<boolean> {
   if (!isSupabaseConfigured) return true;
 
   try {
+    const payload: Record<string, any> = {
+      confirm_count: confirmCount,
+      status,
+    };
+    if (confirmedUsers && confirmedUsers.length > 0) {
+      payload.confirmed_users = confirmedUsers;
+    }
+
     const { error } = await supabase
       .from('reports')
-      .update({
-        confirm_count: confirmCount,
-        status,
-      })
+      .update(payload)
       .eq('id', reportId);
+
+    // Fallback if confirmed_users column doesn't exist yet on remote Supabase schema
+    if (error && error.message?.includes('confirmed_users')) {
+      const { error: fallbackError } = await supabase
+        .from('reports')
+        .update({
+          confirm_count: confirmCount,
+          status,
+        })
+        .eq('id', reportId);
+      return !fallbackError;
+    }
 
     return !error;
   } catch {
@@ -112,19 +132,38 @@ export async function updateReportDisputeInSupabase(
   reportId: string,
   disputeCount: number,
   disputeReasons: string[],
-  status: StatusType
+  status: StatusType,
+  disputedUsers?: string[]
 ): Promise<boolean> {
   if (!isSupabaseConfigured) return true;
 
   try {
+    const payload: Record<string, any> = {
+      dispute_count: disputeCount,
+      dispute_reasons: disputeReasons,
+      status,
+    };
+    if (disputedUsers && disputedUsers.length > 0) {
+      payload.disputed_users = disputedUsers;
+    }
+
     const { error } = await supabase
       .from('reports')
-      .update({
-        dispute_count: disputeCount,
-        dispute_reasons: disputeReasons,
-        status,
-      })
+      .update(payload)
       .eq('id', reportId);
+
+    // Fallback if disputed_users column doesn't exist yet on remote Supabase schema
+    if (error && error.message?.includes('disputed_users')) {
+      const { error: fallbackError } = await supabase
+        .from('reports')
+        .update({
+          dispute_count: disputeCount,
+          dispute_reasons: disputeReasons,
+          status,
+        })
+        .eq('id', reportId);
+      return !fallbackError;
+    }
 
     return !error;
   } catch {

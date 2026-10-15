@@ -131,6 +131,16 @@ export async function createReportInBackend(
       ? uploadedPhotos
       : ['https://images.unsplash.com/photo-1517649763962-0c623266010b?auto=format&fit=crop&w=800&q=80'];
 
+  let submitterId: string | null = null;
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      submitterId = user.id;
+    }
+  } catch (e) {
+    // Ignore auth errors
+  }
+
   // 2. Build local frontend Report object
   const frontendReport: Report = {
     id: reportId,
@@ -148,19 +158,11 @@ export async function createReportInBackend(
     confirmCount: 1,
     disputeCount: 0,
     status: 'pending',
+    confirmedUsers: submitterId ? [submitterId] : [input.submitterName || 'Community Auditor (You)'],
+    disputedUsers: [],
   };
 
   // 3. Prepare Supabase database row payload
-  let submitterId = null;
-
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      submitterId = user.id;
-    }
-  } catch (e) {
-    // Ignore auth errors
-  }
 
   const dbRow: Partial<ReportDbRow> = {
     id: reportId,
@@ -176,6 +178,8 @@ export async function createReportInBackend(
     confirm_count: 1,
     dispute_count: 0,
     status: 'pending',
+    confirmed_users: submitterId ? [submitterId] : [frontendReport.submitterName],
+    disputed_users: [],
     latitude: input.location?.latitude ?? null,
     longitude: input.location?.longitude ?? null,
     address: input.location?.address ?? null,
@@ -257,6 +261,8 @@ export async function fetchReportsFromBackend(userId?: string): Promise<Report[]
       disputeCount: row.dispute_count || 0,
       status: row.status || 'pending',
       disputeReasons: row.dispute_reasons || [],
+      confirmedUsers: Array.isArray(row.confirmed_users) ? row.confirmed_users : [],
+      disputedUsers: Array.isArray(row.disputed_users) ? row.disputed_users : [],
     }));
   } catch (e) {
     console.warn('[Backend Supabase] Error in fetchReportsFromBackend:', e);
@@ -270,7 +276,8 @@ export async function fetchReportsFromBackend(userId?: string): Promise<Report[]
 export async function confirmReportInBackend(
   reportId: string,
   newConfirmCount: number,
-  newStatus: StatusType
+  newStatus: StatusType,
+  confirmedUsers?: string[]
 ): Promise<boolean> {
   return true;
 }
@@ -282,7 +289,8 @@ export async function disputeReportInBackend(
   reportId: string,
   reason: string,
   newDisputeCount: number,
-  newStatus: StatusType
+  newStatus: StatusType,
+  disputedUsers?: string[]
 ): Promise<boolean> {
   return true;
 }

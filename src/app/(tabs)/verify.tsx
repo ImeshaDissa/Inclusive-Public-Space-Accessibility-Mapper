@@ -65,7 +65,7 @@ const ReportCardImage = ({ photoUri, reportId, placeName }: { photoUri?: string;
 
 export default function VerificationQueueScreen() {
   const router = useRouter();
-  const { reports, confirmReport, disputeReport, userProfile, signOut, authReady, isAuthenticated } = useApp();
+  const { reports, confirmReport, disputeReport, userProfile, userId, authEmail, signOut, authReady, isAuthenticated } = useApp();
   const { colors, isDark, toggleTheme } = useAppTheme();
   const { showToast } = useToast();
   const insets = useSafeAreaInsets();
@@ -128,13 +128,21 @@ export default function VerificationQueueScreen() {
   const isFinalStatus = (status: StatusType) => status === 'verified' || status === 'disputed';
 
   const handleConfirm = (reportId: string, placeName: string) => {
-    confirmReport(reportId);
+    const result = confirmReport(reportId);
+    if (result && !result.success) {
+      showToast(result.message || 'Could not confirm report', 'warning', 'alert-circle');
+      return;
+    }
     showToast(`Confirmed report for ${placeName}`, 'success', 'checkmark-circle');
   };
 
   const handleDisputeSubmit = (reason: string, note?: string) => {
     if (activeDisputeReport) {
-      disputeReport(activeDisputeReport.id, reason, note);
+      const result = disputeReport(activeDisputeReport.id, reason, note);
+      if (result && !result.success) {
+        showToast(result.message || 'Could not dispute report', 'warning', 'alert-circle');
+        return;
+      }
       showToast(`Disputed report for ${activeDisputeReport.placeName}`, 'warning', 'alert-circle');
     }
   };
@@ -221,8 +229,8 @@ export default function VerificationQueueScreen() {
             <View style={{ flex: 1 }}>
               <Text style={[styles.ruleTitle, { color: colors.ruleBannerTitle }]}>VERIFICATION THRESHOLD LOGIC:</Text>
               <Text style={[styles.ruleText, { color: colors.ruleBannerText }]}>
-                • <Text style={{ color: colors.statusDotVerified, fontWeight: '700' }}>3+ Confirmations</Text> → Status becomes Verified (Green Pin){'\n'}
-                • <Text style={{ color: colors.statusDotDisputed, fontWeight: '700' }}>2+ Disputes</Text> → Status becomes Disputed (Red Pin)
+                • <Text style={{ color: colors.statusDotVerified, fontWeight: '700' }}>3 Unique Users</Text> must confirm → Status becomes Verified (Green Pin){'\n'}
+                • <Text style={{ color: colors.statusDotDisputed, fontWeight: '700' }}>2 Unique Users</Text> dispute → Status becomes Disputed (Red Pin)
               </Text>
             </View>
           </View>
@@ -241,6 +249,13 @@ export default function VerificationQueueScreen() {
           const priorityStyle = getPriorityStyle(item.priority);
           const locked = isFinalStatus(item.status);
           const photoUri = item.photos && item.photos.length > 0 ? item.photos[0] : undefined;
+
+          const currentUserId = userId || authEmail || userProfile.email || userProfile.name || 'local-auditor';
+          const isAlreadyConfirmed = Boolean(item.confirmedUsers?.includes(currentUserId));
+          const isAlreadyDisputed = Boolean(item.disputedUsers?.includes(currentUserId));
+
+          const confirmDisabled = locked || isAlreadyConfirmed;
+          const disputeDisabled = locked || isAlreadyDisputed;
 
           return (
             <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
@@ -333,7 +348,10 @@ export default function VerificationQueueScreen() {
               <View style={[styles.cardFooter, { borderTopColor: colors.divider }]}>
                 <View style={styles.countsContainer}>
                   <Text style={[styles.countText, { color: colors.textSecondary }]}>
-                    <Text style={{ color: colors.statusDotVerified, fontWeight: '700' }}>{item.confirmCount}</Text> Confirms ·{' '}
+                    <Text style={{ color: colors.statusDotVerified, fontWeight: '700' }}>{item.confirmCount}/3</Text> Confirms{' '}
+                    {item.status === 'verified'
+                      ? '(Verified)'
+                      : `(${Math.max(0, 3 - item.confirmCount)} more needed)`} ·{' '}
                     <Text style={{ color: colors.statusDotDisputed, fontWeight: '700' }}>{item.disputeCount}</Text> Disputes
                   </Text>
                 </View>
@@ -344,25 +362,27 @@ export default function VerificationQueueScreen() {
                     style={[
                       styles.outlinedButton,
                       {
-                        borderColor: colors.statusDotVerified,
-                        backgroundColor: isDark ? colors.chipBg : '#FFFFFF',
+                        borderColor: isAlreadyConfirmed && !locked ? colors.statusDotVerified : (locked ? colors.cardBorder : colors.statusDotVerified),
+                        backgroundColor: isAlreadyConfirmed && !locked
+                          ? (isDark ? 'rgba(16, 185, 129, 0.15)' : '#ECFDF5')
+                          : (isDark ? colors.chipBg : '#FFFFFF'),
                       },
                       locked && { borderColor: colors.cardBorder, backgroundColor: colors.chipBg },
                     ]}
                     onPress={() => handleConfirm(item.id, item.placeName)}
-                    disabled={locked}
+                    disabled={confirmDisabled}
                     activeOpacity={0.7}
                     accessibilityRole="button"
-                    accessibilityLabel={`Confirm report for ${item.placeName}`}
-                    accessibilityState={{ disabled: locked }}
+                    accessibilityLabel={isAlreadyConfirmed ? `Already confirmed report for ${item.placeName}` : `Confirm report for ${item.placeName}`}
+                    accessibilityState={{ disabled: confirmDisabled }}
                   >
                     <Ionicons
-                      name="checkmark-circle-outline"
+                      name={isAlreadyConfirmed ? 'checkmark-circle' : 'checkmark-circle-outline'}
                       size={18}
                       color={locked ? colors.textMuted : colors.statusDotVerified}
                     />
                     <Text style={[styles.confirmBtnText, { color: locked ? colors.textMuted : colors.statusDotVerified }]}>
-                      {locked ? statusConfig.label : 'Confirm'}
+                      {locked ? statusConfig.label : isAlreadyConfirmed ? 'Confirmed ✓' : 'Confirm'}
                     </Text>
                   </TouchableOpacity>
 
@@ -371,25 +391,27 @@ export default function VerificationQueueScreen() {
                     style={[
                       styles.outlinedButton,
                       {
-                        borderColor: colors.statusDotDisputed,
-                        backgroundColor: isDark ? colors.chipBg : '#FFFFFF',
+                        borderColor: isAlreadyDisputed && !locked ? colors.statusDotDisputed : (locked ? colors.cardBorder : colors.statusDotDisputed),
+                        backgroundColor: isAlreadyDisputed && !locked
+                          ? (isDark ? 'rgba(239, 68, 68, 0.15)' : '#FEF2F2')
+                          : (isDark ? colors.chipBg : '#FFFFFF'),
                       },
                       locked && { borderColor: colors.cardBorder, backgroundColor: colors.chipBg },
                     ]}
                     onPress={() => setActiveDisputeReport(item)}
-                    disabled={locked}
+                    disabled={disputeDisabled}
                     activeOpacity={0.7}
                     accessibilityRole="button"
-                    accessibilityLabel={`Dispute report for ${item.placeName}`}
-                    accessibilityState={{ disabled: locked }}
+                    accessibilityLabel={isAlreadyDisputed ? `Already disputed report for ${item.placeName}` : `Dispute report for ${item.placeName}`}
+                    accessibilityState={{ disabled: disputeDisabled }}
                   >
                     <Ionicons
-                      name="flag-outline"
+                      name={isAlreadyDisputed ? 'flag' : 'flag-outline'}
                       size={18}
                       color={locked ? colors.textMuted : colors.statusDotDisputed}
                     />
                     <Text style={[styles.disputeBtnText, { color: locked ? colors.textMuted : colors.statusDotDisputed }]}>
-                      Dispute
+                      {locked ? statusConfig.label : isAlreadyDisputed ? 'Disputed' : 'Dispute'}
                     </Text>
                   </TouchableOpacity>
                 </View>
