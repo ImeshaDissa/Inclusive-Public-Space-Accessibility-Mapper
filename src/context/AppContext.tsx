@@ -128,8 +128,8 @@ interface AppContextType {
     priority?: 'High' | 'Medium' | 'Low';
     location?: { latitude: number; longitude: number; address: string };
   }) => Promise<CreateReportResult>;
-  confirmReport: (reportId: string) => void;
-  disputeReport: (reportId: string, reason: string, note?: string) => void;
+  confirmReport: (reportId: string) => { success: boolean; alreadyConfirmed?: boolean; message?: string } | void;
+  disputeReport: (reportId: string, reason: string, note?: string) => { success: boolean; alreadyDisputed?: boolean; message?: string } | void;
   updateUserProfile: (updates: Partial<UserProfile>) => void;
   /** Uploads a picked local image to Supabase Storage and sets it as the avatar. */
   updateUserAvatar: (localUri: string) => Promise<AuthActionResult>;
@@ -537,45 +537,94 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return result;
   };
 
-  const confirmReport = (reportId: string) => {
+  const confirmReport = (reportId: string): { success: boolean; alreadyConfirmed?: boolean; message?: string } | void => {
     const targetReport = reports.find((r) => r.id === reportId);
-    if (!targetReport || targetReport.status === 'verified' || targetReport.status === 'disputed') return;
+    if (!targetReport || targetReport.status === 'verified' || targetReport.status === 'disputed') {
+      return { success: false, message: 'Report is already finalized.' };
+    }
 
-    const newConfirm = targetReport.confirmCount + 1;
+    const currentUserId = userId || authEmail || userProfile.email || userProfile.name || 'local-auditor';
+    const existingConfirmedUsers = targetReport.confirmedUsers || [];
+
+    // Enforce unique user confirmation: repeated confirmations from the same user do not count
+    if (existingConfirmedUsers.includes(currentUserId)) {
+      return {
+        success: false,
+        alreadyConfirmed: true,
+        message: 'You have already confirmed this report. Confirmations from 3 different users are required for verification.',
+      };
+    }
+
+    const updatedConfirmedUsers = [...existingConfirmedUsers, currentUserId];
+    // Confirmation count reflects unique users who have confirmed
+    const newConfirm = Math.max(targetReport.confirmCount + 1, updatedConfirmedUsers.length);
+    // Verification threshold: 3 or more unique confirmations
     const newStatus = computeStatus(newConfirm, targetReport.disputeCount);
 
     setReports((prevReports) =>
       prevReports.map((r) => {
         if (r.id !== reportId) return r;
-        return { ...r, confirmCount: newConfirm, status: newStatus };
+        return {
+          ...r,
+          confirmCount: newConfirm,
+          confirmedUsers: updatedConfirmedUsers,
+          status: newStatus,
+        };
       })
     );
 
     if (isSupabaseConfigured) {
-      updateReportConfirmInSupabase(reportId, newConfirm, newStatus);
+      updateReportConfirmInSupabase(reportId, newConfirm, newStatus, updatedConfirmedUsers);
     }
 
     setPlaces((prevPlaces) =>
       prevPlaces.map((p) => {
         if (p.id !== targetReport.placeId) return p;
-        const placeConfirms = p.confirmCount + 1;
+        const placeConfirmedUsers = p.confirmedUsers || [];
+        if (placeConfirmedUsers.includes(currentUserId)) {
+          return p;
+        }
+        const updatedPlaceConfirmedUsers = [...placeConfirmedUsers, currentUserId];
+        const placeConfirms = Math.max(p.confirmCount + 1, updatedPlaceConfirmedUsers.length);
         const updatedPlaceStatus = computeStatus(placeConfirms, p.disputeCount);
         if (updatedPlaceStatus !== p.status) {
           addNotificationIfSaved(p.id, p.name, p.status, updatedPlaceStatus);
         }
         if (isSupabaseConfigured) {
-          updatePlaceStatusInSupabase(p.id, placeConfirms, p.disputeCount, updatedPlaceStatus);
+          updatePlaceStatusInSupabase(p.id, placeConfirms, p.disputeCount, updatedPlaceStatus, updatedPlaceConfirmedUsers);
         }
-        return { ...p, confirmCount: placeConfirms, status: updatedPlaceStatus };
+        return {
+          ...p,
+          confirmCount: placeConfirms,
+          confirmedUsers: updatedPlaceConfirmedUsers,
+          status: updatedPlaceStatus,
+        };
       })
     );
+
+    return { success: true };
   };
 
-  const disputeReport = (reportId: string, reason: string, note?: string) => {
+  const disputeReport = (reportId: string, reason: string, note?: string): { success: boolean; alreadyDisputed?: boolean; message?: string } | void => {
     const targetReport = reports.find((r) => r.id === reportId);
-    if (!targetReport || targetReport.status === 'verified' || targetReport.status === 'disputed') return;
+    if (!targetReport || targetReport.status === 'verified' || targetReport.status === 'disputed') {
+      return { success: false, message: 'Report is already finalized.' };
+    }
 
-    const newDisputes = targetReport.disputeCount + 1;
+    const currentUserId = userId || authEmail || userProfile.email || userProfile.name || 'local-auditor';
+    const existingDisputedUsers = targetReport.disputedUsers || [];
+
+    // Enforce unique user dispute: repeated disputes from the same user do not count
+    if (existingDisputedUsers.includes(currentUserId)) {
+      return {
+        success: false,
+        alreadyDisputed: true,
+        message: 'You have already disputed this report.',
+      };
+    }
+
+    const updatedDisputedUsers = [...existingDisputedUsers, currentUserId];
+    const newDisputes = Math.max(targetReport.disputeCount + 1, updatedDisputedUsers.length);
     const newStatus = computeStatus(targetReport.confirmCount, newDisputes);
     const updatedReasons = [...(targetReport.disputeReasons || []), reason];
 
@@ -585,6 +634,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return {
           ...r,
           disputeCount: newDisputes,
+          disputedUsers: updatedDisputedUsers,
           disputeReasons: updatedReasons,
           status: newStatus,
         };
@@ -592,7 +642,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     );
 
     if (isSupabaseConfigured) {
-      updateReportDisputeInSupabase(reportId, newDisputes, updatedReasons, newStatus);
+      updateReportDisputeInSupabase(reportId, newDisputes, updatedReasons, newStatus, updatedDisputedUsers);
       insertDisputeReasonToSupabase({
         reportId,
         placeId: targetReport.placeId,
@@ -606,7 +656,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setPlaces((prevPlaces) =>
       prevPlaces.map((p) => {
         if (p.id !== targetReport.placeId) return p;
-        const placeDisputes = p.disputeCount + 1;
+        const placeDisputedUsers = p.disputedUsers || [];
+        if (placeDisputedUsers.includes(currentUserId)) return p;
+        const updatedPlaceDisputedUsers = [...placeDisputedUsers, currentUserId];
+        const placeDisputes = Math.max(p.disputeCount + 1, updatedPlaceDisputedUsers.length);
         const updatedPlaceStatus = computeStatus(p.confirmCount, placeDisputes);
         if (updatedPlaceStatus !== p.status) {
           addNotificationIfSaved(p.id, p.name, p.status, updatedPlaceStatus);
@@ -624,11 +677,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           }
         }
         if (isSupabaseConfigured) {
-          updatePlaceStatusInSupabase(p.id, p.confirmCount, placeDisputes, updatedPlaceStatus);
+          updatePlaceStatusInSupabase(p.id, p.confirmCount, placeDisputes, updatedPlaceStatus, undefined, updatedPlaceDisputedUsers);
         }
-        return { ...p, disputeCount: placeDisputes, status: updatedPlaceStatus };
+        return { ...p, disputeCount: placeDisputes, disputedUsers: updatedPlaceDisputedUsers, status: updatedPlaceStatus };
       })
     );
+
+    return { success: true };
   };
 
   const updateUserProfile = (updates: Partial<UserProfile>) => {
