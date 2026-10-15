@@ -93,9 +93,7 @@ export default function LoginScreen() {
       showToast('Password recovery needs Supabase configured in this build.', 'warning');
       return;
     }
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(trimmed, {
-      redirectTo: 'exp://127.0.0.1:8081/--/reset-password',
-    });
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(trimmed);
     if (resetError) {
       setError(resetError.message || 'Could not send the recovery email.');
       return;
