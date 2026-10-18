@@ -143,13 +143,15 @@ interface AppContextType {
   refreshCommunityData: () => Promise<void>;
 }
 
-const AppContext = createContext<AppContextType | undefined>(undefined);
+import {
+  computeStatus,
+  validateReportConfirmation,
+  validateReportDispute,
+} from '@/lib/verification';
 
-export function computeStatus(confirmCount: number, disputeCount: number): StatusType {
-  if (disputeCount >= 2) return 'disputed';
-  if (confirmCount >= 3) return 'verified';
-  return 'pending';
-}
+export { computeStatus } from '@/lib/verification';
+
+const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [authReady, setAuthReady] = useState(false);
@@ -539,27 +541,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const confirmReport = (reportId: string): { success: boolean; alreadyConfirmed?: boolean; message?: string } | void => {
     const targetReport = reports.find((r) => r.id === reportId);
-    if (!targetReport || targetReport.status === 'verified' || targetReport.status === 'disputed') {
-      return { success: false, message: 'Report is already finalized.' };
+    if (!targetReport) {
+      return { success: false, message: 'Report not found.' };
     }
 
     const currentUserId = userId || authEmail || userProfile.email || userProfile.name || 'local-auditor';
-    const existingConfirmedUsers = targetReport.confirmedUsers || [];
-
-    // Enforce unique user confirmation: repeated confirmations from the same user do not count
-    if (existingConfirmedUsers.includes(currentUserId)) {
+    const validation = validateReportConfirmation(targetReport, currentUserId);
+    if (!validation.success) {
       return {
         success: false,
-        alreadyConfirmed: true,
-        message: 'You have already confirmed this report. Confirmations from 3 different users are required for verification.',
+        alreadyConfirmed: validation.alreadyProcessed,
+        message: validation.message,
       };
     }
 
-    const updatedConfirmedUsers = [...existingConfirmedUsers, currentUserId];
-    // Confirmation count reflects unique users who have confirmed
-    const newConfirm = Math.max(targetReport.confirmCount + 1, updatedConfirmedUsers.length);
-    // Verification threshold: 3 or more unique confirmations
-    const newStatus = computeStatus(newConfirm, targetReport.disputeCount);
+    const updatedConfirmedUsers = validation.updatedUsers!;
+    const newConfirm = validation.newConfirmCount!;
+    const newStatus = validation.newStatus!;
 
     setReports((prevReports) =>
       prevReports.map((r) => {
@@ -607,25 +605,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const disputeReport = (reportId: string, reason: string, note?: string): { success: boolean; alreadyDisputed?: boolean; message?: string } | void => {
     const targetReport = reports.find((r) => r.id === reportId);
-    if (!targetReport || targetReport.status === 'verified' || targetReport.status === 'disputed') {
-      return { success: false, message: 'Report is already finalized.' };
+    if (!targetReport) {
+      return { success: false, message: 'Report not found.' };
     }
 
     const currentUserId = userId || authEmail || userProfile.email || userProfile.name || 'local-auditor';
-    const existingDisputedUsers = targetReport.disputedUsers || [];
-
-    // Enforce unique user dispute: repeated disputes from the same user do not count
-    if (existingDisputedUsers.includes(currentUserId)) {
+    const validation = validateReportDispute(targetReport, currentUserId, reason);
+    if (!validation.success) {
       return {
         success: false,
-        alreadyDisputed: true,
-        message: 'You have already disputed this report.',
+        alreadyDisputed: validation.alreadyProcessed,
+        message: validation.message,
       };
     }
 
-    const updatedDisputedUsers = [...existingDisputedUsers, currentUserId];
-    const newDisputes = Math.max(targetReport.disputeCount + 1, updatedDisputedUsers.length);
-    const newStatus = computeStatus(targetReport.confirmCount, newDisputes);
+    const updatedDisputedUsers = validation.updatedUsers!;
+    const newDisputes = validation.newDisputeCount!;
+    const newStatus = validation.newStatus!;
     const updatedReasons = [...(targetReport.disputeReasons || []), reason];
 
     setReports((prevReports) =>

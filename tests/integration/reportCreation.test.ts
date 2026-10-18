@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import {
   processReportSubmission,
   buildReportRecord,
-  DatabaseClient,
-} from '../../src/features/reports/reportService';
-import { CreateReportInput } from '../../src/features/reports/types';
+  type DatabaseClient,
+} from '../../src/features/reports/reportService.ts';
+import type { CreateReportInput } from '../../src/features/reports/types.ts';
 
 describe('Report Creation - Integration Tests (Service & Database Flow)', () => {
   const sampleInput: CreateReportInput = {
