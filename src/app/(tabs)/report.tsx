@@ -42,6 +42,10 @@ import { ReportDetailsSection } from '@/components/ReportDetailsSection';
 
 import { SelectedVenuePayload } from '@/types/categoryPlaces';
 import { FeatureKey } from '@/constants/reportFeatures';
+import {
+  canProceedToDetails,
+  canSubmitReport,
+} from '@/features/reports/validation';
 
 import {
   PlaceSearchResult,
@@ -1105,11 +1109,7 @@ export default function SubmitReportScreen() {
   // STEP 1 VALIDATION
   // ============================================================
 
-  const canContinueFromStep1 =
-    !!selectedVenue &&
-    selectedVenue.name
-      .trim()
-      .length > 0;
+  const canContinueFromStep1 = canProceedToDetails(selectedVenue);
 
   const goToDetails = () => {
     if (
@@ -1136,14 +1136,17 @@ export default function SubmitReportScreen() {
         return;
       }
 
-      if (
-        featureCount === 0 &&
-        !note.trim() &&
-        photos.length === 0
-      ) {
+      const submissionValidation = canSubmitReport({
+        featureCount,
+        note,
+        photos,
+      });
+
+      if (!submissionValidation.isValid) {
         Alert.alert(
           'Validation Error',
-          'Please verify at least one feature, add a note, or upload a photo to submit.'
+          submissionValidation.error ||
+            'Please verify at least one feature, add a note, or upload a photo to submit.'
         );
 
         return;
