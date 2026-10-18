@@ -46,7 +46,6 @@
     "@types/react": "~19.1.10",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~10.0.0",
-    "tsx": "^4.23.15",
     "typescript": "~5.9.2"
   },
   "scripts": {
@@ -56,9 +55,10 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "test": "tsx --test tests/**/*.test.ts",
-    "test:unit": "tsx --test tests/unit/**/*.test.ts",
-    "test:integration": "tsx --test tests/integration/**/*.test.ts"
+    "test": "node --no-warnings --test --experimental-strip-types --test-reporter=spec tests/test.ts",
+    "test:all": "node --no-warnings --test --experimental-strip-types --test-reporter=spec tests/test.ts tests/unit/reportValidation.test.ts tests/integration/reportCreation.test.ts",
+    "test:unit": "node --no-warnings --test --experimental-strip-types --test-reporter=spec tests/unit/reportValidation.test.ts",
+    "test:integration": "node --no-warnings --test --experimental-strip-types --test-reporter=spec tests/integration/reportCreation.test.ts"
   },
   "private": true
 }

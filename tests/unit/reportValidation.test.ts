@@ -6,7 +6,7 @@ import {
   validatePhotoUpload,
   validateImageUrl,
   formatRelativeTimestamp,
-} from '../../src/features/reports/validation';
+} from '../../src/features/reports/validation.ts';
 
 describe('Report Creation - Unit Tests (Validation & Helpers)', () => {
   describe('canProceedToDetails() - Step 1 Location Validation', () => {

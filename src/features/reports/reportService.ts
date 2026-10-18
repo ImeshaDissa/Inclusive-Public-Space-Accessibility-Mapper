@@ -1,5 +1,5 @@
-import { Report, PriorityType } from '@/types/accessibility';
-import { CreateReportInput, CreateReportResult, ReportDbRow } from './types';
+import type { Report, PriorityType } from '../../types/accessibility';
+import type { CreateReportInput, CreateReportResult, ReportDbRow } from './types';
 
 export interface DatabaseClient {
   from: (table: string) => {
